@@ -1,26 +1,27 @@
 'use client';
 
 /**
- * CameoStoryboardWidgets — 分镜 tab 上的 Cameo 一致性可视化套件 (Sprint A.4)
+ * CameoStoryboardWidgets — Cameo consistency viz on the storyboard tab (Sprint A.4)
  *
- * 三个组件:
- *   · CameoBadge      — 单张分镜卡右上角的红/黄/绿小圆 (含 popover 显示详情)
- *   · CameoSummary    — 项目顶部汇总条 (N 镜 · 平均 · 需重生)
- *   · CameoBatchRetry — "批量重生低分镜" 按钮 + 进度反馈
+ * Three pieces:
+ *   · CameoBadge      — red/amber/green corner dot on a board card (popover detail)
+ *   · CameoSummary    — project header strip (N shots · avg · need regen)
+ *   · CameoBatchRetry — "batch regen low-score shots" + progress
  *
- * 数据契约:
- *   每个 storyboard asset 的 data 字段包含可选的 cameoScore/cameoRetried/...,
- *   由 v2.12 Sprint A.1 的 evaluateAndRetry 在 orchestrator 写入并经 create-stream 落库.
- *   对没有 cameoScore 的旧数据, 所有组件都做 noop / 空态 friendly 渲染。
+ * Data contract:
+ *   each storyboard asset data may include cameoScore/cameoRetried/...,
+ *   written by v2.12 Sprint A.1 evaluateAndRetry in the orchestrator and persisted
+ *   via create-stream. Old data without cameoScore is a friendly noop.
  *
- * 设计目的: 从 ROADMAP_V4 的"5 秒判断哪些镜要重画"出发, 顶部一行总览,
- *           每张卡角标精确定位, 一键批量重生闭环。
+ * Goal (ROADMAP_V4 "5 seconds to see which shots to redraw"): one-line overview,
+ *           per-card badge, one-click batch regen loop.
  */
 
 import { useState, useMemo } from 'react';
 import { Pulse as Activity, Repeat, Warning as AlertTriangle, CircleNotch as Loader2, CheckCircle as CheckCircle2, X } from '@phosphor-icons/react';
 import { CameoBarList, CameoDonut } from '@/components/cinema/dataviz';
 import { NumberTicker } from '@/components/cinema/effects';
+import { useLocale } from '@/hooks/use-locale';
 
 interface CameoData {
   cameoScore?: number;
@@ -28,15 +29,15 @@ interface CameoData {
   cameoAttempts?: number;
   cameoFinalCw?: number;
   cameoReason?: string;
-  /** v2.12 Phase 3 → A.4: 多角色锁脸独立评分,2+ 角色镜头才有。null score = 该角色 vision 失败 */
+  /** v2.12 Phase 3 → A.4: per-character face-lock scores; only on 2+ character shots. null = vision failed */
   cameoPerCharacterScores?: Array<{ name?: string; score: number | null; reasoning?: string }>;
 }
 
-/** 把 0-100 分映射成 red / amber / green 三档配色, 与 readinessLevel 对齐 */
+/** Map 0-100 to red / amber / green, aligned with readinessLevel */
 function classify(score?: number): 'green' | 'amber' | 'red' | 'na' {
   if (typeof score !== 'number') return 'na';
   if (score >= 85) return 'green';
-  if (score >= 70) return 'amber';  // 注意 ROADMAP_V4 §2 A.4 说 70-84 黄, 75 是 retry 阈值, 这里展示用 70 边界
+  if (score >= 70) return 'amber';  // ROADMAP_V4 §2 A.4: 70-84 yellow; 75 is retry; display uses 70
   return 'red';
 }
 
@@ -48,13 +49,14 @@ const PALETTE = {
 } as const;
 
 // ────────────────────────────────────────────────
-// Badge — 单张分镜卡角标
+// Badge — corner mark on a single board card
 // ────────────────────────────────────────────────
 
 export function CameoBadge({ data }: { data: CameoData }) {
+  const { t } = useLocale();
   const [showPopover, setShowPopover] = useState(false);
   const lvl = classify(data.cameoScore);
-  // 没分数也不渲染 (避免空徽章污染卡片)
+  // No score → do not render (empty badges pollute the card)
   if (lvl === 'na' && !data.cameoRetried) return null;
 
   const p = PALETTE[lvl];
@@ -64,8 +66,8 @@ export function CameoBadge({ data }: { data: CameoData }) {
       <button
         onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowPopover((v) => !v); }}
         className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold border backdrop-blur-sm shadow-sm hover:scale-105 transition-transform ${p.bg} ${p.text} ${p.border}`}
-        aria-label={`Cameo 一致性: ${data.cameoScore ?? '—'}/100`}
-        title={`Cameo 一致性: ${data.cameoScore ?? '—'}/100`}
+        aria-label={`${t.sharedUi.cameoConsistency}: ${data.cameoScore ?? '—'}/100`}
+        title={`${t.sharedUi.cameoConsistency}: ${data.cameoScore ?? '—'}/100`}
       >
         <Activity className="w-2.5 h-2.5" />
         {typeof data.cameoScore === 'number' ? data.cameoScore : '—'}
@@ -74,7 +76,7 @@ export function CameoBadge({ data }: { data: CameoData }) {
 
       {showPopover ? (
         <>
-          {/* 半透明遮罩抓 click-outside */}
+          {/* Translucent overlay to catch click-outside */}
           <div
             className="fixed inset-0 z-30"
             onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowPopover(false); }}
@@ -84,7 +86,7 @@ export function CameoBadge({ data }: { data: CameoData }) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-2">
-              <span className={`text-[11px] tracking-widest uppercase ${p.text}`}>Cameo 一致性</span>
+              <span className={`text-[11px] tracking-widest uppercase ${p.text}`}>{t.sharedUi.cameoConsistency}</span>
               <button
                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowPopover(false); }}
                 className="p-0.5 rounded hover:bg-white/10 text-white/40 hover:text-white"
@@ -100,7 +102,7 @@ export function CameoBadge({ data }: { data: CameoData }) {
               <span className="text-[10px] text-white/40 mb-0.5">/ 100</span>
             </div>
 
-            {/* v2.12 Phase 3: 多角色独立评分条 — 仅当 cameoPerCharacterScores 有 2+ 条时显示 */}
+            {/* v2.12 Phase 3: per-character score bars — only when 2+ entries */}
             {data.cameoPerCharacterScores && data.cameoPerCharacterScores.length >= 2 ? (
               <div className="mb-2 pb-2 border-b border-white/10">
                 <div className="text-[10px] uppercase tracking-widest text-white/40 mb-1.5">
@@ -113,7 +115,7 @@ export function CameoBadge({ data }: { data: CameoData }) {
                     const widthPct = c.score == null ? 0 : Math.max(2, Math.min(100, c.score));
                     return (
                       <li key={i} className="flex items-center gap-2">
-                        <span className="text-[10.5px] text-white/65 truncate flex-shrink-0 max-w-[80px]" title={c.name || `角色 ${i + 1}`}>
+                        <span className="text-[10.5px] text-white/65 truncate flex-shrink-0 max-w-[80px]" title={c.name || t.sharedUi.characterN.replace('{n}', String(i + 1))}>
                           {c.name || `#${i + 1}`}
                         </span>
                         <div className="flex-1 h-1.5 rounded-full bg-white/8 overflow-hidden">
@@ -140,18 +142,18 @@ export function CameoBadge({ data }: { data: CameoData }) {
               {data.cameoRetried ? (
                 <li className="flex items-center gap-1.5">
                   <Repeat className="w-3 h-3 text-violet-300" />
-                  <span>已自动重生 {data.cameoAttempts ?? 2} 次</span>
+                  <span>{t.sharedUi.autoRetriedN.replace('{n}', String(data.cameoAttempts ?? 2))}</span>
                 </li>
               ) : (
                 <li className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-3 h-3 text-white/40" />
-                  <span>首次生成达标</span>
+                  <span>{t.sharedUi.firstPassOk}</span>
                 </li>
               )}
               {typeof data.cameoFinalCw === 'number' ? (
                 <li className="flex items-center gap-1.5">
                   <Activity className="w-3 h-3 text-white/40" />
-                  <span>最终 cw = {data.cameoFinalCw}</span>
+                  <span>{t.sharedUi.finalCw} = {data.cameoFinalCw}</span>
                 </li>
               ) : null}
             </ul>
@@ -163,7 +165,7 @@ export function CameoBadge({ data }: { data: CameoData }) {
 }
 
 // ────────────────────────────────────────────────
-// Summary Bar — 项目顶部汇总
+// Summary Bar — project header strip
 // ────────────────────────────────────────────────
 
 export function CameoSummary({
@@ -173,6 +175,7 @@ export function CameoSummary({
   onBatchRetry: (lowScoreShotNumbers: number[]) => void;
   batchRetrying: boolean;
 }) {
+  const { t } = useLocale();
   const stats = useMemo(() => {
     const scored = storyboards.filter((sb) => typeof sb.data?.cameoScore === 'number');
     const total = storyboards.length;
@@ -194,12 +197,12 @@ export function CameoSummary({
     };
   }, [storyboards]);
 
-  // 没有任何评分数据 → 不渲染汇总条 (避免空态污染)
+  // No scores → do not render the strip (avoid empty-state noise)
   if (stats.evaluated === 0) {
     if (stats.total > 0) {
       return (
         <div className="mb-3 px-3 py-2 rounded-lg bg-white/3 border border-white/8 text-[11px] text-white/45 leading-relaxed">
-          本项目分镜暂无 Cameo 一致性评分(早于 v2.12 创建 / 未配置 OPENAI_API_KEY)
+          {t.sharedUi.cameoNoScores}
         </div>
       );
     }
@@ -215,18 +218,18 @@ export function CameoSummary({
       <div className="flex items-center gap-1.5">
         <Activity className="w-3.5 h-3.5 text-violet-300 [.cinema-page_&]:text-[var(--cinema-amber)]" />
         <span className="text-[11px] text-violet-200 tracking-widest uppercase [.cinema-page_&]:cinema-eyebrow [.cinema-page_&]:text-[var(--cinema-amber)] [.cinema-page_&]:opacity-90">
-          <span className="[.cinema-page_&]:hidden">Cameo 一致性</span>
-          <span className="hidden [.cinema-page_&]:inline">CAMEO · 一致性仪表</span>
+          <span className="[.cinema-page_&]:hidden">{t.sharedUi.cameoConsistency}</span>
+          <span className="hidden [.cinema-page_&]:inline">CAMEO · {t.sharedUi.consistencyMeter}</span>
         </span>
       </div>
       <div className="text-[12px] text-white/85 [.cinema-page_&]:cinema-mono [.cinema-page_&]:text-[var(--cinema-text-2)]">
         <span className="[.cinema-page_&]:opacity-50 [.cinema-page_&]:tracking-widest [.cinema-page_&]:text-[10px] [.cinema-page_&]:mr-1">SHOTS</span>
         <span className="font-semibold tabular-nums [.cinema-page_&]:text-[var(--cinema-text)]">{stats.total}</span>
-        <span className="[.cinema-page_&]:hidden"> 镜</span>
+        <span className="[.cinema-page_&]:hidden"> {t.product.shotsUnit}</span>
       </div>
       <div className="flex items-center gap-1 text-[12px]">
         <span className="text-white/50 [.cinema-page_&]:cinema-eyebrow [.cinema-page_&]:tracking-widest">
-          <span className="[.cinema-page_&]:hidden">平均</span>
+          <span className="[.cinema-page_&]:hidden">{t.sharedUi.average}</span>
           <span className="hidden [.cinema-page_&]:inline">AVG</span>
         </span>
         <span className={`font-bold tabular-nums ${ap.text} [.cinema-page_&]:cinema-mono`}>{stats.avg}</span>
@@ -237,7 +240,7 @@ export function CameoSummary({
           <AlertTriangle className="w-3.5 h-3.5" />
           <span>
             <span className="font-semibold tabular-nums [.cinema-page_&]:cinema-mono">{stats.lowCount}</span>
-            <span className="[.cinema-page_&]:hidden"> 镜需重生</span>
+            <span className="[.cinema-page_&]:hidden"> {t.sharedUi.shotsNeedRegen}</span>
             <span className="hidden [.cinema-page_&]:inline opacity-75 ml-1 cinema-mono text-[10px] tracking-wider">BELOW THRESHOLD</span>
           </span>
         </div>
@@ -246,7 +249,7 @@ export function CameoSummary({
         <div className="flex items-center gap-1 text-[11px] text-violet-200/70 [.cinema-page_&]:text-[var(--cinema-text-2)] [.cinema-page_&]:cinema-mono">
           <Repeat className="w-3 h-3" />
           <span>
-            <span className="[.cinema-page_&]:hidden">本次已自动重生 {stats.retriedCount} 镜</span>
+            <span className="[.cinema-page_&]:hidden">{t.sharedUi.autoRetriedShots.replace('{n}', String(stats.retriedCount))}</span>
             <span className="hidden [.cinema-page_&]:inline">RETRIED · {stats.retriedCount}</span>
           </span>
         </div>
@@ -256,30 +259,30 @@ export function CameoSummary({
           onClick={() => onBatchRetry(stats.lowShotNumbers)}
           disabled={batchRetrying}
           className="ml-auto px-3 py-1.5 rounded-lg bg-violet-500/20 hover:bg-violet-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11.5px] text-violet-100 border border-violet-500/35 transition-colors flex items-center gap-1.5 [.cinema-page_&]:rounded-none [.cinema-page_&]:bg-[var(--cinema-amber)] [.cinema-page_&]:hover:bg-[#D6B270] [.cinema-page_&]:text-black [.cinema-page_&]:border-[var(--cinema-amber)] [.cinema-page_&]:font-semibold"
-          title={`触发 cameo 自动重生流程, 加强 cw 重画这 ${stats.lowCount} 镜`}
+          title={t.sharedUi.batchRetryTitle.replace('{n}', String(stats.lowCount))}
         >
           {batchRetrying ? (
             <>
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span className="[.cinema-page_&]:hidden">重生中…</span>
+              <span className="[.cinema-page_&]:hidden">{t.sharedUi.retrying}</span>
               <span className="hidden [.cinema-page_&]:inline cinema-mono tracking-wider">RETRYING…</span>
             </>
           ) : (
             <>
               <Repeat className="w-3.5 h-3.5" />
-              <span className="[.cinema-page_&]:hidden">批量重生 ({stats.lowCount})</span>
+              <span className="[.cinema-page_&]:hidden">{t.sharedUi.batchRetryN.replace('{n}', String(stats.lowCount))}</span>
               <span className="hidden [.cinema-page_&]:inline cinema-mono tracking-wider">▶ BATCH RETRY · {stats.lowCount}</span>
             </>
           )}
         </button>
       ) : (
         <span className="ml-auto text-[10.5px] text-emerald-300/70 [.cinema-page_&]:text-[var(--cinema-green)] [.cinema-page_&]:cinema-mono [.cinema-page_&]:tracking-wider">
-          <span className="[.cinema-page_&]:hidden">✓ 所有镜头已达标</span>
+          <span className="[.cinema-page_&]:hidden">✓ {t.sharedUi.allShotsPass}</span>
           <span className="hidden [.cinema-page_&]:inline">✓ ALL SHOTS PASS</span>
         </span>
       )}
     </div>
-    {/* v2.13.3 — 仅 cinema 模式下额外渲染 donut + per-shot bar list */}
+    {/* v2.13.3 — extra donut + per-shot bars in cinema mode only */}
     <CameoDashboard storyboards={storyboards} stats={stats} />
     </>
   );
@@ -295,7 +298,8 @@ function CameoDashboard({
   storyboards: Array<{ data?: CameoData; shotNumber?: number }>;
   stats: { evaluated: number; avg: number | null; lowCount: number; retriedCount: number };
 }) {
-  // 准备 BarList 数据
+  const { t } = useLocale();
+  // Prepare BarList data
   const items = useMemo(() => {
     return storyboards
       .filter((sb) => typeof sb.shotNumber === 'number')
@@ -306,7 +310,7 @@ function CameoDashboard({
       }));
   }, [storyboards]);
 
-  // donut 三段统计 (≥85 pass / 70-84 warn / <70 fail / null na)
+  // donut three-tier counts (≥85 pass / 70-84 warn / <70 fail / null na)
   const seg = useMemo(() => {
     let pass = 0, warn = 0, fail = 0, na = 0;
     for (const it of items) {
@@ -326,7 +330,7 @@ function CameoDashboard({
 
   return (
     <div className="hidden [.cinema-page_&]:grid grid-cols-1 md:grid-cols-[auto_1fr] gap-5 mb-4 cinema-card-hi p-4">
-      {/* 左:donut + 三档统计 */}
+      {/* Left: donut + three-tier counts */}
       <div className="flex items-center gap-4">
         <CameoDonut
           pass={seg.pass}
@@ -362,10 +366,10 @@ function CameoDashboard({
           )}
         </div>
       </div>
-      {/* 右:per-shot bar list */}
+      {/* Right: per-shot bar list */}
       <div className="min-w-0">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="cinema-eyebrow tracking-widest">PER-SHOT · 最弱镜头优先</span>
+          <span className="cinema-eyebrow tracking-widest">PER-SHOT · {t.sharedUi.weakestFirst}</span>
           <span className="cinema-mono text-[10px] opacity-50">click → jump</span>
         </div>
         <CameoBarList items={items} threshold={75} onClickShot={scrollToShot} maxRows={12} />

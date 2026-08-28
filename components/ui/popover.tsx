@@ -3,14 +3,14 @@
 /**
  * components/ui/popover (v2.13.5 · shadcn-style on Radix)
  *
- * 比手写 dropdown 强:
- *   - 自动定位 (collision detection, flips at viewport edge)
- *   - portal 到 body 顶层, 不被 overflow-hidden 容器裁剪
- *   - 焦点管理 + Esc 关闭 + 点外面关闭, 全 ARIA 标记
+ * Stronger than a hand-rolled dropdown:
+ *   - auto-position (collision detection, flips at viewport edge)
+ *   - portals to document.body so overflow-hidden parents cannot clip it
+ *   - focus management + Esc to close + click-outside, full ARIA
  *
- * 用法:
+ * Usage:
  *   <Popover>
- *     <PopoverTrigger asChild><button>详情</button></PopoverTrigger>
+ *     <PopoverTrigger asChild><button>Details</button></PopoverTrigger>
  *     <PopoverContent align="end">
  *       <h4>SHOT 03</h4>
  *       <p>...</p>
@@ -36,7 +36,7 @@ const PopoverContent = React.forwardRef<
       align={align}
       sideOffset={sideOffset}
       className={cn(
-        // 影院 card_hi 风: 厚边 + amber 高光 + 衬线副标题字号
+        // Cinema card_hi: thick border + amber highlight + serif subtitle size
         'z-50 w-72 rounded-md border p-4 outline-none',
         'border-[var(--cinema-border-hi)] bg-[var(--cinema-surface)]',
         'text-[var(--cinema-text)]',

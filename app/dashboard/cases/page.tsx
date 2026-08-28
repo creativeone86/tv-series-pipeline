@@ -6,7 +6,8 @@ import { Copy, Check, Play, Eye, Heart, Sparkle as Sparkles } from '@phosphor-ic
 import { useLocale } from '@/hooks/use-locale';
 
 export default function CasesPage() {
-  const { t } = useLocale();
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { dashMore: Record<string, string> };
   const [cases, setCases] = useState<any[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -55,7 +56,7 @@ export default function CasesPage() {
                 />
               ) : (
                 <>
-                  {/* v9.5.5 修复:有视频的卡片直接静音循环自动播放(展示真片段),非仅 gradient 占位 */}
+                  {/* v9.5.5 fix: cards with video autoplay muted loop (real clip), not just a gradient placeholder */}
                   {c.videoUrl ? (
                     <video
                       src={c.videoUrl}
@@ -67,13 +68,13 @@ export default function CasesPage() {
                   )}
                   {c.videoUrl && (
                     <>
-                      <span className="absolute top-2.5 left-2.5 text-[10px] px-1.5 py-0.5 rounded bg-black/55 text-white/80 border border-white/10 backdrop-blur-sm">示意片段</span>
+                      <span className="absolute top-2.5 left-2.5 text-[10px] px-1.5 py-0.5 rounded bg-black/55 text-white/80 border border-white/10 backdrop-blur-sm">{t.dashMore.demoClip}</span>
                       <button
                         onClick={(e) => { e.stopPropagation(); setPlayingId(c.id); }}
-                        aria-label="有声播放"
+                        aria-label={t.dashMore.playWithAudio}
                         className="absolute top-2.5 right-2.5 z-10 text-[10px] px-2 py-1 rounded-full bg-black/55 text-white/90 border border-white/15 backdrop-blur-sm inline-flex items-center gap-1 cursor-pointer hover:bg-black/75 transition-all"
                       >
-                        <Play weight="fill" className="w-2.5 h-2.5" /> 有声播放
+                        <Play weight="fill" className="w-2.5 h-2.5" /> {t.dashMore.playWithAudio}
                       </button>
                     </>
                   )}
@@ -125,8 +126,7 @@ export default function CasesPage() {
       </div>
 
       <p className="mt-6 text-[11px] text-[var(--soft)] leading-relaxed max-w-3xl">
-        ⚠️ 部分卡片的「示意片段」引用自公开影视作品(如《英雄联盟：双城之战 / Arcane》，版权归 Riot Games · Fortiche · Netflix），
-        仅用于个人学习与画风参考、<strong className="text-[var(--muted)]">非商业用途</strong>，版权归原作者所有。正式上线请替换为自有或已授权素材。
+        {t.dashMore.casesCopyrightLead}<strong className="text-[var(--muted)]">{t.dashMore.casesCopyrightStrong}</strong>{t.dashMore.casesCopyrightTail}
       </p>
     </div>
   );

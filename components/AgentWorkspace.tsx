@@ -5,6 +5,8 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { Agent, AgentRole } from '@/types/agents';
 import { Sparkle as Sparkles, CheckCircle as CheckCircle2, WarningCircle as AlertCircle, CircleNotch as Loader2, Clock } from '@phosphor-icons/react';
+import { useLocale } from '@/hooks/use-locale';
+import type { Translations } from '@/lib/i18n';
 
 interface AgentWorkspaceProps {
   agents: Agent[];
@@ -12,6 +14,7 @@ interface AgentWorkspaceProps {
 
 export function AgentWorkspace({ agents }: AgentWorkspaceProps) {
   const reduce = useReducedMotion();
+  const { t } = useLocale();
   return (
     <div className="space-y-4">
       <AnimatePresence>
@@ -24,7 +27,7 @@ export function AgentWorkspace({ agents }: AgentWorkspaceProps) {
             transition={{ delay: index * 0.1 }}
             className="group relative bg-white/5 border border-white/10 rounded-2xl p-6 hover:border-white/20 transition-all backdrop-blur-xl"
           >
-            {/* 背景光效 */}
+            {/* Ambient hover glow */}
             <div className={`absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity ${
               agent.status === 'working' ? 'bg-gradient-to-r from-green-500/5 to-emerald-500/5' :
               agent.status === 'thinking' ? 'bg-gradient-to-r from-yellow-500/5 to-amber-500/5' :
@@ -33,7 +36,7 @@ export function AgentWorkspace({ agents }: AgentWorkspaceProps) {
             }`} />
 
             <div className="relative flex items-start gap-6">
-              {/* Agent 头像 */}
+              {/* Agent avatar */}
               <div className="relative flex-shrink-0">
                 <div className="relative">
                   <Avatar className="w-20 h-20 border-2 border-white/10">
@@ -43,7 +46,7 @@ export function AgentWorkspace({ agents }: AgentWorkspaceProps) {
                     </AvatarFallback>
                   </Avatar>
 
-                  {/* 状态指示器 */}
+                  {/* Status indicator */}
                   <motion.div
                     className={`absolute -bottom-1 -right-1 w-7 h-7 rounded-full border-2 border-black flex items-center justify-center ${
                       agent.status === 'working' ? 'bg-green-500' :
@@ -71,7 +74,7 @@ export function AgentWorkspace({ agents }: AgentWorkspaceProps) {
                 </div>
               </div>
 
-              {/* Agent 信息 */}
+              {/* Agent info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between mb-3">
                   <div>
@@ -79,14 +82,14 @@ export function AgentWorkspace({ agents }: AgentWorkspaceProps) {
                       {agent.name}
                     </h3>
                     <p className="text-sm text-gray-400">
-                      {getRoleName(agent.role)}
+                      {getRoleName(agent.role, t)}
                     </p>
                   </div>
 
                   <StatusBadge status={agent.status} />
                 </div>
 
-                {/* 当前任务 */}
+                {/* Current task */}
                 {agent.currentTask && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
@@ -100,18 +103,18 @@ export function AgentWorkspace({ agents }: AgentWorkspaceProps) {
                   </motion.div>
                 )}
 
-                {/* 进度条 */}
+                {/* Progress */}
                 {agent.status !== 'idle' && agent.status !== 'error' && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-400">进度</span>
+                      <span className="text-gray-400">{t.sharedUi.progress}</span>
                       <span className="text-white font-medium">{agent.progress}%</span>
                     </div>
                     <Progress value={agent.progress} className="h-2" />
                   </div>
                 )}
 
-                {/* 错误信息 */}
+                {/* Error */}
                 {agent.error && (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
@@ -121,7 +124,7 @@ export function AgentWorkspace({ agents }: AgentWorkspaceProps) {
                     <div className="flex items-start gap-3">
                       <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-sm font-medium text-red-300 mb-1">出错了</p>
+                        <p className="text-sm font-medium text-red-300 mb-1">{t.sharedUi.somethingWentWrong}</p>
                         <p className="text-sm text-red-200/80">{agent.error}</p>
                       </div>
                     </div>
@@ -136,14 +139,14 @@ export function AgentWorkspace({ agents }: AgentWorkspaceProps) {
   );
 }
 
-// 状态徽章组件
 function StatusBadge({ status }: { status: Agent['status'] }) {
+  const { t } = useLocale();
   const statusConfig = {
-    idle: { label: '待命中', className: 'bg-gray-500/20 text-gray-300' },
-    thinking: { label: '思考中', className: 'bg-yellow-500/20 text-yellow-300' },
-    working: { label: '工作中', className: 'bg-green-500/20 text-green-300' },
-    completed: { label: '已完成', className: 'bg-blue-500/20 text-blue-300' },
-    error: { label: '出错了', className: 'bg-red-500/20 text-red-300' },
+    idle: { label: t.sharedUi.statusIdle, className: 'bg-gray-500/20 text-gray-300' },
+    thinking: { label: t.sharedUi.statusThinking, className: 'bg-yellow-500/20 text-yellow-300' },
+    working: { label: t.sharedUi.statusWorking, className: 'bg-green-500/20 text-green-300' },
+    completed: { label: t.dashProjects.statusCompleted, className: 'bg-blue-500/20 text-blue-300' },
+    error: { label: t.sharedUi.somethingWentWrong, className: 'bg-red-500/20 text-red-300' },
   };
 
   const config = statusConfig[status];
@@ -155,18 +158,17 @@ function StatusBadge({ status }: { status: Agent['status'] }) {
   );
 }
 
-// 获取角色名称
-function getRoleName(role: AgentRole): string {
+function getRoleName(role: AgentRole, t: Translations): string {
   const roleNames: Record<string, string> = {
-    [AgentRole.DIRECTOR]: 'AI 导演',
-    [AgentRole.WRITER]: 'AI 编剧',
-    [AgentRole.CHARACTER_DESIGNER]: 'AI 角色设计师',
-    [AgentRole.SCENE_DESIGNER]: 'AI 场景设计师',
-    [AgentRole.STORYBOARD]: 'AI 分镜师',
-    [AgentRole.VIDEO_PRODUCER]: 'AI 视频制作',
-    [AgentRole.EDITOR]: 'AI 剪辑师',
-    [AgentRole.PRODUCER]: 'AI 制片人',
+    [AgentRole.DIRECTOR]: t.sharedUi.aiDirector,
+    [AgentRole.WRITER]: t.sharedUi.aiWriter,
+    [AgentRole.CHARACTER_DESIGNER]: t.sharedUi.aiCharacterDesigner,
+    [AgentRole.SCENE_DESIGNER]: t.sharedUi.aiSceneDesigner,
+    [AgentRole.STORYBOARD]: t.sharedUi.aiStoryboard,
+    [AgentRole.VIDEO_PRODUCER]: t.sharedUi.aiVideoProducer,
+    [AgentRole.EDITOR]: t.sharedUi.aiEditor,
+    [AgentRole.PRODUCER]: t.sharedUi.aiProducer,
   };
 
-  return roleNames[role] || '未知角色';
+  return roleNames[role] || t.sharedUi.unknownRole;
 }

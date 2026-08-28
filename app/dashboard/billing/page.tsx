@@ -1,14 +1,14 @@
 'use client';
 
 /**
- * /dashboard/billing · Sprint C.2 — 订阅管理页
+ * /dashboard/billing · Sprint C.2 — subscription management
  *
- * 4 卡:Free / Creator / Pro / Enterprise. 当前 tier 高亮.
- * 点"升级到 X" → POST /api/stripe/checkout → 重定向到 Stripe Checkout.
- * Stripe 跳回时带 ?status=success 或 ?status=canceled, 我们渲染 toast.
+ * 4 cards: Free / Creator / Pro / Enterprise. Current tier is highlighted.
+ * "Upgrade to X" → POST /api/stripe/checkout → redirect to Stripe Checkout.
+ * Stripe returns with ?status=success or ?status=canceled; we toast that.
  *
- * 不直接做"降级 / 取消" — 那走 Stripe 的 Customer Portal (Stripe 自己的页面).
- * MVP 里把 Customer Portal 链接当 placeholder, 等用户配 STRIPE_PORTAL_LINK 再启用.
+ * No in-app downgrade / cancel — that is Stripe Customer Portal (Stripe's own page).
+ * MVP treats the portal link as a placeholder until STRIPE_PORTAL_LINK is set.
  */
 
 import { useEffect, useState } from 'react';
@@ -22,12 +22,13 @@ import { useLocale } from '@/hooks/use-locale';
 export default function BillingPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
-  const { t } = useLocale();
+  const { t: tRaw, locale } = useLocale();
+  const t = tRaw as typeof tRaw & { dashMore: Record<string, string> };
   const params = useSearchParams();
   const [currentTier, setCurrentTier] = useState<string>('free');
   const [busy, setBusy] = useState<string | null>(null);
 
-  // 从 /api/auth/me 拿 subscription_tier(/api/auth/me 已经返回, 见下方注释)
+  // Read subscription_tier from /api/auth/me (already returned; see comment below)
   useEffect(() => {
     const fetchPlan = async () => {
       try {
@@ -39,12 +40,12 @@ export default function BillingPage() {
           const data = await res.json();
           if (data?.subscriptionTier) setCurrentTier(data.subscriptionTier);
         }
-      } catch { /* 静默 — 默认 free */ }
+      } catch { /* silent — default free */ }
     };
     fetchPlan();
   }, [user]);
 
-  // Stripe 跳回时显示状态
+  // Show status when Stripe redirects back
   useEffect(() => {
     const status = params.get('status');
     if (status === 'success') {
@@ -73,7 +74,7 @@ export default function BillingPage() {
         showToast({ title: data.error || t.billing.checkoutFailed, type: 'error' });
         return;
       }
-      // 跳到 Stripe Checkout 页
+      // Redirect to Stripe Checkout
       window.location.href = data.url;
     } catch (e) {
       showToast({ title: e instanceof Error ? e.message : t.billing.checkoutFailed, type: 'error' });
@@ -87,7 +88,7 @@ export default function BillingPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold">{t.billing.title}</h1>
         <p className="text-sm text-[var(--soft)] mt-1">
-          {t.billing.currentTier}<span className="text-[#E8C547] font-semibold">{tierLabel(currentTier)}</span>
+          {t.billing.currentTier}<span className="text-[#E8C547] font-semibold">{tierLabel(currentTier, locale, t.dashMore.freeTier)}</span>
           <span className="text-white/30 mx-2">·</span>
           {t.billing.paymentNote}
         </p>
@@ -123,7 +124,7 @@ export default function BillingPage() {
               <div className="mb-3">
                 <div className="text-xs text-[var(--soft)] uppercase tracking-wider">{tier.nameEn}</div>
                 <div className="text-xl font-bold mt-0.5" style={{ color: tier.color }}>
-                  {tier.name}
+                  {locale === 'en' ? (tier.nameEn || tier.name) : tier.name}
                 </div>
               </div>
               <div className="mb-4">
@@ -164,7 +165,7 @@ export default function BillingPage() {
                 ) : isCustom ? (
                   <>{t.billing.businessTalk}</>
                 ) : (
-                  <>{t.billing.upgradeTo} {tier.name}</>
+                  <>{t.billing.upgradeTo} {locale === 'en' ? (tier.nameEn || tier.name) : tier.name}</>
                 )}
               </button>
             </div>
@@ -193,6 +194,8 @@ export default function BillingPage() {
   );
 }
 
-function tierLabel(id: string): string {
-  return PRICING_TIERS.find(t => t.id === id)?.name || '免费版';
+function tierLabel(id: string, locale: string, fallback: string): string {
+  const tier = PRICING_TIERS.find(x => x.id === id);
+  if (!tier) return fallback;
+  return locale === 'en' ? (tier.nameEn || tier.name) : tier.name;
 }

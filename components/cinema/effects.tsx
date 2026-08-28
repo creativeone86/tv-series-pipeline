@@ -1,25 +1,25 @@
 'use client';
 
 /**
- * Cinema 微动效组件 (v2.13.3 / v2.13.4, Aceternity 风格)
+ * Cinema micro-motion components (v2.13.3 / v2.13.4, Aceternity-style)
  *
- * 全用 framer-motion(已是项目依赖)+ 纯 CSS,无需新装包。
+ * All framer-motion (already a dep) + plain CSS; no new packages.
  *
- * 包含:
- *   <NumberTicker>        — 数字滚动到指定值(项目计数 / 评分等)
- *   <BorderBeam>          — 旋转的 amber 渐变边框光束(用于 Slate / 主 CTA)
- *   <AnimatedShinyText>   — 文字上的 amber 光波扫过(灵感库 / 提示)
- *   <Marquee>             — 横向无限滚动(灵感卡 / 案例库)
- *   <MovingBorderButton>  — v2.13.4 · 沿元素四周跑的 amber 高光,主 CTA 用
- *   <TextGenerateEffect>  — v2.13.4 · 词级别 stagger 显现,Slate 副标题用
- *   <Spotlight>           — v2.13.4 · SVG 锥光,Slate 顶部装饰
+ * Includes:
+ *   <NumberTicker>        — count up to a value (project counts / scores)
+ *   <BorderBeam>          — rotating amber gradient border beam (Slate / primary CTA)
+ *   <AnimatedShinyText>   — amber shine sweep on text (inspiration / hints)
+ *   <Marquee>             — infinite horizontal marquee (inspiration / cases)
+ *   <MovingBorderButton>  — v2.13.4 · amber highlight racing the border, for primary CTAs
+ *   <TextGenerateEffect>  — v2.13.4 · word-level stagger reveal, for Slate subtitles
+ *   <Spotlight>           — v2.13.4 · SVG cone spotlight, Slate top decoration
  */
 
 import { useEffect, useRef, useState, useMemo, type ReactNode, type ButtonHTMLAttributes } from 'react';
 import { motion, useMotionValue, useSpring, useInView, useMotionTemplate, useAnimationFrame, useReducedMotion } from 'framer-motion';
 
 // ────────────────────────────────────────────────
-// NumberTicker — 滚到目标值
+// NumberTicker — count to target
 // ────────────────────────────────────────────────
 export function NumberTicker({
   value,
@@ -49,7 +49,7 @@ export function NumberTicker({
 
   useEffect(() => {
     if (!inView) return;
-    // v10.3.4 a11y: 数字弹簧非 transform/layout,MotionConfig 不会关 → 减少动效时直接落终值(不滚动)
+    // v10.3.4 a11y: number spring is not transform/layout so MotionConfig will not disable it → jump to final value when reduce-motion
     if (reduce) { setDisplay(value.toFixed(decimals)); return; }
     motionVal.set(value);
   }, [inView, value, motionVal, reduce, decimals]);
@@ -69,7 +69,7 @@ export function NumberTicker({
 }
 
 // ────────────────────────────────────────────────
-// BorderBeam — 旋转的边框光束
+// BorderBeam — rotating border beam
 // ────────────────────────────────────────────────
 export function BorderBeam({
   size = 200,
@@ -88,7 +88,7 @@ export function BorderBeam({
     <div
       className="pointer-events-none absolute inset-0 overflow-hidden"
       style={{
-        // 用 CSS 变量交给 keyframes 用
+        // hand CSS variables to the keyframes
         ['--size' as any]: `${size}px`,
         ['--duration' as any]: `${duration}s`,
         ['--delay' as any]: `${delay}s`,
@@ -117,7 +117,7 @@ export function BorderBeam({
 }
 
 // ────────────────────────────────────────────────
-// AnimatedShinyText — 文字光波扫过
+// AnimatedShinyText — shine sweep on text
 // ────────────────────────────────────────────────
 export function AnimatedShinyText({
   children,
@@ -148,7 +148,7 @@ export function AnimatedShinyText({
 }
 
 // ────────────────────────────────────────────────
-// Marquee — 横向无限滚动
+// Marquee — infinite horizontal scroll
 // ────────────────────────────────────────────────
 export function Marquee({
   children,
@@ -169,7 +169,7 @@ export function Marquee({
     >
       <motion.div
         className="flex shrink-0 gap-3"
-        // v10.3.4 a11y: 减少动效时不滚动 —— 静止呈现首屏内容
+        // v10.3.4 a11y: do not scroll when reduce-motion — show the first screen still
         animate={reduce ? { x: '0%' } : { x: ['0%', '-100%'] }}
         transition={reduce ? { duration: 0 } : { duration: speed, repeat: Infinity, ease: 'linear' }}
         whileHover={!reduce && pauseOnHover ? { x: '0%' } : undefined}
@@ -182,10 +182,10 @@ export function Marquee({
 }
 
 // ────────────────────────────────────────────────
-// MovingBorderButton — Aceternity-style 主 CTA
+ // MovingBorderButton — Aceternity-style primary CTA
 //
-// 沿四周跑的 amber 高光带 + 内置 button,用于"开机 / ROLL / 润色 / 生成视频"
-// 这种"用户主路径终点"按钮。SVG <rect> 沿 stroke 路径取点,放一个发光球。
+// amber highlight racing the edge + built-in button, for "boot / ROLL / polish / gen video"
+// these "end of the happy path" buttons. SVG <rect> samples the stroke and places a glow.
 // ────────────────────────────────────────────────
 export function MovingBorderButton({
   children,
@@ -198,20 +198,20 @@ export function MovingBorderButton({
   ...rest
 }: {
   children: ReactNode;
-  /** 高光绕一圈的毫秒数 */
+  /** milliseconds for one lap of the highlight */
   duration?: number;
   borderRadius?: number;
   containerClassName?: string;
   borderClassName?: string;
   className?: string;
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'>) {
-  // 高光的位置, framer 动画驱动
+  // highlight position, driven by framer
   const pathRef = useRef<SVGRectElement | null>(null);
   const progress = useMotionValue(0);
   const reduce = useReducedMotion();
 
   useAnimationFrame((time) => {
-    // v10.3.4 a11y: 手动 rAF 不受 MotionConfig 管 → 减少动效时停跑边框高光
+    // v10.3.4 a11y: manual rAF is outside MotionConfig → stop the border highlight when reduce-motion
     if (disabled || reduce) return;
     const length = pathRef.current?.getTotalLength?.() ?? 0;
     if (length === 0) return;
@@ -241,7 +241,7 @@ export function MovingBorderButton({
       style={{ borderRadius }}
       {...rest}
     >
-      {/* SVG 取点路径 (隐藏) */}
+      {/* SVG sampling path (hidden) */}
       <div className="absolute inset-0 pointer-events-none">
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -272,7 +272,7 @@ export function MovingBorderButton({
         )}
       </div>
 
-      {/* 内层真正的按钮 surface */}
+      {/* inner real button surface */}
       <span
         className={`relative flex h-full w-full items-center justify-center ${className}`}
         style={{ borderRadius: borderRadius - 1 }}
@@ -284,17 +284,17 @@ export function MovingBorderButton({
 }
 
 // ────────────────────────────────────────────────
-// TextGenerateEffect — 词级别 stagger 显现
+// TextGenerateEffect — word-level stagger reveal
 //
-// 把一段文本拆成词, in-view 后逐词淡入(类似 ChatGPT 流式打字感)。
-// 不调 LLM, 纯前端动画, 适合 Slate notes / 引导文案。
+// Split text into words and fade them in when in-view (ChatGPT-like stream feel).
+// No LLM; front-end animation only. Good for Slate notes / guide copy.
 // ────────────────────────────────────────────────
 export function TextGenerateEffect({
   text,
   className = '',
-  /** 单词淡入间隔 ms */
+  /** ms between word fades */
   stagger = 60,
-  /** 单词显现时长 ms */
+  /** ms for each word to appear */
   duration = 320,
 }: {
   text: string;
@@ -305,17 +305,17 @@ export function TextGenerateEffect({
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true, margin: '-10% 0px' });
   const reduce = useReducedMotion();
-  // 中文按字符切, 英文按空格切
+    // CJK: split per character; Latin: split on spaces
   const words = useMemo(() => splitForReveal(text), [text]);
 
   return (
     <span ref={ref} className={className}>
-      {/* v10.3.3 a11y: aria-label 不能用在无 role 的 span 上;改用 sr-only 真文本供读屏,动画词逐个 aria-hidden */}
+      {/* v10.3.3 a11y: aria-label cannot sit on a span with no role; use sr-only real text for AT, animate words aria-hidden */}
       <span className="sr-only">{text}</span>
       {words.map((w, i) => (
         <motion.span
           key={`${i}-${w}`}
-          // v10.3.4 a11y: 减少动效时一次性呈现(无 stagger / 位移 / 模糊)
+          // v10.3.4 a11y: show everything at once when reduce-motion (no stagger / move / blur)
           initial={reduce ? false : { opacity: 0, filter: 'blur(6px)', y: 4 }}
           animate={
             reduce
@@ -339,7 +339,7 @@ export function TextGenerateEffect({
   );
 }
 
-/** 中英文混合 stagger 切分:中文逐字, 英文按空格段, 标点跟在前面词后 */
+/** Mixed CJK/Latin stagger split: CJK per char, Latin on spaces, punctuation stays with the prior word */
 function splitForReveal(text: string): string[] {
   const out: string[] = [];
   let buf = '';
@@ -350,8 +350,8 @@ function splitForReveal(text: string): string[] {
     }
   };
   for (const ch of text) {
-    // 中文 / 日韩字符 — 逐字 (CJK Unified + Halfwidth/Fullwidth Forms + 中文标点)
-    if (/[　-鿿＀-￯]/.test(ch)) {
+    // CJK / JK characters — per char (CJK Unified + half/fullwidth forms + CJK punctuation)
+    if (/[\u3000-\u9fff\uff00-\uffef]/.test(ch)) {
       flush();
       out.push(ch);
     } else if (ch === ' ') {
@@ -366,10 +366,10 @@ function splitForReveal(text: string): string[] {
 }
 
 // ────────────────────────────────────────────────
-// Spotlight — Aceternity 风格的 SVG 锥光
+// Spotlight — Aceternity-style SVG cone light
 //
-// 用作 hero / Slate 卡片的背景装饰(右上 / 左上 默认右上)。
-// 不影响布局, pointer-events:none, 父容器 relative + overflow-hidden。
+// Background decoration for hero / Slate cards (top-right / top-left; default top-right).
+// Does not affect layout; pointer-events:none; parent should be relative + overflow-hidden.
 // ────────────────────────────────────────────────
 export function Spotlight({
   className = '',
@@ -380,7 +380,7 @@ export function Spotlight({
   fill?: string;
   position?: 'top-right' | 'top-left' | 'top-center';
 }) {
-  // 椭圆中心的位置百分比
+  // ellipse center as a percent
   const cx = position === 'top-left' ? 18 : position === 'top-center' ? 50 : 82;
 
   return (

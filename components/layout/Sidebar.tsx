@@ -2,20 +2,22 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useLocale } from '@/hooks/use-locale';
 
 interface SidebarProps {
   width: number;
 }
 
 export default function Sidebar({ width }: SidebarProps) {
+  const { t } = useLocale();
   const [activeTab, setActiveTab] = useState('text');
 
   const tools = [
-    { id: 'text', icon: '📝', label: '文本生成' },
-    { id: 'image', icon: '🎨', label: '图片生成' },
-    { id: 'video', icon: '🎬', label: '视频生成' },
-    { id: 'effect', icon: '✨', label: '特效' },
-    { id: 'assets', icon: '📦', label: '资产库' },
+    { id: 'text', icon: '📝', label: t.sharedUi.toolText },
+    { id: 'image', icon: '🎨', label: t.sharedUi.toolImage },
+    { id: 'video', icon: '🎬', label: t.sharedUi.toolVideo },
+    { id: 'effect', icon: '✨', label: t.sharedUi.toolEffect },
+    { id: 'assets', icon: '📦', label: t.sharedUi.toolAssets },
   ];
 
   return (
@@ -55,27 +57,28 @@ export default function Sidebar({ width }: SidebarProps) {
 }
 
 function ToolContent({ activeTab }: { activeTab: string }) {
+  const { t } = useLocale();
   const contentMap: Record<string, { title: string; description: string }> = {
     text: {
-      title: '文本生成',
-      description: '使用 AI 生成漫画脚本、对话和故事'
+      title: t.sharedUi.toolText,
+      description: t.sharedUi.toolTextDesc,
     },
     image: {
-      title: '图片生成',
-      description: '生成漫画场景、角色和背景图片'
+      title: t.sharedUi.toolImage,
+      description: t.sharedUi.toolImageDesc,
     },
     video: {
-      title: '视频生成',
-      description: '将漫画场景转换为动态视频'
+      title: t.sharedUi.toolVideo,
+      description: t.sharedUi.toolVideoDesc,
     },
     effect: {
-      title: '特效',
-      description: '为漫画添加视觉特效和滤镜'
+      title: t.sharedUi.toolEffect,
+      description: t.sharedUi.toolEffectDesc,
     },
     assets: {
-      title: '资产库',
-      description: '管理角色、场景和素材资源'
-    }
+      title: t.sharedUi.toolAssets,
+      description: t.sharedUi.toolAssetsDesc,
+    },
   };
 
   const content = contentMap[activeTab];
@@ -91,9 +94,8 @@ function ToolContent({ activeTab }: { activeTab: string }) {
         </p>
       </div>
 
-      {/* 工具特定内容将在后续添加 */}
       <div className="text-sm text-gray-500 dark:text-gray-500 italic">
-        工具内容开发中...
+        {t.sharedUi.toolComingSoon}
       </div>
     </div>
   );

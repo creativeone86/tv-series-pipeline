@@ -1,24 +1,25 @@
 'use client';
 
 /**
- * DiffPanel — 原文 vs 润色后 并排对比视图。
+ * DiffPanel — side-by-side original vs polished comparison.
  *
- * 为什么独立成组件:
- *   润色页本身已经很长, 把 diff 渲染 + 小状态栏抽出来便于复用
- *   (以后项目详情页想展示"上次润色改了啥"也能直接嵌)。
+ * Why a separate component:
+ *   The polish page is already long; extracting diff rendering + a compact
+ *   status bar makes reuse easier (e.g. project detail "what last polish changed").
  *
- * 渲染逻辑:
- *   - same   → 两列都是同一行, 淡灰
- *   - mod    → 左红底(原) + 右绿底(新), 同一视觉行
- *   - del    → 只左, 右占位空白
- *   - add    → 只右, 左占位空白
+ * Render rules:
+ *   - same   → both columns show the same line, muted gray
+ *   - mod    → left red (old) + right green (new), same visual row
+ *   - del    → left only; right is a blank placeholder
+ *   - add    → right only; left is a blank placeholder
  *
- * 视觉上用 CSS grid-cols-2 让左右永远对齐, 单元格上染色 + 左侧小色条
- * (借鉴 GitHub/GitLab 的 diff 面板风格)。
+ * CSS grid-cols-2 keeps columns aligned; cells are tinted with a left color bar
+ * (GitHub/GitLab-style diff panel).
  */
 
 import { useMemo } from 'react';
 import { diffLines, diffStats, type DiffRow } from '@/lib/text-diff';
+import { useLocale } from '@/hooks/use-locale';
 
 export default function DiffPanel({
   before, after, maxHeight = '60vh',
@@ -27,36 +28,38 @@ export default function DiffPanel({
   after: string;
   maxHeight?: string;
 }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { polishUi: Record<string, string> };
   const rows = useMemo(() => diffLines(before, after), [before, after]);
   const stats = useMemo(() => diffStats(rows), [rows]);
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-black/25 overflow-hidden">
-      {/* 状态栏: 改动统计 */}
+      {/* Status bar: change stats */}
       <div className="px-3 py-2 bg-black/30 border-b border-[var(--border)] flex items-center gap-3 text-[11px] flex-wrap">
         <span className="text-white/45 tracking-wider uppercase">Diff</span>
         <span className="text-emerald-300 font-mono tabular-nums">+ {stats.add + stats.mod}</span>
         <span className="text-rose-300 font-mono tabular-nums">− {stats.del + stats.mod}</span>
         <span className="text-white/45 font-mono tabular-nums">= {stats.same}</span>
         <span className="ml-auto text-white/40">
-          改动率 <span className="font-mono text-white/70">{Math.round(stats.changeRatio * 100)}%</span>
+          {t.polishUi.changeRate} <span className="font-mono text-white/70">{Math.round(stats.changeRatio * 100)}%</span>
           {' · '}
-          共 <span className="font-mono text-white/70">{stats.total}</span> 行
+          {t.polishUi.totalLinesBefore}<span className="font-mono text-white/70">{stats.total}</span>{t.polishUi.totalLinesAfter}
         </span>
       </div>
 
-      {/* Diff 主体 */}
+      {/* Diff body */}
       <div
         className="overflow-auto font-[ui-monospace,SFMono-Regular,Menlo,monospace] text-[12.5px] leading-relaxed"
         style={{ maxHeight }}
       >
         <div className="grid grid-cols-[1fr_1fr] min-w-full">
-          {/* 顶部表头(sticky) */}
+          {/* Sticky column headers */}
           <div className="sticky top-0 z-10 px-3 py-1.5 bg-black/50 backdrop-blur border-b border-white/10 text-[10px] tracking-widest uppercase text-white/45">
-            原文
+            {t.polishUi.original}
           </div>
           <div className="sticky top-0 z-10 px-3 py-1.5 bg-black/50 backdrop-blur border-b border-white/10 border-l border-l-white/10 text-[10px] tracking-widest uppercase text-white/45">
-            润色后
+            {t.polishUi.polishedAfter}
           </div>
 
           {rows.map((r, idx) => (
@@ -65,7 +68,7 @@ export default function DiffPanel({
 
           {rows.length === 0 ? (
             <div className="col-span-2 p-6 text-center text-white/40 text-[12px]">
-              两段内容完全一致 — 无差异可显示
+              {t.polishUi.noDiff}
             </div>
           ) : null}
         </div>
@@ -75,11 +78,11 @@ export default function DiffPanel({
 }
 
 function DiffRowView({ row }: { row: DiffRow }) {
-  // 颜色方案, 参考 GitHub diff:
-  //   same → 中性灰
-  //   del  → 左红 (#f85149-ish), 右空
-  //   add  → 左空, 右绿 (#3fb950-ish)
-  //   mod  → 左红 + 右绿, 视觉上同一行
+  // Color scheme, after GitHub diff:
+  //   same → neutral gray
+  //   del  → left red (#f85149-ish), right empty
+  //   add  → left empty, right green (#3fb950-ish)
+  //   mod  → left red + right green, same visual row
   if (row.kind === 'same') {
     return (
       <>

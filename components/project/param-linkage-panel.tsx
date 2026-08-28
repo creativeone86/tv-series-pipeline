@@ -1,11 +1,12 @@
 'use client';
 
 /**
- * components/project/param-linkage-panel (v8.2) — 参数联动 / JSON↔可视化同步
- * (对标 CineMatrix「Parameter Linkage / JSON to Visual Sync」)
+ * components/project/param-linkage-panel (v8.2) — param linkage / JSON↔visual sync
+ * (CineMatrix "Parameter Linkage / JSON to Visual Sync").
  *
- * 把项目结构化参数 (每镜 ShotSpec + 连贯性 + 格式) 以 JSON 呈现 + 编辑, 校验后一键写回 (Sync Now)。
- * 顶部联动示意图: 时间线 ↔ 分镜卡 ↔ 参数, 实时同步 + 上次同步时间。
+ * Project structured params (per-shot ShotSpec + continuity + format) as editable
+ * JSON; validate then write back (Sync Now).
+ * Top diagram: timeline ↔ shot card ↔ params, live sync + last-sync time.
  */
 
 import { useMemo, useState } from 'react';
@@ -13,6 +14,7 @@ import { BracketsCurly as Braces, ArrowsClockwise as RefreshCw, Check, WarningCi
 import {
   buildParamDoc, paramDocToJson, parseParamDoc, diffParamDoc, type ParamDoc,
 } from '@/lib/param-linkage';
+import { useLocale } from '@/hooks/use-locale';
 
 export function ParamLinkagePanel({ projectId, shots = [], continuity, format, onSynced }: {
   projectId: string;
@@ -21,15 +23,18 @@ export function ParamLinkagePanel({ projectId, shots = [], continuity, format, o
   format?: any;
   onSynced?: (doc: ParamDoc) => void;
 }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectMisc: Record<string, string> };
   const initial = useMemo(() => buildParamDoc({ shots, continuity, format }), [shots, continuity, format]);
   const [baseDoc, setBaseDoc] = useState<ParamDoc>(initial);
   const [text, setText] = useState<string>(() => paramDocToJson(initial));
   const [syncing, setSyncing] = useState(false);
-  const [lastSync, setLastSync] = useState<string>('从未');
+  const [lastSync, setLastSync] = useState<string>(t.projectMisc.neverSynced);
   const [msg, setMsg] = useState('');
 
   const parsed = useMemo(() => parseParamDoc(text), [text]);
   const diff = useMemo(() => (parsed.ok && parsed.doc ? diffParamDoc(baseDoc, parsed.doc) : null), [parsed, baseDoc]);
+  const nodeNames = [t.product.timeline, t.projectMisc.shotCard, t.projectMisc.params];
 
   async function sync() {
     if (!parsed.ok || !parsed.doc) return;
@@ -39,28 +44,31 @@ export function ParamLinkagePanel({ projectId, shots = [], continuity, format, o
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ doc: parsed.doc }),
       });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) { setMsg(j?.error || `同步失败 (${r.status})`); }
+      if (!r.ok) { setMsg(j?.error || t.projectMisc.syncFailedStatus.replace('{status}', String(r.status))); }
       else {
         setBaseDoc(parsed.doc);
         setText(paramDocToJson(parsed.doc));
         setLastSync(new Date().toLocaleTimeString());
-        setMsg(`已同步 ${j.syncedShots ?? 0} 镜 + 连贯性 + 格式`);
+        setMsg(t.projectMisc.syncedMsg.replace('{n}', String(j.syncedShots ?? 0)));
         onSynced?.(parsed.doc);
         setTimeout(() => setMsg(''), 4000);
       }
-    } catch (e: any) { setMsg(e?.message || '网络错误'); }
+    } catch (e: any) { setMsg(e?.message || t.auth.waitlistNetworkError); }
     finally { setSyncing(false); }
   }
 
   const dirty = !!diff && diff.total > 0;
+  const pendingBits = diff && diff.total > 0
+    ? ` · ${t.projectMisc.pendingSyncShots.replace('{n}', String(diff.changedShots.length))}${diff.formatChanged ? t.projectMisc.plusFormat : ''}${diff.continuityChanged ? t.projectMisc.plusContinuity : ''}${t.projectMisc.pendingSyncSuffix}`
+    : '';
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 联动示意图 */}
+      {/* Linkage diagram */}
       <div className="cinema-card !p-4">
-        <div className="cinema-eyebrow mb-3 flex items-center gap-1.5"><GitCompareArrows size={13} className="text-[var(--primary)]" /> 参数联动 · PARAMETER LINKAGE</div>
+        <div className="cinema-eyebrow mb-3 flex items-center gap-1.5"><GitCompareArrows size={13} className="text-[var(--primary)]" /> {t.projectMisc.paramLinkageTitle}</div>
         <div className="flex items-center justify-center gap-3 py-2">
-          {['时间线', '分镜卡', '参数'].map((n, i) => (
+          {nodeNames.map((n, i) => (
             <div key={n} className="flex items-center gap-3">
               <div className="rounded-lg border border-[var(--border)] px-3 py-2 text-center min-w-[72px]">
                 <div className="text-[11px] font-semibold">{n}</div>
@@ -72,16 +80,16 @@ export function ParamLinkagePanel({ projectId, shots = [], continuity, format, o
         </div>
         <div className="flex items-center justify-center gap-2 mt-1">
           <span className={`w-2 h-2 rounded-full ${dirty ? 'bg-[var(--secondary)]' : 'bg-[var(--accent-green)]'} ${dirty ? '' : 'animate-pulse'}`} />
-          <span className="cinema-mono text-[10px] opacity-70">{dirty ? '有未同步改动' : '实时同步 · 已一致'} · 上次同步 {lastSync}</span>
+          <span className="cinema-mono text-[10px] opacity-70">{dirty ? t.projectMisc.unsyncedChanges : t.projectMisc.liveSynced} · {t.projectMisc.lastSyncAt.replace('{time}', lastSync)}</span>
         </div>
       </div>
 
-      {/* JSON 编辑 + 同步 */}
+      {/* JSON editor + sync */}
       <div className="cinema-card !p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="cinema-eyebrow flex items-center gap-1.5"><Braces size={13} /> 参数 JSON ({baseDoc.shots.length} 镜)</span>
+          <span className="cinema-eyebrow flex items-center gap-1.5"><Braces size={13} /> {t.projectMisc.paramJsonN.replace('{n}', String(baseDoc.shots.length))}</span>
           {parsed.ok
-            ? <span className="cinema-mono text-[10px] text-[var(--accent-green)] flex items-center gap-1"><Check size={11} /> JSON 合法{diff && diff.total > 0 ? ` · ${diff.changedShots.length} 镜${diff.formatChanged ? '+格式' : ''}${diff.continuityChanged ? '+连贯性' : ''} 待同步` : ''}</span>
+            ? <span className="cinema-mono text-[10px] text-[var(--accent-green)] flex items-center gap-1"><Check size={11} /> {t.projectMisc.jsonValid}{pendingBits}</span>
             : <span className="cinema-mono text-[10px] text-[var(--secondary)] flex items-center gap-1"><AlertCircle size={11} /> {parsed.error}</span>}
         </div>
         <textarea
@@ -89,13 +97,13 @@ export function ParamLinkagePanel({ projectId, shots = [], continuity, format, o
           rows={16} spellCheck={false} value={text} onChange={(e) => setText(e.target.value)}
         />
         <div className="flex items-center gap-2 mt-3">
-          <button onClick={() => { setText(paramDocToJson(baseDoc)); }} className="cinema-btn-ghost !text-[11px]">还原</button>
+          <button onClick={() => { setText(paramDocToJson(baseDoc)); }} className="cinema-btn-ghost !text-[11px]">{t.projectMisc.revert}</button>
           <button onClick={sync} disabled={!parsed.ok || !dirty || syncing} className="cinema-btn-primary !text-[11px] ml-auto disabled:opacity-50">
-            {syncing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} 应用并同步 (Sync Now)
+            {syncing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} {t.projectMisc.syncNow}
           </button>
         </div>
         {msg && <p className="cinema-mono text-[10px] mt-1.5 text-[var(--accent-green)]">{msg}</p>}
-        <p className="cinema-mono text-[9px] opacity-40 mt-1">编辑每镜 spec / continuity / format 后点同步 → 写回分镜资产; 摄影台/连贯性/格式条的改动也会在重载后回流到这里。</p>
+        <p className="cinema-mono text-[9px] opacity-40 mt-1">{t.projectMisc.paramJsonHint}</p>
       </div>
     </div>
   );

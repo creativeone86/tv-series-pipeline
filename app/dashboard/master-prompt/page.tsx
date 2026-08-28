@@ -1,12 +1,12 @@
 'use client';
 
 /**
- * Master Prompt Generator · 顶级创意生成器 (v7.7) — 对标 CineMaster Pro
+ * Master Prompt Generator · top-tier creative generator (v7.7) — CineMaster Pro-class
  *
- * 结构化生成 master prompt:Role / Task / 核心概念 + 执行参数(影片 look / LUT / 导演运镜 / 画幅 / 额外)。
- *   - 实时编译结构化 Markdown prompt
- *   - 复制 / LLM 优化 / 用此 prompt 去创作
- *   - 右下:专业术语对照表
+ * Structured master prompt: Role / Task / core concept + execution params (film look / LUT / director movement / aspect / extra).
+ *   - Live-compile a structured Markdown prompt
+ *   - Copy / LLM refine / send this prompt to create
+ *   - Bottom-right: glossary of craft terms
  */
 
 import { useState } from 'react';
@@ -17,9 +17,10 @@ import {
   DEFAULT_MASTER_PROMPT, compileMasterPrompt, describeMasterPrompt,
   type MasterPromptSpec, type RefPreset,
 } from '@/lib/master-prompt';
+import { useLocale } from '@/hooks/use-locale';
 
-function PresetRow({ icon: Icon, title, list, value, onPick }: {
-  icon: any; title: string; list: RefPreset[]; value: string; onPick: (id: string) => void;
+function PresetRow({ icon: Icon, title, list, value, onPick, locale }: {
+  icon: any; title: string; list: RefPreset[]; value: string; onPick: (id: string) => void; locale: string;
 }) {
   return (
     <div>
@@ -28,7 +29,7 @@ function PresetRow({ icon: Icon, title, list, value, onPick }: {
         {list.map((p) => (
           <button key={p.id} onClick={() => onPick(p.id)} title={p.ref}
             className={`text-left px-2 py-1 rounded-md border transition ${value === p.id ? 'border-[var(--cinema-amber)] bg-[var(--cinema-amber-glow)]' : 'border-[var(--cinema-border)] hover:border-[var(--cinema-border-hi)]'}`}>
-            <span className="block text-[11px] leading-tight">{p.label}</span>
+            <span className="block text-[11px] leading-tight">{locale === 'en' ? p.ref : p.label}</span>
             <span className="block cinema-mono text-[9px] opacity-50">{p.ref}</span>
           </button>
         ))}
@@ -39,6 +40,8 @@ function PresetRow({ icon: Icon, title, list, value, onPick }: {
 
 export default function MasterPromptPage() {
   const router = useRouter();
+  const { t: tRaw, locale } = useLocale();
+  const t = tRaw as typeof tRaw & { dashMore: Record<string, string> };
   const [spec, setSpec] = useState<MasterPromptSpec>(DEFAULT_MASTER_PROMPT);
   const [refined, setRefined] = useState<string | null>(null);
   const [refining, setRefining] = useState(false);
@@ -60,9 +63,9 @@ export default function MasterPromptPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: compiled }),
       });
       const j = await r.json();
-      if (!r.ok) setErr(j?.error || `优化失败 (${r.status})`);
+      if (!r.ok) setErr(j?.error || t.dashMore.refineFailed.replace('{status}', String(r.status)));
       else setRefined(j.refined);
-    } catch (e: any) { setErr(e?.message || '网络错误'); }
+    } catch (e: any) { setErr(e?.message || t.dashMore.networkError); }
     finally { setRefining(false); }
   }
 
@@ -75,66 +78,66 @@ export default function MasterPromptPage() {
   return (
     <div className="cinema-page min-h-screen px-5 py-5 max-w-[1480px] mx-auto">
       <header className="mb-4">
-        <div className="cinema-headline !text-xl flex items-center gap-2"><Wand2 size={20} className="text-[var(--cinema-amber)]" /> 顶级创意生成器</div>
-        <div className="cinema-eyebrow !mt-1">MASTER PROMPT GENERATOR · 结构化导演级提示词</div>
+        <div className="cinema-headline !text-xl flex items-center gap-2"><Wand2 size={20} className="text-[var(--cinema-amber)]" /> {t.dashMore.masterTitle}</div>
+        <div className="cinema-eyebrow !mt-1">{t.dashMore.masterEyebrow}</div>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* 左:输入 + 预设 */}
+        {/* Left: inputs + presets */}
         <div className="cinema-card !p-4 flex flex-col gap-4">
           <div className="grid grid-cols-1 gap-2">
-            <label className="cinema-eyebrow">Role · 角色设定
+            <label className="cinema-eyebrow">{t.dashMore.roleLabel}
               <input className="cinema-input w-full mt-1 !text-xs" value={spec.role} onChange={(e) => set({ role: e.target.value })} />
             </label>
-            <label className="cinema-eyebrow">Task · 任务
+            <label className="cinema-eyebrow">{t.dashMore.taskLabel}
               <input className="cinema-input w-full mt-1 !text-xs" value={spec.task} onChange={(e) => set({ task: e.target.value })} />
             </label>
-            <label className="cinema-eyebrow">Core Concept · 核心概念
-              <textarea className="cinema-textarea w-full mt-1 !text-xs" rows={3} placeholder="本片的核心创意 / 情绪 / 卖点…"
+            <label className="cinema-eyebrow">{t.dashMore.conceptLabel}
+              <textarea className="cinema-textarea w-full mt-1 !text-xs" rows={3} placeholder={t.dashMore.conceptPlaceholder}
                 value={spec.coreConcept} onChange={(e) => set({ coreConcept: e.target.value })} />
             </label>
           </div>
 
-          <PresetRow icon={Film} title="影片 LOOK · 光影参考" list={FILM_LOOK_PRESETS} value={spec.filmLook} onPick={(id) => set({ filmLook: id })} />
-          <PresetRow icon={Palette} title="色彩 LUT" list={LUT_PRESETS} value={spec.lut} onPick={(id) => set({ lut: id })} />
-          <PresetRow icon={Video} title="导演运镜风格" list={MOVEMENT_STYLE_PRESETS} value={spec.movementStyle} onPick={(id) => set({ movementStyle: id })} />
+          <PresetRow icon={Film} title={t.dashMore.filmLookTitle} list={FILM_LOOK_PRESETS} value={spec.filmLook} onPick={(id) => set({ filmLook: id })} locale={locale} />
+          <PresetRow icon={Palette} title={t.dashMore.lutTitle} list={LUT_PRESETS} value={spec.lut} onPick={(id) => set({ lut: id })} locale={locale} />
+          <PresetRow icon={Video} title={t.dashMore.movementTitle} list={MOVEMENT_STYLE_PRESETS} value={spec.movementStyle} onPick={(id) => set({ movementStyle: id })} locale={locale} />
 
           <div className="grid grid-cols-2 gap-2">
-            <label className="cinema-eyebrow">画幅
+            <label className="cinema-eyebrow">{t.dashMore.aspectLabel}
               <input className="cinema-input w-full mt-1 !text-xs" value={spec.aspect} onChange={(e) => set({ aspect: e.target.value })} />
             </label>
-            <label className="cinema-eyebrow">额外参数
-              <input className="cinema-input w-full mt-1 !text-xs" placeholder="可选" value={spec.extra} onChange={(e) => set({ extra: e.target.value })} />
+            <label className="cinema-eyebrow">{t.dashMore.extraLabel}
+              <input className="cinema-input w-full mt-1 !text-xs" placeholder={t.dashMore.optional} value={spec.extra} onChange={(e) => set({ extra: e.target.value })} />
             </label>
           </div>
         </div>
 
-        {/* 右:编译结果 + 操作 + 术语表 */}
+        {/* Right: compiled result + actions + glossary */}
         <div className="flex flex-col gap-4">
           <div className="cinema-card !p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="cinema-eyebrow flex items-center gap-1.5"><Clapperboard size={13} className="text-[var(--cinema-amber)]" /> {refined ? '优化后 Prompt' : 'Master Prompt'}</span>
+              <span className="cinema-eyebrow flex items-center gap-1.5"><Clapperboard size={13} className="text-[var(--cinema-amber)]" /> {refined ? t.dashMore.refinedPrompt : 'Master Prompt'}</span>
               <span className="cinema-mono text-[10px] opacity-60">{describeMasterPrompt(spec)}</span>
             </div>
             <pre className="cinema-mono text-[10px] leading-relaxed text-[var(--cinema-green)] bg-[var(--cinema-surface)] rounded-md p-3 max-h-[360px] overflow-auto custom-scrollbar whitespace-pre-wrap">{shown}</pre>
             {err && <p className="text-[var(--secondary)] text-xs mt-1.5">{err}</p>}
             <div className="flex items-center gap-2 mt-3 flex-wrap">
-              <button onClick={copy} className="cinema-btn-ghost !text-[11px]">{copied ? <Check size={13} className="text-[var(--cinema-green)]" /> : <Copy size={13} />} 复制</button>
-              <button onClick={refine} disabled={refining} className="cinema-btn-ghost !text-[11px] disabled:opacity-50">{refining ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} 优化 Prompt</button>
-              {refined && <button onClick={() => setRefined(null)} className="cinema-btn-ghost !text-[11px]">还原</button>}
-              <button onClick={sendToCreate} className="cinema-btn-primary !text-[11px] ml-auto"><Sparkles size={13} /> 用此创作 <span className="cinema-cta-island"><ArrowRight size={12} /></span></button>
+              <button onClick={copy} className="cinema-btn-ghost !text-[11px]">{copied ? <Check size={13} className="text-[var(--cinema-green)]" /> : <Copy size={13} />} {t.dashMore.copy}</button>
+              <button onClick={refine} disabled={refining} className="cinema-btn-ghost !text-[11px] disabled:opacity-50">{refining ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} {t.dashMore.refinePrompt}</button>
+              {refined && <button onClick={() => setRefined(null)} className="cinema-btn-ghost !text-[11px]">{t.dashMore.restore}</button>}
+              <button onClick={sendToCreate} className="cinema-btn-primary !text-[11px] ml-auto"><Sparkles size={13} /> {t.dashMore.useToCreate} <span className="cinema-cta-island"><ArrowRight size={12} /></span></button>
             </div>
           </div>
 
-          {/* 专业术语对照表 */}
+          {/* Craft glossary */}
           <div className="cinema-card !p-4">
-            <div className="cinema-eyebrow mb-2 flex items-center gap-1.5"><BookText size={13} /> 专业术语对照表</div>
+            <div className="cinema-eyebrow mb-2 flex items-center gap-1.5"><BookText size={13} /> {t.dashMore.glossaryTitle}</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
               {GLOSSARY.map((g) => (
                 <div key={g.term} className="text-[11px] leading-snug">
                   <span className="cinema-mono text-[var(--cinema-amber)]">{g.term}</span>
                   {g.en && <span className="cinema-mono text-[9px] opacity-50"> {g.en}</span>}
-                  <span className="opacity-80"> — {g.def}</span>
+                  <span className="opacity-80"> — {locale === 'en' ? (g.en || g.def) : g.def}</span>
                 </div>
               ))}
             </div>

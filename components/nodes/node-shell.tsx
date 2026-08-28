@@ -5,13 +5,14 @@ import type { PipelineNodeStatus, AgentRole } from '@/types/agents';
 import { CheckCircle, Check, Chat as MessageSquare, ArrowsClockwise as RefreshCw, X, CircleNotch as Loader2 } from '@phosphor-icons/react';
 import { useProjectWorkspaceStore } from '@/lib/store';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useLocale } from '@/hooks/use-locale';
 
 interface Props {
   status: PipelineNodeStatus;
   color: string;
   children: React.ReactNode;
   className?: string;
-  agentRole?: AgentRole; // 用于确认时关联角色
+  agentRole?: AgentRole; // used when confirming to associate the role
 }
 
 const COLOR_MAP: Record<string, { glow: string; border: string; bg: string; accent: string }> = {
@@ -25,6 +26,8 @@ const COLOR_MAP: Record<string, { glow: string; border: string; bg: string; acce
 };
 
 export function NodeShell({ status, color, children, className = '', agentRole }: Props) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectMisc: Record<string, string> };
   const c = COLOR_MAP[color] || COLOR_MAP.purple;
   const [confirmed, setConfirmed] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -81,7 +84,7 @@ export function NodeShell({ status, color, children, className = '', agentRole }
       const projectId = s.currentProject?.id;
 
       if (!projectId || !agentRole) {
-        setRegenMessage('无法获取项目信息');
+        setRegenMessage(t.projectMisc.noProjectInfo);
         return;
       }
 
@@ -92,11 +95,11 @@ export function NodeShell({ status, color, children, className = '', agentRole }
       });
 
       const data = await res.json();
-      setRegenMessage(data.message || '已提交修改意见');
+      setRegenMessage(data.message || t.projectMisc.feedbackSubmitted);
       setFeedback('');
       setShowFeedback(false);
     } catch {
-      setRegenMessage('提交失败，请重试');
+      setRegenMessage(t.projectMisc.submitFailedRetry);
     } finally {
       setIsRegenerating(false);
     }
@@ -110,13 +113,13 @@ export function NodeShell({ status, color, children, className = '', agentRole }
     `}>
       {children}
 
-      {/* 确认按钮 + 微调区域 */}
+      {/* Confirm + tweak */}
       {status === 'completed' && agentRole && (
         <div className="mt-3 pt-2.5 border-t border-[var(--border)]">
           {confirmed ? (
             <div className="flex items-center justify-center gap-1.5 text-[10px] text-emerald-400/80">
               <CheckCircle className="w-3 h-3" />
-              已确认
+              {t.projectMisc.confirmed}
             </div>
           ) : (
             <button
@@ -124,22 +127,22 @@ export function NodeShell({ status, color, children, className = '', agentRole }
               className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-[#E8C547]/10 text-[#E8C547]/80 text-[10px] font-medium hover:bg-[#E8C547]/18 transition-colors"
             >
               <Check className="w-3 h-3" />
-              确认保存
+              {t.projectMisc.confirmSave}
             </button>
           )}
 
-          {/* 微调按钮 */}
+          {/* Tweak button */}
           {!showFeedback && (
             <button
               onClick={() => setShowFeedback(true)}
               className="mt-1.5 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-[#E8C547]/06 text-[#E8C547]/60 text-[10px] font-medium hover:bg-[#E8C547]/12 hover:text-[#E8C547]/80 transition-colors"
             >
               <MessageSquare className="w-3 h-3" />
-              微调
+              {t.projectMisc.tweak}
             </button>
           )}
 
-          {/* 反馈面板 */}
+          {/* Feedback panel */}
           <AnimatePresence>
             {showFeedback && (
               <motion.div
@@ -153,7 +156,7 @@ export function NodeShell({ status, color, children, className = '', agentRole }
                   <textarea
                     value={feedback}
                     onChange={(e) => setFeedback(e.target.value)}
-                    placeholder="输入修改意见..."
+                    placeholder={t.projectMisc.feedbackPlaceholder}
                     className="w-full bg-black/30 border border-[#E8C547]/20 rounded-md px-2.5 py-1.5 text-[10px] text-gray-300 placeholder:text-gray-600 resize-none max-h-[60px] custom-scrollbar focus:outline-none focus:border-[#E8C547]/40 transition-colors"
                     rows={2}
                   />
@@ -168,7 +171,7 @@ export function NodeShell({ status, color, children, className = '', agentRole }
                       ) : (
                         <RefreshCw className="w-3 h-3" />
                       )}
-                      重新生成
+                      {t.projectMisc.regenerate}
                     </button>
                     <button
                       onClick={() => {
@@ -186,7 +189,7 @@ export function NodeShell({ status, color, children, className = '', agentRole }
             )}
           </AnimatePresence>
 
-          {/* 重新生成状态消息 */}
+          {/* Regen status message */}
           <AnimatePresence>
             {regenMessage && (
               <motion.div

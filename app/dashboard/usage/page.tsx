@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * v9.3.2 — 创作者用量与成本面板.
+ * v9.3.2 — Creator usage & cost panel.
  *
- * 消费 GET /api/usage/summary → 预算环(当月) + 引擎花费条 + 每日趋势 + 活跃配额告警 banner
- *   + 按 provider 失败计数。创作者可见(非仅 admin),复用 API 健康看板设计语言。
+ * Consumes GET /api/usage/summary → monthly budget ring + engine spend bars + daily trend + active quota alert banner
+ *   + per-provider failure counts. Visible to creators (not admin-only); reuses the API health board design language.
  */
 
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
@@ -56,8 +56,8 @@ const cny = (n: number) => `¥${(Number(n) || 0).toFixed(2)}`;
 
 export default function UsagePage() {
   const { t } = useLocale();
-  // v12.257 修闪烁:load 若依赖 t(每次渲染都是新对象),load 每渲染重建 → 下方
-  // useEffect([days, load]) 每渲染重触发 → 无限重取 summary → 页面狂闪。改用 ref 读 t,让 load 稳定([])。
+  // v12.257 flicker fix: if load depends on t (new object every render), load is recreated each render →
+  // useEffect([days, load]) retriggers every render → infinite summary refetch → page flashes. Read t via ref so load stays stable ([]).
   const tRef = useRef(t);
   tRef.current = t;
   const [days, setDays] = useState(30);
@@ -95,14 +95,14 @@ export default function UsagePage() {
     }
   }, []);
 
-  // v9.3.4: 月预算改存服务端 — 初次拉已存值
+  // v9.3.4: monthly budget is stored server-side — load saved value on first fetch
   useEffect(() => {
     fetch('/api/usage/budget').then((r) => (r.ok ? r.json() : null)).then((b) => {
       if (b && b.capCny != null) setCap(String(b.capCny));
     }).catch(() => {});
   }, []);
 
-  // 失焦保存预算 → 重算 guard
+  // Save budget on blur → recompute guard
   const saveCap = useCallback(async () => {
     try {
       await fetch('/api/usage/budget', {
@@ -122,11 +122,11 @@ export default function UsagePage() {
 
   const engines = data?.cost.byEngine || [];
   const maxEngine = Math.max(1, ...engines.map((e) => e.costCny));
-  // 每日趋势:把稀疏的 byDay(只含有花费的日子)填成窗口内连续每一天(缺失日补 0)。
-  // 否则非连续日期被等宽并列 → 误导;同时柱子定高 bug 一并修(见下方渲染)。
+  // Daily trend: fill sparse byDay (only days with spend) into every day in the window (missing days = 0).
+  // Otherwise non-contiguous dates sit side-by-side at equal width — misleading; also fixes the bar-height bug (see render below).
   const trend = buildDailyTrend(data?.cost.byDay || [], data?.window?.since, data?.window?.days || 0);
   const maxDay = Math.max(1, ...trend.map((d) => d.costCny));
-  const labelEvery = Math.max(1, Math.ceil(trend.length / 8)); // 标签抽稀,避免 30/90 天挤成一团
+  const labelEvery = Math.max(1, Math.ceil(trend.length / 8)); // thin labels so 30/90-day windows do not pile up
 
   return (
     <div className="cinema-page max-w-5xl mx-auto flex flex-col gap-5">
@@ -155,7 +155,7 @@ export default function UsagePage() {
 
       {data && !loading && (
         <>
-          {/* 活跃配额告警 banner */}
+          {/* Active quota alert banner */}
           {data.activeAlerts.length > 0 && (
             <div className="cinema-card !p-3 border border-[var(--secondary)]/40 bg-[var(--secondary)]/5">
               <div className="cinema-eyebrow text-[var(--secondary)] mb-1.5 flex items-center gap-1.5"><AlertTriangle size={13} /> {t.usagePage.activeAlertsBanner}</div>
@@ -172,7 +172,7 @@ export default function UsagePage() {
             </div>
           )}
 
-          {/* 预算护栏状态条 */}
+          {/* Budget guard status bar */}
           {data.guard.level !== 'none' && (
             <div className={`cinema-card !p-3 border flex items-center gap-2 ${GUARD_TONE[data.guard.level] || GUARD_TONE.none}`}>
               <ShieldCheck size={15} weight="fill" className="shrink-0" />
@@ -181,7 +181,7 @@ export default function UsagePage() {
             </div>
           )}
 
-          {/* v12.223 配额超额提示条(超档上限 → 建议充值/降级引擎) */}
+          {/* v12.223 quota-exceeded bar (over tier ceiling → suggest top-up / cheaper engine) */}
           {data.quota && !data.quota.unlimited && data.quota.exceeded && (
             <div className="cinema-card !p-3 border border-[var(--secondary)]/50 bg-[var(--secondary)]/5 flex items-center gap-2">
               <AlertTriangle size={15} className="text-[var(--secondary)] shrink-0" />
@@ -190,7 +190,7 @@ export default function UsagePage() {
             </div>
           )}
 
-          {/* 预算环 + 配额环 + 总览 */}
+          {/* Budget ring + quota ring + overview */}
           <div className="grid grid-cols-1 sm:grid-cols-[auto_auto_1fr] gap-4">
             <div className={`cinema-card !p-4 flex items-center gap-4 border ${STATUS_TONE[ringTone]}`}>
               <div className="relative shrink-0" style={{ width: 84, height: 84 }}>
@@ -211,7 +211,7 @@ export default function UsagePage() {
               </div>
             </div>
 
-            {/* v12.223 订阅档月度配额环(本月真实成本 / 档上限) */}
+            {/* v12.223 subscription-tier monthly quota ring (real month cost / tier ceiling) */}
             {data.quota && (() => {
               const q = data.quota!;
               const qPct = q.unlimited ? 0 : Math.max(0, Math.min(1, q.ratio));
@@ -247,7 +247,7 @@ export default function UsagePage() {
             </div>
           </div>
 
-          {/* 引擎花费条 */}
+          {/* Engine spend bars */}
           <div className="cinema-card !p-4">
             <div className="cinema-eyebrow mb-3 flex items-center gap-1.5"><CurrencyCny size={13} className="text-[var(--primary)]" /> {t.usagePage.engineCostPrefix} {data.window.days} {t.usagePage.daySuffix}</div>
             {engines.length === 0 && <div className="cinema-mono text-[11px] opacity-50">{t.usagePage.engineNoData}</div>}
@@ -265,7 +265,7 @@ export default function UsagePage() {
             </div>
           </div>
 
-          {/* 每日趋势 */}
+          {/* Daily trend */}
           <div className="cinema-card !p-4">
             <div className="cinema-eyebrow mb-3 flex items-center gap-1.5"><ChartLineUp size={13} className="text-[var(--accent)]" /> {t.usagePage.dailyTrendTitle}</div>
             {trend.length === 0 && <div className="cinema-mono text-[11px] opacity-50">{t.usagePage.dailyNoData}</div>}
@@ -273,7 +273,7 @@ export default function UsagePage() {
               <div className="flex items-stretch gap-px h-28">
                 {trend.map((d, i) => (
                   <div key={d.day} className="flex-1 flex flex-col items-center gap-1 group min-w-0" title={`${d.day} · ${cny(d.costCny)} · ${d.count} ${t.usagePage.countSuffix}`}>
-                    {/* 柱轨:flex-1 给出确定高度,柱子 height:% 才有基准(原 bug:父列无定高 → % 解析为 0) */}
+                    {/* Bar track: flex-1 gives a definite height so bar height:% has a basis (old bug: parent column had no height → % resolved to 0) */}
                     <div className="flex-1 w-full flex items-end min-h-0">
                       <div className="w-full rounded-t bg-[var(--accent)]/70 group-hover:bg-[var(--accent)] transition-colors"
                         style={{ height: `${d.costCny > 0 ? Math.max(4, (d.costCny / maxDay) * 100) : 0}%` }} />
@@ -302,8 +302,8 @@ function Stat({ label, value, icon }: { label: string; value: string; icon: Reac
 }
 
 /**
- * 把稀疏的 byDay 填成连续每日趋势:从 window.since(或最早记录日)起,
- * 覆盖整个窗口的每一天,缺失日补 0。UTC 基准对齐 byDay 的 createdAt.slice(0,10)。
+ * Fill sparse byDay into a continuous daily trend: from window.since (or earliest recorded day),
+ * cover every day in the window; missing days get 0. UTC basis aligns with byDay createdAt.slice(0,10).
  */
 function buildDailyTrend(
   byDay: Array<{ day: string; costCny: number; count: number }>,

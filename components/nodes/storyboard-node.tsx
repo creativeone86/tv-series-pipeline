@@ -5,24 +5,26 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { PipelineNodeData } from '@/types/agents';
 import { NodeShell } from './node-shell';
 import { FilmStrip as Film, CircleNotch as Loader2, CheckCircle as CheckCircle2, Clock, Camera, Sun, Palette, ArrowRight as MoveRight } from '@phosphor-icons/react';
+import { useLocale } from '@/hooks/use-locale';
 
-// Runway-style camera icon mapping
+// Runway-style camera icon mapping (keys match Writer cameraAngle data)
 const CAMERA_ICONS: Record<string, string> = {
-  '远景': '🔭', '全景': '🏔️', '中景': '🎥', '近景': '👤', '特写': '🔍',
-  '大特写': '🔬', '俯拍': '⬇️', '仰拍': '⬆️', '平拍': '➡️', '跟拍': '🏃',
+  '\u8fdc\u666f': '🔭', '\u5168\u666f': '🏔️', '\u4e2d\u666f': '🎥', '\u8fd1\u666f': '👤', '\u7279\u5199': '🔍',
+  '\u5927\u7279\u5199': '🔬', '\u4fef\u62cd': '⬇️', '\u4ef0\u62cd': '⬆️', '\u5e73\u62cd': '➡️', '\u8ddf\u62cd': '🏃',
 };
 
 function StoryboardNodeComponent({ data }: NodeProps) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectMisc: Record<string, string> };
   const d = data as unknown as PipelineNodeData;
   const storyboards = d.assets?.filter(a => a.type === 'storyboard') || [];
-  // v12.144:分镜面板 —— 同镜草图(草图锁模式产出)按 shotNumber 关联,卡内并排展示
+  // v12.144: board panel — same-shot sketches (sketch-lock) keyed by shotNumber
   const sketchByShot = new Map<number, string>(
     (d.assets?.filter(a => a.type === 'storyboard-sketch') || [])
       .map(a => [a.shotNumber as number, a.mediaUrls?.[0] || ''])
       .filter(([, u]) => !!u) as Array<[number, string]>,
   );
-  // v12.10.0(#2):逐秒 beat 来自剧本 shot(Writer 已产出),按 shotNumber 关联到分镜卡,
-  // 让分镜「精确到第几秒是什么内容」可见。
+  // v12.10.0(#2): per-second beats from Writer shots, keyed onto board cards
   const scriptShots: any[] = (d.assets?.find(a => a.type === 'script')?.data as any)?.shots || [];
   const beatsByShot = new Map<number, any[]>(
     scriptShots.filter(s => Array.isArray(s?.beats) && s.beats.length).map(s => [s.shotNumber, s.beats]),
@@ -38,12 +40,12 @@ function StoryboardNodeComponent({ data }: NodeProps) {
         </div>
         <div className="flex-1">
           <div className="text-sm font-semibold text-white flex items-center gap-2">
-            分镜师
+            {t.projectMisc.storyboardArtist}
             {d.status === 'running' && <Loader2 className="w-3.5 h-3.5 text-green-400 animate-spin" />}
             {d.status === 'completed' && <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />}
             {d.status === 'pending' && <Clock className="w-3.5 h-3.5 text-gray-500" />}
           </div>
-          <div className="text-[11px] text-gray-400">分镜脚本 · 镜头语言设计</div>
+          <div className="text-[11px] text-gray-400">{t.projectMisc.storyboardSub}</div>
         </div>
         {d.status === 'running' && <span className="text-[10px] text-green-400 font-medium">{d.progress}%</span>}
       </div>
@@ -79,7 +81,7 @@ function StoryboardNodeComponent({ data }: NodeProps) {
                   )}
                 </div>
 
-                {/* v12.144 分镜面板:分镜图 + 构图草图并排(有图才显示;此前纯文字卡) */}
+                {/* v12.144 board panel: board image + composition sketch side by side */}
                 {(sb.mediaUrls?.[0] || sketchByShot.get(sb.shotNumber as number)) && (
                   <div className="flex gap-1.5 mb-1.5">
                     {sb.mediaUrls?.[0] && (
@@ -88,7 +90,7 @@ function StoryboardNodeComponent({ data }: NodeProps) {
                     )}
                     {sketchByShot.get(sb.shotNumber as number) && (
                       /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={sketchByShot.get(sb.shotNumber as number)} alt="构图草图" title="构图草图(草图锁)" className="h-20 w-14 rounded-lg border border-cyan-500/30 object-cover shrink-0 opacity-80" />
+                      <img src={sketchByShot.get(sb.shotNumber as number)} alt={t.projectMisc.sketchAlt} title={t.projectMisc.sketchTitle} className="h-20 w-14 rounded-lg border border-cyan-500/30 object-cover shrink-0 opacity-80" />
                     )}
                   </div>
                 )}
@@ -98,19 +100,19 @@ function StoryboardNodeComponent({ data }: NodeProps) {
                   {sb.data?.description || sb.name}
                 </div>
 
-                {/* v12.10.0(#2):逐秒 beat sheet —— 精确到第几秒是什么内容 */}
+                {/* v12.10.0(#2): per-second beat sheet */}
                 {beatsByShot.get(sb.shotNumber as number)?.length ? (
                   <div className="mt-2 space-y-1 border-l-2 border-cyan-500/30 pl-2">
                     {beatsByShot.get(sb.shotNumber as number)!.map((b: any, bi: number) => (
                       <div key={bi} className="flex gap-1.5 text-[10px] leading-snug">
                         <span className="shrink-0 font-mono text-cyan-400/90 tabular-nums">{b.ts}</span>
                         <span className="text-gray-300 min-w-0">
-                          {/* v12.11.0:谁/在哪 前缀 */}
+                          {/* v12.11.0: who / where prefix */}
                           {Array.isArray(b.characters) && b.characters.length ? <span className="text-emerald-300/80">👤{b.characters.join('/')} </span> : null}
                           {b.scene ? <span className="text-cyan-200/70">🏞{b.scene} </span> : null}
                           {b.action}
                           {b.camera ? <span className="text-gray-500"> · 🎥{b.camera}</span> : null}
-                          {/* v12.11.0:微表情 / 慢镜 / 氛围 */}
+                          {/* v12.11.0: micro-expression / speed / mood */}
                           {b.microExpression ? <span className="text-violet-300/80"> · 😶{b.microExpression}</span> : null}
                           {b.speedRamp ? <span className="text-amber-300/80"> · ⏱{b.speedRamp}</span> : null}
                           {b.mood ? <span className="text-rose-300/70"> · {b.mood}</span> : null}
@@ -118,12 +120,12 @@ function StoryboardNodeComponent({ data }: NodeProps) {
                         </span>
                       </div>
                     ))}
-                    {/* v12.11.0:镜头级 Must-Show 目标物 */}
+                    {/* v12.11.0: shot-level Must-Show props */}
                     {(() => {
                       const ms = scriptShots.find((s) => s.shotNumber === sb.shotNumber)?.mustShow;
                       return Array.isArray(ms) && ms.length ? (
                         <div className="flex gap-1.5 text-[10px] leading-snug pt-0.5">
-                          <span className="shrink-0 text-yellow-400/90">必现</span>
+                          <span className="shrink-0 text-yellow-400/90">{t.projectMisc.mustShow}</span>
                           <span className="text-yellow-200/70 min-w-0">{ms.join(' · ')}</span>
                         </div>
                       ) : null;
@@ -144,7 +146,7 @@ function StoryboardNodeComponent({ data }: NodeProps) {
         </div>
       ) : (
         <div className="text-center py-6 text-gray-500 text-xs">
-          {d.status === 'pending' ? '等待场景设计完成...' : d.status === 'running' ? '分镜脚本编写中...' : ''}
+          {d.status === 'pending' ? t.projectMisc.waitScenes : d.status === 'running' ? t.projectMisc.writingBoards : ''}
         </div>
       )}
 

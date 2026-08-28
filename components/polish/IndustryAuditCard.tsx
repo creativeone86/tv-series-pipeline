@@ -1,31 +1,32 @@
 'use client';
 
 /**
- * IndustryAuditCard — Pro 模式润色结果的"行业诊断体检单"
+ * IndustryAuditCard — industry-audit checklist for Pro polish results.
  *
- * 渲染 /api/polish-script?mode=pro 返回的 audit 对象, 把 LLM 给出的
- * 剧本医生报告可视化成一张面板, 帮用户(通常是导演/编剧)快速看到:
- *   · Hook 强度 (red/amber/green)
- *   · 三幕关键节拍是否到位
- *   · 对白问题 (直抒胸臆 / 抽象情绪)
- *   · 角色 identity 锚点 (给 Sora Cameo / Seedance 多图参考对齐)
- *   · 场景光影一致性 (lightDirection + 色温 + 氛围)
- *   · 跨镜 continuity 钩子 (给 v2.10 Keyframes 首尾帧衔接用)
- *   · AIGC 就绪度分数 + 问题清单
+ * Renders the audit object from /api/polish-script?mode=pro and visualizes
+ * the LLM "script doctor" report so a director/writer can scan:
+ *   · Hook strength (red/amber/green)
+ *   · Whether three-act beats landed
+ *   · Dialogue issues (on-the-nose / abstract emotion)
+ *   · Character identity anchors (Sora Cameo / Seedance multi-ref)
+ *   · Scene lighting consistency (lightDirection + color temp + mood)
+ *   · Cross-shot continuity hooks (v2.10 Keyframes first/last frame)
+ *   · AIGC readiness score + issue list
  *
- * 设计哲学: 只渲染模型给到的内容, 缺失字段优雅隐藏。绝不自己补数据。
+ * Design: render only what the model returned; hide missing fields. Never invent data.
  */
 
 import { Pulse as Activity, Warning as AlertTriangle, Anchor, MaskHappy as Drama, ListBullets as LayoutList, Lightbulb, Quotes as MessageSquareQuote, Palette, Users, Lightning as Zap, MagnifyingGlass as Search, PlusCircle } from '@phosphor-icons/react';
 import { readinessLevel } from '@/lib/polish-prompts';
+import { useLocale } from '@/hooks/use-locale';
 
 /**
- * 可选的"一键行动" callback:
- *   · onSearch(keyword)      — 在正文里高亮这段文本, 让编辑可以一眼定位到该问题所在的行
- *   · onAddToFocus(keyword)  — 把这段文本加入到"下一轮润色的 focus"输入, 下一次跑 polish 时带上
+ * Optional one-click action callbacks:
+ *   · onSearch(keyword)      — highlight this text in the body so the editor can jump to it
+ *   · onAddToFocus(keyword)  — append this text to the next-round polish focus input
  *
- * 这两个 callback 是可选的; 如果父组件不传, 对应按钮就不渲染。
- * 这样 LatestPolishBanner 里嵌的只读 audit 就不会出现无效按钮。
+ * Both are optional; if the parent omits them, the buttons are not rendered.
+ * Read-only audit embeds (LatestPolishBanner) therefore stay button-free.
  */
 export interface AuditActions {
   onSearch?: (keyword: string) => void;
@@ -81,25 +82,16 @@ export interface PolishAudit {
   }>;
 }
 
-const HOOK_COLOR: Record<string, { bg: string; text: string; border: string; label: string }> = {
-  weak:   { bg: 'bg-red-500/10',     text: 'text-red-300',     border: 'border-red-500/30',    label: '弱'  },
-  ok:     { bg: 'bg-amber-500/10',   text: 'text-amber-300',   border: 'border-amber-500/30',  label: '中'  },
-  strong: { bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/30', label: '强' },
+const HOOK_COLOR: Record<string, { bg: string; text: string; border: string }> = {
+  weak:   { bg: 'bg-red-500/10',     text: 'text-red-300',     border: 'border-red-500/30' },
+  ok:     { bg: 'bg-amber-500/10',   text: 'text-amber-300',   border: 'border-amber-500/30' },
+  strong: { bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/30' },
 };
 
 const SEVERITY_COLOR: Record<string, string> = {
   minor:    'bg-blue-500/15 text-blue-300 border-blue-500/30',
   major:    'bg-amber-500/15 text-amber-300 border-amber-500/30',
   critical: 'bg-red-500/15 text-red-300 border-red-500/30',
-};
-
-const CATEGORY_LABEL: Record<string, string> = {
-  pacing:    '节奏',
-  dialogue:  '对白',
-  structure: '结构',
-  character: '角色',
-  aigc:      'AIGC',
-  other:     '其他',
 };
 
 const READINESS_BAR: Record<string, { bar: string; ring: string; label: string; text: string }> = {
@@ -116,7 +108,7 @@ export default function IndustryAuditCard({
 }) {
   return (
     <div className="flex flex-col gap-4">
-      {/* 顶部: AIGC 就绪度 + 风格画像 (最关键的两张脸) */}
+      {/* Top: AIGC readiness + style profile (the two faces that matter most) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {audit.aigcReadiness ? <ReadinessBlock r={audit.aigcReadiness} /> : null}
         {audit.styleProfile ? <StyleProfileBlock s={audit.styleProfile} /> : null}
@@ -125,40 +117,40 @@ export default function IndustryAuditCard({
       {/* Hook */}
       {audit.hook ? <HookBlock h={audit.hook} /> : null}
 
-      {/* 三幕结构 */}
+      {/* Three-act structure */}
       {audit.actStructure ? <ActStructureBlock a={audit.actStructure} actions={actions} /> : null}
 
-      {/* 对白问题 */}
+      {/* Dialogue issues */}
       {audit.dialogueIssues &&
         (audit.dialogueIssues.onTheNoseLines.length > 0 ||
           audit.dialogueIssues.abstractEmotionLines.length > 0) ? (
         <DialogueBlock d={audit.dialogueIssues} actions={actions} />
       ) : null}
 
-      {/* 角色锚点 */}
+      {/* Character anchors */}
       {audit.characterAnchors.length > 0 ? (
         <CharacterAnchorsBlock anchors={audit.characterAnchors} />
       ) : null}
 
-      {/* 场景光影 */}
+      {/* Scene lighting */}
       {audit.sceneLighting.length > 0 ? (
         <SceneLightingBlock scenes={audit.sceneLighting} />
       ) : null}
 
-      {/* 跨镜连贯钩子 */}
+      {/* Cross-shot continuity hooks */}
       {audit.continuityAnchors.length > 0 ? (
         <ContinuityBlock anchors={audit.continuityAnchors} />
       ) : null}
 
-      {/* 问题清单 */}
+      {/* Issue list */}
       {audit.issues.length > 0 ? <IssuesBlock issues={audit.issues} actions={actions} /> : null}
     </div>
   );
 }
 
 /**
- * 共用的"一键行动"按钮组件 —— 给 audit 里每条可操作的条目加 🔍 查找 + ＋ focus 两个小按钮。
- * 刻意做得很小 (text-[9px] / w-3), 不抢视觉, 但是 hover 时有明显反馈。
+ * Shared one-click actions — tiny search + add-to-focus buttons on each actionable row.
+ * Kept small (text-[9px] / w-3) so they don't compete visually; hover still gives feedback.
  */
 function ActionButtons({
   text, actions, className,
@@ -167,6 +159,8 @@ function ActionButtons({
   actions?: AuditActions;
   className?: string;
 }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { polishUi: Record<string, string> };
   if (!actions || (!actions.onSearch && !actions.onAddToFocus)) return null;
   return (
     <span className={`inline-flex items-center gap-1 ${className ?? ''}`}>
@@ -174,7 +168,7 @@ function ActionButtons({
         <button
           onClick={(e) => { e.stopPropagation(); actions.onSearch!(text); }}
           className="p-0.5 rounded hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
-          title="在润色结果正文中高亮这段内容"
+          title={t.polishUi.searchInResult}
         >
           <Search className="w-3 h-3" />
         </button>
@@ -183,7 +177,7 @@ function ActionButtons({
         <button
           onClick={(e) => { e.stopPropagation(); actions.onAddToFocus!(text); }}
           className="p-0.5 rounded hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
-          title="加入下一轮润色的「特别要求」, 让 LLM 重点处理"
+          title={t.polishUi.addToFocusTitle}
         >
           <PlusCircle className="w-3 h-3" />
         </button>
@@ -214,18 +208,24 @@ function SectionCard({
 }
 
 function ReadinessBlock({ r }: { r: NonNullable<PolishAudit['aigcReadiness']> }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { polishUi: Record<string, string> };
   const lvl = readinessLevel(r.score);
   const palette = READINESS_BAR[lvl.level];
+  const readinessLabel =
+    lvl.level === 'green' ? t.polishUi.readinessGreen
+      : lvl.level === 'amber' ? t.polishUi.readinessAmber
+        : t.polishUi.readinessRed;
   return (
     <SectionCard
       icon={<Activity className={`w-4 h-4 ${palette.label}`} />}
-      title="AIGC 管线就绪度"
+      title={t.polishUi.aigcReadiness}
       accent={palette.ring.replace('ring-', 'border-')}
     >
       <div className="flex items-end gap-3 mb-2">
         <span className={`text-4xl font-bold ${palette.label} tabular-nums`}>{r.score}</span>
         <span className="text-xs text-white/50 mb-1.5">/ 100</span>
-        <span className={`ml-auto text-[11px] ${palette.text} mb-1.5`}>{lvl.label}</span>
+        <span className={`ml-auto text-[11px] ${palette.text} mb-1.5`}>{readinessLabel}</span>
       </div>
       <div className="h-1.5 rounded-full bg-white/10 overflow-hidden mb-3">
         <div
@@ -241,14 +241,16 @@ function ReadinessBlock({ r }: { r: NonNullable<PolishAudit['aigcReadiness']> })
 }
 
 function StyleProfileBlock({ s }: { s: NonNullable<PolishAudit['styleProfile']> }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { polishUi: Record<string, string> };
   const fields: Array<[string, string, string]> = [
-    ['类型', s.genre, 'text-[#E8C547]'],
-    ['基调', s.tone, 'text-pink-300'],
-    ['节奏', s.rhythm, 'text-cyan-300'],
-    ['美术', s.artDirection, 'text-violet-300'],
+    [t.polishUi.fieldGenre, s.genre, 'text-[#E8C547]'],
+    [t.polishUi.fieldTone, s.tone, 'text-pink-300'],
+    [t.polishUi.fieldRhythm, s.rhythm, 'text-cyan-300'],
+    [t.polishUi.fieldArt, s.artDirection, 'text-violet-300'],
   ];
   return (
-    <SectionCard icon={<Palette className="w-4 h-4 text-pink-300" />} title="风格画像">
+    <SectionCard icon={<Palette className="w-4 h-4 text-pink-300" />} title={t.polishUi.stylePortrait}>
       <dl className="space-y-1.5 text-[12px]">
         {fields
           .filter(([, v]) => !!v)
@@ -264,18 +266,24 @@ function StyleProfileBlock({ s }: { s: NonNullable<PolishAudit['styleProfile']> 
 }
 
 function HookBlock({ h }: { h: NonNullable<PolishAudit['hook']> }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { polishUi: Record<string, string> };
   const p = HOOK_COLOR[h.strength];
+  const hookLabel =
+    h.strength === 'weak' ? t.polishUi.hookWeak
+      : h.strength === 'ok' ? t.polishUi.hookOk
+        : t.polishUi.hookStrong;
   return (
     <SectionCard
       icon={<Zap className={`w-4 h-4 ${p.text}`} />}
-      title="前 3 秒 Hook"
+      title={t.polishUi.hookTitle}
       accent={p.border}
     >
       <div className="flex items-start gap-3 flex-wrap">
         <span
           className={`px-2.5 py-1 rounded-md text-[11px] font-semibold ${p.bg} ${p.text} border ${p.border} shrink-0`}
         >
-          强度: {p.label}
+          {t.polishUi.hookStrength.replace('{label}', hookLabel)}
         </span>
         <div className="flex-1 min-w-[200px] space-y-1.5">
           {h.at3s ? (
@@ -299,14 +307,16 @@ function ActStructureBlock({
   a: NonNullable<PolishAudit['actStructure']>;
   actions?: AuditActions;
 }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { polishUi: Record<string, string> };
   const beats: Array<[string, string, string]> = [
-    ['激励事件', a.incitingIncident, 'bg-blue-500/10 text-blue-200 border-blue-500/30'],
-    ['中点反转', a.midpoint,         'bg-purple-500/10 text-purple-200 border-purple-500/30'],
-    ['高潮',     a.climax,           'bg-amber-500/10 text-amber-200 border-amber-500/30'],
-    ['收尾',     a.resolution,       'bg-emerald-500/10 text-emerald-200 border-emerald-500/30'],
+    [t.polishUi.beatInciting, a.incitingIncident, 'bg-blue-500/10 text-blue-200 border-blue-500/30'],
+    [t.polishUi.beatMidpoint, a.midpoint,         'bg-purple-500/10 text-purple-200 border-purple-500/30'],
+    [t.polishUi.beatClimax, a.climax,             'bg-amber-500/10 text-amber-200 border-amber-500/30'],
+    [t.polishUi.beatResolution, a.resolution,     'bg-emerald-500/10 text-emerald-200 border-emerald-500/30'],
   ];
   return (
-    <SectionCard icon={<LayoutList className="w-4 h-4 text-cyan-300" />} title="三幕结构 · Save the Cat 节拍">
+    <SectionCard icon={<LayoutList className="w-4 h-4 text-cyan-300" />} title={t.polishUi.actTitle}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 mb-3">
         {beats
           .filter(([, v]) => !!v)
@@ -324,8 +334,8 @@ function ActStructureBlock({
         <div>
           <p className="text-[10px] text-amber-300/80 tracking-wider uppercase mb-1.5 flex items-center gap-1">
             <AlertTriangle className="w-3 h-3" />
-            缺失节拍 ({a.missingBeats.length})
-            <span className="opacity-60 ml-1 normal-case tracking-normal">· 可 ＋ 到下轮 focus</span>
+            {t.polishUi.missingBeats.replace('{n}', String(a.missingBeats.length))}
+            <span className="opacity-60 ml-1 normal-case tracking-normal">{t.polishUi.missingBeatsHint}</span>
           </p>
           <div className="flex gap-1.5 flex-wrap">
             {a.missingBeats.map((b, i) => (
@@ -334,7 +344,7 @@ function ActStructureBlock({
                 className="px-2 py-0.5 rounded-md text-[11px] bg-amber-500/10 text-amber-200 border border-amber-500/30 flex items-center gap-1"
               >
                 {b}
-                <ActionButtons text={`补上${b}`} actions={actions} />
+                <ActionButtons text={t.polishUi.fillBeat.replace('{beat}', b)} actions={actions} />
               </span>
             ))}
           </div>
@@ -350,13 +360,15 @@ function DialogueBlock({
   d: NonNullable<PolishAudit['dialogueIssues']>;
   actions?: AuditActions;
 }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { polishUi: Record<string, string> };
   return (
-    <SectionCard icon={<MessageSquareQuote className="w-4 h-4 text-rose-300" />} title="对白问题 · 反直抒 & 情绪可视化">
+    <SectionCard icon={<MessageSquareQuote className="w-4 h-4 text-rose-300" />} title={t.polishUi.dialogueTitle}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {d.onTheNoseLines.length > 0 ? (
           <div>
             <p className="text-[10px] text-rose-300/80 tracking-wider uppercase mb-1.5">
-              直抒胸臆 (建议改 subtext) · {d.onTheNoseLines.length}
+              {t.polishUi.onTheNose.replace('{n}', String(d.onTheNoseLines.length))}
             </p>
             <ul className="space-y-1.5 text-[12px] text-white/80">
               {d.onTheNoseLines.map((l, i) => (
@@ -372,7 +384,7 @@ function DialogueBlock({
         {d.abstractEmotionLines.length > 0 ? (
           <div>
             <p className="text-[10px] text-orange-300/80 tracking-wider uppercase mb-1.5">
-              抽象情绪 (建议画面化) · {d.abstractEmotionLines.length}
+              {t.polishUi.abstractEmotion.replace('{n}', String(d.abstractEmotionLines.length))}
             </p>
             <ul className="space-y-1.5 text-[12px] text-white/80">
               {d.abstractEmotionLines.map((l, i) => (
@@ -391,8 +403,10 @@ function DialogueBlock({
 }
 
 function CharacterAnchorsBlock({ anchors }: { anchors: PolishAudit['characterAnchors'] }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { polishUi: Record<string, string> };
   return (
-    <SectionCard icon={<Users className="w-4 h-4 text-violet-300" />} title="角色 Identity 锚点 · Cameo/Seedance 对齐">
+    <SectionCard icon={<Users className="w-4 h-4 text-violet-300" />} title={t.polishUi.charAnchorsTitle}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
         {anchors.map((c) => (
           <div
@@ -405,19 +419,19 @@ function CharacterAnchorsBlock({ anchors }: { anchors: PolishAudit['characterAnc
             <dl className="space-y-1 text-[11.5px]">
               {c.visualLock ? (
                 <div className="flex gap-1.5">
-                  <dt className="text-[10px] text-violet-300/70 shrink-0 w-10">锁脸</dt>
+                  <dt className="text-[10px] text-violet-300/70 shrink-0 w-10">{t.polishUi.faceLock}</dt>
                   <dd className="text-white/80 leading-relaxed">{c.visualLock}</dd>
                 </div>
               ) : null}
               {c.speechStyle ? (
                 <div className="flex gap-1.5">
-                  <dt className="text-[10px] text-violet-300/70 shrink-0 w-10">话风</dt>
+                  <dt className="text-[10px] text-violet-300/70 shrink-0 w-10">{t.polishUi.speechStyle}</dt>
                   <dd className="text-white/80 leading-relaxed">{c.speechStyle}</dd>
                 </div>
               ) : null}
               {c.arc ? (
                 <div className="flex gap-1.5">
-                  <dt className="text-[10px] text-violet-300/70 shrink-0 w-10">弧光</dt>
+                  <dt className="text-[10px] text-violet-300/70 shrink-0 w-10">{t.polishUi.arc}</dt>
                   <dd className="text-white/80 leading-relaxed">{c.arc}</dd>
                 </div>
               ) : null}
@@ -430,17 +444,19 @@ function CharacterAnchorsBlock({ anchors }: { anchors: PolishAudit['characterAnc
 }
 
 function SceneLightingBlock({ scenes }: { scenes: PolishAudit['sceneLighting'] }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { polishUi: Record<string, string> };
   return (
-    <SectionCard icon={<Lightbulb className="w-4 h-4 text-yellow-300" />} title="场景光影表 · Prompt-ready">
+    <SectionCard icon={<Lightbulb className="w-4 h-4 text-yellow-300" />} title={t.polishUi.lightingTitle}>
       <div className="overflow-x-auto -mx-1">
         <table className="w-full text-[11.5px] min-w-[520px]">
           <thead>
             <tr className="text-[10px] text-white/45 tracking-wider uppercase text-left">
-              <th className="py-1.5 px-2 font-normal">场景</th>
-              <th className="py-1.5 px-2 font-normal">光向</th>
-              <th className="py-1.5 px-2 font-normal">光质</th>
-              <th className="py-1.5 px-2 font-normal">色温</th>
-              <th className="py-1.5 px-2 font-normal">氛围</th>
+              <th className="py-1.5 px-2 font-normal">{t.product.tabScenes}</th>
+              <th className="py-1.5 px-2 font-normal">{t.polishUi.colLightDir}</th>
+              <th className="py-1.5 px-2 font-normal">{t.polishUi.colQuality}</th>
+              <th className="py-1.5 px-2 font-normal">{t.polishUi.colColorTemp}</th>
+              <th className="py-1.5 px-2 font-normal">{t.polishUi.colMood}</th>
             </tr>
           </thead>
           <tbody>
@@ -461,8 +477,10 @@ function SceneLightingBlock({ scenes }: { scenes: PolishAudit['sceneLighting'] }
 }
 
 function ContinuityBlock({ anchors }: { anchors: string[] }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { polishUi: Record<string, string> };
   return (
-    <SectionCard icon={<Anchor className="w-4 h-4 text-teal-300" />} title="跨镜一致性钩子 · Keyframes 首尾帧衔接">
+    <SectionCard icon={<Anchor className="w-4 h-4 text-teal-300" />} title={t.polishUi.continuityTitle}>
       <ul className="space-y-1.5 text-[12px] text-white/80">
         {anchors.map((a, i) => (
           <li key={i} className="flex gap-2 leading-relaxed">
@@ -483,11 +501,21 @@ function IssuesBlock({
   issues: PolishAudit['issues'];
   actions?: AuditActions;
 }) {
-  // 按严重度排序: critical > major > minor
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { polishUi: Record<string, string> };
+  const categoryLabel: Record<string, string> = {
+    pacing: t.polishUi.catPacing,
+    dialogue: t.polishUi.catDialogue,
+    structure: t.polishUi.catStructure,
+    character: t.polishUi.catCharacter,
+    aigc: t.polishUi.catAigc,
+    other: t.polishUi.catOther,
+  };
+  // Sort by severity: critical > major > minor
   const order = { critical: 0, major: 1, minor: 2 } as const;
   const sorted = [...issues].sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9));
   return (
-    <SectionCard icon={<Drama className="w-4 h-4 text-orange-300" />} title={`问题清单 (${issues.length})`}>
+    <SectionCard icon={<Drama className="w-4 h-4 text-orange-300" />} title={t.polishUi.issuesTitle.replace('{n}', String(issues.length))}>
       <ul className="space-y-2">
         {sorted.map((it, i) => (
           <li
@@ -497,7 +525,7 @@ function IssuesBlock({
             <div className="flex items-center gap-2 mb-1 text-[10px] tracking-wider uppercase opacity-80">
               <span>{it.severity}</span>
               <span>·</span>
-              <span>{CATEGORY_LABEL[it.category] || it.category}</span>
+              <span>{categoryLabel[it.category] || it.category}</span>
               {it.where ? (
                 <>
                   <span>·</span>
@@ -513,4 +541,3 @@ function IssuesBlock({
     </SectionCard>
   );
 }
-

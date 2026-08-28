@@ -1,25 +1,27 @@
 'use client';
 
 /**
- * FirstRunGuide (v10.5.3) — 创作工坊首跑三步引导(零依赖 coach marks)。
+ * FirstRunGuide (v10.5.3) — three-step first-run coach for the create workshop
+ * (no extra coach-mark dependency).
  *
- * 首次进入 create 页(localStorage 无完成标记)时,按「写创意 → 选风格 → ROLL」
- * 三步高亮对应区块(页面元素带 data-guide="idea|style|roll" 锚点):
- * 半透明遮罩 + 目标琥珀描边 + 就近气泡卡。完成/跳过都落 localStorage 不再弹。
+ * On first visit (no localStorage done flag), highlight idea → style → ROLL
+ * (anchors: data-guide="idea|style|roll"): dim overlay + amber outline + nearby
+ * bubble. Complete or skip writes localStorage and never shows again.
  *
- * 埋点(完成率 = completed/shown):create_guide_shown / _step{N} / _completed / _skipped
- * → POST /api/telemetry/ui-event(fire-and-forget,失败不影响引导)。
- * a11y:气泡 role=dialog + useFocusTrap(Tab 圈内循环、Escape=跳过、焦点归还)。
+ * Telemetry (completion = completed/shown): create_guide_shown / _step{N} /
+ * _completed / _skipped → POST /api/telemetry/ui-event (fire-and-forget).
+ * a11y: bubble role=dialog + useFocusTrap (Tab cycle, Escape=skip, restore focus).
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
+import { useLocale } from '@/hooks/use-locale';
 
 const DONE_KEY = 'qfmj-create-guide-done';
 
 const STEPS = [
-  { target: 'idea', title: '① 写下你的创意', desc: '30 字以上、带题材线索(悬疑/爱情/古风…)效果最好;也可以直接粘贴完整剧本。' },
-  { target: 'style', title: '② 选一个画风', desc: '画风决定全片视觉基调 —— 横向滑动挑一张顺眼的;之后还能在风格画廊里换。' },
-  { target: 'roll', title: '③ 开机 · ROLL', desc: 'AI 团队接管剩下的一切:剧本 → 分镜 → 视频 → 成片;进度随时可在「任务队列」查看。' },
+  { target: 'idea' },
+  { target: 'style' },
+  { target: 'roll' },
 ] as const;
 
 function track(event: string, meta: Record<string, unknown> = {}) {
@@ -30,16 +32,24 @@ function track(event: string, meta: Record<string, unknown> = {}) {
       body: JSON.stringify({ event, meta }),
       keepalive: true,
     }).catch(() => {});
-  } catch { /* 埋点失败不影响引导 */ }
+  } catch { /* telemetry failure must not block the guide */ }
 }
 
 interface Rect { top: number; left: number; width: number; height: number }
 
 export function FirstRunGuide() {
-  const [step, setStep] = useState(-1); // -1 = 未激活
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { workshopCreate: Record<string, string> };
+  const [step, setStep] = useState(-1); // -1 = inactive
   const [rect, setRect] = useState<Rect | null>(null);
 
-  // 首跑判定 + 曝光埋点
+  const stepCopy = [
+    { title: t.workshopCreate.guideStep1Title, desc: t.workshopCreate.guideStep1Desc },
+    { title: t.workshopCreate.guideStep2Title, desc: t.workshopCreate.guideStep2Desc },
+    { title: t.workshopCreate.guideStep3Title, desc: t.workshopCreate.guideStep3Desc },
+  ];
+
+  // First-run check + impression event
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -49,7 +59,7 @@ export function FirstRunGuide() {
     track('create_guide_shown');
   }, []);
 
-  // 目标测量(步进 / resize / scroll 时重测;jsdom/零尺寸 → 居中兜底)
+  // Measure target (on step / resize / scroll; jsdom or zero-size → centered fallback)
   useEffect(() => {
     if (step < 0) return;
     const measure = () => {
@@ -80,10 +90,10 @@ export function FirstRunGuide() {
   const dialogRef = useFocusTrap<HTMLDivElement>(step >= 0, () => finish('skipped'));
 
   if (step < 0) return null;
-  const s = STEPS[step];
+  const s = stepCopy[step];
   const last = step === STEPS.length - 1;
 
-  // 气泡定位:目标下方(空间不够则上方);无目标 rect → 屏幕居中
+  // Bubble: below the target (flip above if needed); no rect → screen center
   const cardStyle: React.CSSProperties = rect
     ? (() => {
         const below = rect.top + rect.height + 12;
@@ -98,9 +108,9 @@ export function FirstRunGuide() {
 
   return (
     <div className="fixed inset-0 z-[9000]">
-      {/* 遮罩(挡误触;引导本身就是模态语义) */}
+      {/* Overlay (blocks stray clicks; the guide is modal) */}
       <div aria-hidden="true" className="absolute inset-0 bg-black/55" />
-      {/* 目标高亮描边 */}
+      {/* Target highlight outline */}
       {rect && (
         <div
           aria-hidden="true"
@@ -113,12 +123,12 @@ export function FirstRunGuide() {
           }}
         />
       )}
-      {/* 气泡卡 */}
+      {/* Bubble card */}
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label="创作工坊首跑引导"
+        aria-label={t.workshopCreate.guideAria}
         tabIndex={-1}
         className="w-[360px] max-w-[calc(100vw-24px)] rounded-xl border border-[var(--cinema-amber-deep,#8A6E3F)] bg-[#16130f] p-4 shadow-2xl outline-none"
         style={cardStyle}
@@ -134,7 +144,7 @@ export function FirstRunGuide() {
             onClick={() => finish('skipped')}
             className="text-[11px] text-white/60 hover:text-white/90 underline"
           >
-            跳过引导
+            {t.workshopCreate.skipGuide}
           </button>
           <span className="flex-1" />
           {step > 0 && (
@@ -143,7 +153,7 @@ export function FirstRunGuide() {
               onClick={() => { setStep(step - 1); }}
               className="cinema-btn !px-3 !py-1.5 !text-[12px]"
             >
-              上一步
+              {t.workshopCreate.prevStep}
             </button>
           )}
           <button
@@ -155,7 +165,7 @@ export function FirstRunGuide() {
             }}
             className="cinema-btn cinema-btn-primary !px-4 !py-1.5 !text-[12px]"
           >
-            {last ? '开拍 🎬' : '下一步'}
+            {last ? t.workshopCreate.startShoot : t.workshopCreate.nextStep}
           </button>
         </div>
       </div>

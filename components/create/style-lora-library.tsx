@@ -3,14 +3,14 @@
 /**
  * components/create/style-lora-library (v2.15 G8)
  *
- * 用户自定义"风格指纹"库 — 复用现有 global_assets (type='style') 表 + 路由,
- * 不引新 schema。
+ * User "style fingerprint" library — reuses global_assets (type='style')
+ * table + routes. No new schema.
  *
- * 数据形态 (存进 global_assets.metadata):
- *   { stylePreset: string,   // 当前 style 选择器值
- *     cameraDefault: string|null }  // 当前镜头语言默认 (v2.14 P1.1)
+ * Payload (stored in global_assets.metadata):
+ *   { stylePreset: string,   // current style selector value
+ *     cameraDefault: string|null }  // current camera-language default (v2.14 P1.1)
  *
- * 用法:
+ * Usage:
  *   <StyleLoraLibrary
  *     currentStyle={style}
  *     currentCameraDefault={cameraDefault}
@@ -21,6 +21,7 @@
 import { useEffect, useState } from 'react';
 import { Bookmark, Plus, Trash as Trash2, CircleNotch as Loader2 } from '@phosphor-icons/react';
 import { useToast } from '@/components/ui/toast-provider';
+import { useLocale } from '@/hooks/use-locale';
 import {
   Popover,
   PopoverContent,
@@ -49,7 +50,7 @@ export interface StyleLoraLibraryProps {
   currentStyle: string;
   currentCameraDefault: string | null;
   onApply: (applied: AppliedStyle) => void;
-  /** 可选: 提示用户保存时附带项目第一张参考图的 thumbnail */
+  /** Optional: suggest the project's first reference still as the thumbnail */
   thumbnailSuggest?: string;
   className?: string;
 }
@@ -57,7 +58,9 @@ export interface StyleLoraLibraryProps {
 export function StyleLoraLibrary({
   currentStyle, currentCameraDefault, onApply, thumbnailSuggest, className = '',
 }: StyleLoraLibraryProps) {
-  const { showToast } = useToast();   // v12.300:失败要让用户看见,不能只进 console
+  const { showToast } = useToast();   // v12.300: surface failures; do not leave them in console only
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { workshopCreate: Record<string, string> };
   const [items, setItems] = useState<GlobalAssetStyle[]>([]);
   const [loading, setLoading] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
@@ -109,11 +112,10 @@ export function StyleLoraLibrary({
         }),
       });
       if (!res.ok) {
-        // v12.300:此前只 console.warn —— 弹框停留、spinner 消失、零提示,
-        // 用户不知道保存失败,可能反复重试或以为要刷新页面。
+        // v12.300: previously only console.warn — popover stayed, spinner died, no copy
         const body = await res.json().catch(() => ({}));
         console.warn('[StyleLora] save failed:', body.error);
-        showToast({ title: '风格保存失败', description: String(body?.error || `HTTP ${res.status}`).slice(0, 120), type: 'error', duration: 4000 });
+        showToast({ title: t.workshopCreate.styleSaveFailed, description: String(body?.error || `HTTP ${res.status}`).slice(0, 120), type: 'error', duration: 4000 });
         return;
       }
       setDraftName('');
@@ -125,7 +127,7 @@ export function StyleLoraLibrary({
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`删除风格 "${name}" ?`)) return;
+    if (!confirm(t.workshopCreate.deleteStyleConfirm.replace('{name}', name))) return;
     try {
       await fetch(`/api/global-assets/${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (appliedId === id) setAppliedId(null);
@@ -148,7 +150,7 @@ export function StyleLoraLibrary({
       <div className="flex items-center justify-between mb-2">
         <span className="cinema-eyebrow inline-flex items-center gap-1.5">
           <Bookmark className="w-3 h-3" />
-          STYLE LIBRARY · 我的风格库
+          {t.workshopCreate.styleLibraryTitle}
         </span>
         <Popover open={saveOpen} onOpenChange={setSaveOpen}>
           <PopoverTrigger asChild>
@@ -156,10 +158,10 @@ export function StyleLoraLibrary({
               type="button"
               disabled={!currentStyle}
               className="cinema-btn !px-2 !py-1 !text-[10px] inline-flex items-center gap-1 disabled:opacity-30"
-              title={currentStyle ? '把当前风格存进我的库' : '先选个画风再保存'}
+              title={currentStyle ? t.workshopCreate.saveCurrentHint : t.workshopCreate.saveCurrentDisabledHint}
             >
               <Plus className="w-3 h-3" />
-              保存当前
+              {t.workshopCreate.saveCurrent}
             </button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-72 space-y-2">
@@ -170,20 +172,20 @@ export function StyleLoraLibrary({
               value={draftName}
               onChange={(e) => setDraftName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
-              placeholder="给风格起个名字"
+              placeholder={t.workshopCreate.styleNamePlaceholder}
               maxLength={40}
               className="w-full px-2 py-1.5 bg-[var(--cinema-surface-2)] border border-[var(--cinema-border)] rounded text-sm focus:outline-none focus:border-[var(--cinema-amber)]"
             />
             <div className="cinema-mono text-[10px] opacity-50">
-              当前: {currentStyle || '—'}
-              {currentCameraDefault ? ` · 镜头 ${currentCameraDefault}` : ''}
+              {t.workshopCreate.currentStyle.replace('{style}', currentStyle || '—')}
+              {currentCameraDefault ? t.workshopCreate.currentCamera.replace('{camera}', currentCameraDefault) : ''}
             </div>
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => setSaveOpen(false)}
                 className="cinema-btn !px-3 !py-1 !text-[11px] flex-1"
               >
-                取消
+                {t.common.cancel}
               </button>
               <button
                 onClick={handleSave}
@@ -191,7 +193,7 @@ export function StyleLoraLibrary({
                 className="cinema-btn cinema-btn-primary !px-3 !py-1 !text-[11px] flex-1 disabled:opacity-40 inline-flex items-center justify-center gap-1"
               >
                 {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-                保存
+                {t.common.save}
               </button>
             </div>
           </PopoverContent>
@@ -199,10 +201,10 @@ export function StyleLoraLibrary({
       </div>
 
       {loading ? (
-        <div className="cinema-mono text-[10px] opacity-75">加载中…</div>
+        <div className="cinema-mono text-[10px] opacity-75">{t.common.loading}</div>
       ) : items.length === 0 ? (
         <div className="cinema-mono text-[10px] opacity-70">
-          暂无收藏。挑个画风 + 镜头, 点 "保存当前" 入库, 下次一键复用。
+          {t.workshopCreate.styleLibraryEmpty}
         </div>
       ) : (
         <div className="flex flex-wrap gap-1.5">
@@ -224,7 +226,7 @@ export function StyleLoraLibrary({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.name); }}
-                  title="删除"
+                  title={t.common.delete}
                   className="ml-px px-1.5 py-1 cinema-btn !text-[10px] opacity-40 hover:opacity-100 hover:text-[var(--cinema-red)] transition-opacity"
                 >
                   <Trash2 className="w-2.5 h-2.5" />

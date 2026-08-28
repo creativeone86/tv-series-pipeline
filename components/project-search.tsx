@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { MagnifyingGlass as Search, X, Funnel as Filter } from '@phosphor-icons/react';
-import { Button } from './ui/button';
+import { useLocale } from '@/hooks/use-locale';
 
 interface ProjectSearchProps {
   onSearch: (query: string) => void;
@@ -11,6 +11,7 @@ interface ProjectSearchProps {
 }
 
 export function ProjectSearch({ onSearch, onFilterChange, currentFilter }: ProjectSearchProps) {
+  const { t } = useLocale();
   const [query, setQuery] = useState('');
 
   const handleSearch = (value: string) => {
@@ -24,22 +25,21 @@ export function ProjectSearch({ onSearch, onFilterChange, currentFilter }: Proje
   };
 
   const filters = [
-    { value: 'all', label: '全部' },
-    { value: 'completed', label: '已完成' },
-    { value: 'creating', label: '创作中' },
-    { value: 'failed', label: '失败' },
+    { value: 'all', label: t.projects.filterAll },
+    { value: 'completed', label: t.projects.filterCompleted },
+    { value: 'creating', label: t.projects.filterCreating },
+    { value: 'failed', label: t.projects.filterFailed },
   ];
 
   return (
     <div className="space-y-4">
-      {/* 搜索框 */}
       <div className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
         <input
           type="text"
           value={query}
           onChange={(e) => handleSearch(e.target.value)}
-          placeholder="搜索项目标题或描述..."
+          placeholder={t.projects.searchPlaceholder}
           className="w-full h-12 pl-12 pr-12 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#E8C547]/50 focus:border-[#E8C547]/50 transition-all"
         />
         {query && (
@@ -52,7 +52,6 @@ export function ProjectSearch({ onSearch, onFilterChange, currentFilter }: Proje
         )}
       </div>
 
-      {/* 筛选按钮 */}
       <div className="flex items-center gap-2">
         <Filter className="w-4 h-4 text-gray-400" />
         <div className="flex gap-2">

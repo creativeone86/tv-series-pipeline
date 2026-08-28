@@ -76,6 +76,6 @@ describe('StylePicker', () => {
     fireEvent.change(screen.getByTestId('style-search'), {
       target: { value: 'xyz-zzz-no-match' },
     });
-    expect(screen.getByText('没有找到匹配的风格')).toBeInTheDocument();
+    expect(screen.getByText('No matching styles')).toBeInTheDocument();
   });
 });

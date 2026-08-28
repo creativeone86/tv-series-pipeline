@@ -14,14 +14,15 @@ import { readinessLevel } from '@/lib/polish-prompts';
 import { useLocale } from '@/hooks/use-locale';
 
 export default function ProjectsPage() {
-  const { t } = useLocale();
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { dashMore: Record<string, string> };
   const router = useRouter();
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'completed' | 'active' | 'draft'>('all');
   const [importingDemo, setImportingDemo] = useState(false);
 
-  // v10.5.0: 演示工程一键导入 —— 0 key 也能逛完整成片工作台(Time-to-Wow 专项)
+  // v10.5.0: one-click demo import — walk the full film workbench with 0 keys (Time-to-Wow)
   const importDemo = async () => {
     if (importingDemo) return;
     setImportingDemo(true);
@@ -36,13 +37,13 @@ export default function ProjectsPage() {
         router.push(`/projects/${projectId}`);
         return;
       }
-    } catch { /* 失败落回按钮态 */ }
+    } catch { /* fall back to the button state */ }
     setImportingDemo(false);
   };
 
   useEffect(() => {
-    // v5.0.x fix: 走 api-client (带 Authorization), 解析真实登录用户而非 no-auth 兜底.
-    // 之前用裸 fetch 无 token → 命中 first-user 兜底; 测试用户污染 DB 后兜底解析错乱, 项目全空.
+    // v5.0.x fix: go through api-client (with Authorization) so we resolve the real signed-in user, not the no-auth fallback.
+    // Bare fetch without a token used to hit the first-user fallback; after test users polluted the DB that fallback resolved wrong and the list was empty.
     api.projects()
       .then((d: any) => { if (Array.isArray(d)) setProjects(d); })
       .catch(() => {})
@@ -80,7 +81,7 @@ export default function ProjectsPage() {
     archived: { label: t.dashProjects.statusArchived, dotColor: 'bg-white/30', bgColor: 'bg-white/5 text-white/40 border-white/10', icon: Archive },
   };
 
-  // 「全部」默认不含已下架(下架=从主列表移走);选「已下架」单独看
+  // "All" excludes archived by default (archived = removed from the main list); pick "Archived" to see them
   const filtered = filter === 'all'
     ? projects.filter(p => p.status !== 'archived')
     : projects.filter(p => p.status === filter);
@@ -94,7 +95,7 @@ export default function ProjectsPage() {
 
   return (
     <div className="cinema-page max-w-6xl mx-auto -mx-[5vw] -my-6 px-[5vw] py-6">
-      {/* Header — 影院仪表盘风格 */}
+      {/* Header — cinema dashboard look */}
       <div className="flex justify-between items-end mb-6 animate-fade-up gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -114,7 +115,7 @@ export default function ProjectsPage() {
 
       <FilmStripDivider />
 
-      {/* Filter Bar — cinema chip 风 */}
+      {/* Filter Bar — cinema chips */}
       <div className="flex items-center gap-1.5 mb-6 mt-4 animate-fade-up" style={{ animationDelay: '0.1s' }}>
         <span className="cinema-eyebrow mr-2">FILTER</span>
         {filterOptions.map(f => {
@@ -185,7 +186,7 @@ export default function ProjectsPage() {
                 <div className="cover h-[160px]">
                   <img loading="lazy" decoding="async" src={cover} alt={p.title} className="w-full h-full object-cover"
                     onError={(e) => {
-                      // 历史项目封面 URL 失效(CDN 过期 / 本地资产被清)→ 兜底到内联占位图,避免露碎图标。单次切换防循环。
+                      // Historical cover URL dead (CDN expired / local asset cleared) → fall back to the inline placeholder so we do not show a broken icon. One-shot swap to avoid a loop.
                       const img = e.currentTarget;
                       if (img.dataset.fallback) return;
                       img.dataset.fallback = '1';
@@ -196,7 +197,7 @@ export default function ProjectsPage() {
                     <div className={`w-1.5 h-1.5 rounded-full ${sc.dotColor}`} />
                     {sc.label}
                   </div>
-                  {/* v11.2.0 管理操作(hover 显示):下架/上架 + 删除 */}
+                  {/* v11.2.0 manage actions (hover): archive/restore + delete */}
                   <div className="absolute top-3 left-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button type="button" disabled={busyId === p.id}
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleArchive(p.id, p.status !== 'archived'); }}
@@ -217,16 +218,16 @@ export default function ProjectsPage() {
                       {shotCount} {t.dashProjects.shotsUnit}
                     </div>
                   )}
-                  {/* AIGC 就绪度徽章 — 数据源是 latestPolish.audit.aigcReadiness, 红黄绿一眼看到该项目剧本是否上得了管线 */}
+                  {/* AIGC readiness badge — source is latestPolish.audit.aigcReadiness; red/amber/green shows whether the script can enter the pipeline */}
                   <ReadinessBadge entry={p.latestPolish} />
                   {p.latestPolish && !p.latestPolish?.audit?.aigcReadiness?.score ? (
-                    <div className="absolute top-3 left-3 flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/40 backdrop-blur-sm text-[10px] text-violet-50 border border-violet-300/30" title="该项目最近润色过, 但未生成 Pro 体检分数">
+                    <div className="absolute top-3 left-3 flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/40 backdrop-blur-sm text-[10px] text-violet-50 border border-violet-300/30" title={t.dashMore.polishedNoScore}>
                       <Sparkles className="w-2.5 h-2.5" />
                       {t.dashProjects.polished}
                     </div>
                   ) : null}
-                  {/* 快捷"润色"按钮 — 带原剧本跳到 Polish Studio.
-                      仅当项目已有剧本时可见, 避免空项目点进去没东西改。 */}
+                  {/* Quick Polish — jump to Polish Studio with the existing script.
+                      Only when the project already has a script, so empty projects are not a dead end. */}
                   {p.scriptData?.shots?.length > 0 ? (
                     <button
                       type="button"
@@ -274,23 +275,25 @@ export default function ProjectsPage() {
 }
 
 /**
- * 项目卡左上角的"AIGC 管线就绪度"徽章。
+ * AIGC pipeline-readiness badge on the project card.
  *
- * 数据源: project.latestPolish.audit.aigcReadiness.score
- *   · 没有 latestPolish 或没有 score → 不渲染 (返回 null)
- *   · 有分数 → 用 readinessLevel 映射到 red / amber / green 三档配色
+ * Source: project.latestPolish.audit.aigcReadiness.score
+ *   · no latestPolish or no score → do not render (null)
+ *   · has a score → map via readinessLevel to red / amber / green
  *
- * 设计目的: 让用户在项目列表一眼看到 "哪个项目剧本已经过 Pro 体检 + 处于什么档位",
- * 决定下一个优先润色或重跑哪个。
+ * Goal: in the project list, see at a glance which scripts have had a Pro check and at what band,
+ * so the next polish / rerun priority is obvious.
  */
 function ReadinessBadge({ entry }: { entry: any }) {
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { dashMore: Record<string, string> };
   const score = entry?.audit?.aigcReadiness?.score;
   if (typeof score !== 'number') return null;
   const lvl = readinessLevel(score);
   return (
     <div
       className="absolute bottom-2.5 right-11 flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-full bg-black/55 backdrop-blur-sm border border-white/10 shadow-sm"
-      title={`AIGC 就绪度: ${score}/100 · ${lvl.label}`}
+      title={t.dashMore.aigcReadiness.replace('{score}', String(score)).replace('{label}', lvl.label)}
     >
       <ScoreDonut score={score} size={26} thickness={2.6} showCenter={false} />
       <span className="cinema-mono text-[10px] tabular-nums font-semibold text-white/95 leading-none">

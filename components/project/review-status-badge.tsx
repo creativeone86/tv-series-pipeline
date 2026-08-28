@@ -3,13 +3,14 @@
 /**
  * v3.x P0.3 E.3 — ReviewStatusBadge
  *
- * 显示当前项目的审批状态 + 操作按钮 (submit / approve / request changes / withdraw).
- * 嵌在项目页 nav bar 右侧.
+ * Shows the project's review status + actions (submit / approve / request changes / withdraw).
+ * Embedded on the right of the project page nav bar.
  */
 
 import { useEffect, useState, useCallback } from 'react';
 import { CheckCircle as CheckCircle2, Warning as AlertTriangle, CircleNotch as Loader2, PaperPlaneTilt as Send, X as XIcon, Eye, ArrowCounterClockwise as RotateCcw } from '@phosphor-icons/react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useLocale } from '@/hooks/use-locale';
 
 type ReviewStatus = 'draft' | 'in_review' | 'approved' | 'changes_requested';
 
@@ -37,6 +38,8 @@ const STATUS_CONFIG: Record<ReviewStatus, { label: string; color: string; icon: 
 };
 
 export function ReviewStatusBadge({ projectId, currentUserId }: ReviewStatusBadgeProps) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectMisc: Record<string, string> };
   const [data, setData] = useState<ReviewStatusData | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
@@ -63,13 +66,13 @@ export function ReviewStatusBadge({ projectId, currentUserId }: ReviewStatusBadg
       });
       const body = await res.json();
       if (!res.ok) {
-        setError(body?.error || `失败 ${res.status}`);
+        setError(body?.error || t.seriesDetail.resumeFailStatus.replace('{status}', String(res.status)));
         return;
       }
       setData(body);
       setNote('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : '请求失败');
+      setError(e instanceof Error ? e.message : t.seriesDetail.requestFailed);
     } finally {
       setBusy(false);
     }
@@ -88,7 +91,7 @@ export function ReviewStatusBadge({ projectId, currentUserId }: ReviewStatusBadg
     <Popover>
       <PopoverTrigger
         className={`cinema-chip inline-flex items-center gap-1 cursor-pointer hover:bg-white/5 ${cfg.color}`}
-        title={`审批状态: ${cfg.label} (点击操作)`}
+        title={t.projectMisc.reviewStatusTitle.replace('{label}', cfg.label)}
       >
         <Icon className="w-3 h-3" />
         <span className="cinema-mono text-[10px]">{cfg.label}</span>
@@ -99,22 +102,22 @@ export function ReviewStatusBadge({ projectId, currentUserId }: ReviewStatusBadg
           REVIEW STATE
         </div>
         <div className="cinema-mono text-[10px] opacity-70 space-y-0.5">
-          <div>当前: <span className={cfg.color}>{cfg.label}</span></div>
+          <div>{t.projectMisc.currentLabel}<span className={cfg.color}>{cfg.label}</span></div>
           {data.submittedAt && (
-            <div>提交: {new Date(data.submittedAt).toLocaleString()}</div>
+            <div>{t.projectMisc.submittedLabel}{new Date(data.submittedAt).toLocaleString()}</div>
           )}
           {data.reviewedAt && (
-            <div>审阅: {new Date(data.reviewedAt).toLocaleString()}</div>
+            <div>{t.projectMisc.reviewedLabel}{new Date(data.reviewedAt).toLocaleString()}</div>
           )}
           {data.reviewNote && (
             <div className="mt-1 p-1.5 bg-white/5 rounded">
-              <div className="opacity-60">审阅留言:</div>
+              <div className="opacity-60">{t.projectMisc.reviewNoteLabel}</div>
               <div className="text-white/80">{data.reviewNote}</div>
             </div>
           )}
         </div>
 
-        {/* note 输入 (审阅或 request changes 用) */}
+        {/* note input (approve or request changes) */}
         {(canApprove || canRequestChanges || canWithdraw) && (
           <textarea
             value={note}
@@ -122,7 +125,7 @@ export function ReviewStatusBadge({ projectId, currentUserId }: ReviewStatusBadg
             disabled={busy}
             rows={2}
             maxLength={500}
-            placeholder={canRequestChanges ? '请填改写意见 (必填)' : '留言 (可选)'}
+            placeholder={canRequestChanges ? t.projectMisc.changesNoteRequired : t.projectMisc.noteOptional}
             className="w-full px-2 py-1 cinema-mono text-[11px] bg-[var(--cinema-surface-2)] border border-[var(--cinema-border)] rounded resize-y focus:outline-none focus:border-[var(--cinema-amber)] disabled:opacity-50"
           />
         )}
@@ -139,7 +142,7 @@ export function ReviewStatusBadge({ projectId, currentUserId }: ReviewStatusBadg
               className="cinema-btn cinema-btn-primary !px-2 !py-1 !text-[10px] inline-flex items-center gap-1 disabled:opacity-40"
             >
               {busy ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Send className="w-2.5 h-2.5" />}
-              提交评审
+              {t.projectMisc.submitReview}
             </button>
           )}
           {canApprove && (
@@ -149,7 +152,7 @@ export function ReviewStatusBadge({ projectId, currentUserId }: ReviewStatusBadg
               className="cinema-btn !px-2 !py-1 !text-[10px] inline-flex items-center gap-1 disabled:opacity-40 text-[var(--cinema-green)]"
             >
               <CheckCircle2 className="w-2.5 h-2.5" />
-              通过
+              {t.visionAudit.passLabel}
             </button>
           )}
           {canRequestChanges && (
@@ -159,7 +162,7 @@ export function ReviewStatusBadge({ projectId, currentUserId }: ReviewStatusBadg
               className="cinema-btn !px-2 !py-1 !text-[10px] inline-flex items-center gap-1 disabled:opacity-40 text-[var(--cinema-red)]"
             >
               <AlertTriangle className="w-2.5 h-2.5" />
-              请改
+              {t.projectMisc.requestChanges}
             </button>
           )}
           {canWithdraw && (
@@ -169,7 +172,7 @@ export function ReviewStatusBadge({ projectId, currentUserId }: ReviewStatusBadg
               className="cinema-btn !px-2 !py-1 !text-[10px] inline-flex items-center gap-1 disabled:opacity-40"
             >
               <XIcon className="w-2.5 h-2.5" />
-              撤回
+              {t.projectMisc.withdraw}
             </button>
           )}
         </div>

@@ -1,17 +1,18 @@
 'use client';
 
 /**
- * v3.x — InviteProjectButton: 项目 nav bar 上的邀请按钮 + popover.
+ * v3.x — InviteProjectButton: invite button + popover on the project nav bar.
  *
- * 行为:
- *   - Owner: 看到"邀请协作者"按钮, 点开 popover, 选 role 生成链接复制
- *   - 显示当前协作者列表 + 移除按钮
- *   - 非 owner: 不显示
+ * Behavior:
+ *   - Owner: sees "Invite collaborators", opens popover, picks a role, generates a copyable link
+ *   - Shows current collaborator list + remove
+ *   - Non-owner: hidden
  */
 
 import { useCallback, useEffect, useState } from 'react';
 import { UserPlus, Copy, Check, Trash as Trash2, CircleNotch as Loader2, X as XIcon } from '@phosphor-icons/react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useLocale } from '@/hooks/use-locale';
 
 type ProjectRole = 'viewer' | 'commenter' | 'editor';
 
@@ -44,18 +45,21 @@ export interface InviteProjectButtonProps {
   isOwner: boolean;
 }
 
-const ROLE_LABEL: Record<ProjectRole, string> = {
-  viewer: '只读',
-  commenter: '可评论',
-  editor: '可编辑',
-};
+function roleLabel(role: ProjectRole, pt: Record<string, string>): string {
+  if (role === 'viewer') return pt.roleViewer;
+  if (role === 'commenter') return pt.roleCommenter;
+  return pt.roleEditor;
+}
 
 export function InviteProjectButton({ projectId, isOwner }: InviteProjectButtonProps) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectTools: Record<string, string> };
+  const pt = t.projectTools;
   const [data, setData] = useState<InviteData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState<ProjectRole>('viewer');
-  const [expiresInDays, setExpiresInDays] = useState<string>('7'); // '0' = 永久
+  const [expiresInDays, setExpiresInDays] = useState<string>('7'); // '0' = forever
   const [busy, setBusy] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
@@ -65,13 +69,13 @@ export function InviteProjectButton({ projectId, isOwner }: InviteProjectButtonP
     try {
       const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/invite`);
       if (res.ok) setData(await res.json());
-      else setError(`加载失败 ${res.status}`);
+      else setError(pt.loadFailed.replace('{status}', String(res.status)));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'fetch failed');
     } finally {
       setLoading(false);
     }
-  }, [projectId, isOwner]);
+  }, [projectId, isOwner, pt.loadFailed]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -89,10 +93,10 @@ export function InviteProjectButton({ projectId, isOwner }: InviteProjectButtonP
       });
       const body = await res.json();
       if (!res.ok) {
-        setError(body?.error || `失败 ${res.status}`);
+        setError(body?.error || pt.createFailed.replace('{status}', String(res.status)));
         return;
       }
-      // 复制到剪贴板
+      // Copy to clipboard
       try {
         await navigator.clipboard.writeText(body.url);
         setCopiedToken(body.token);
@@ -100,14 +104,14 @@ export function InviteProjectButton({ projectId, isOwner }: InviteProjectButtonP
       } catch { /* ignore */ }
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : '失败');
+      setError(e instanceof Error ? e.message : pt.failed);
     } finally {
       setBusy(false);
     }
   };
 
   const revokeToken = async (token: string) => {
-    if (!confirm('吊销这个邀请链接? 之后此链接将无效.')) return;
+    if (!confirm(pt.revokeConfirm)) return;
     try {
       const res = await fetch(
         `/api/projects/${encodeURIComponent(projectId)}/invite?token=${encodeURIComponent(token)}`,
@@ -118,7 +122,7 @@ export function InviteProjectButton({ projectId, isOwner }: InviteProjectButtonP
   };
 
   const removeCollab = async (userId: string, userName: string) => {
-    if (!confirm(`从协作者中移除 ${userName}? 已写入的评论不会删除.`)) return;
+    if (!confirm(pt.removeConfirm.replace('{name}', userName))) return;
     try {
       const res = await fetch(
         `/api/projects/${encodeURIComponent(projectId)}/invite?userId=${encodeURIComponent(userId)}`,
@@ -151,7 +155,7 @@ export function InviteProjectButton({ projectId, isOwner }: InviteProjectButtonP
     <Popover>
       <PopoverTrigger
         className="cinema-btn-ghost cinema-btn !p-2 inline-flex items-center gap-1.5"
-        title="邀请协作者"
+        title={pt.inviteTitle}
       >
         <UserPlus className="w-4 h-4" />
         {data && data.collaborators.length > 0 && (
@@ -164,10 +168,10 @@ export function InviteProjectButton({ projectId, isOwner }: InviteProjectButtonP
           PROJECT COLLABORATORS
         </div>
 
-        {/* 当前协作者 */}
+        {/* Current collaborators */}
         {data && data.collaborators.length > 0 && (
           <div className="space-y-1">
-            <div className="cinema-mono text-[10px] opacity-60">已加入 ({data.collaborators.length})</div>
+            <div className="cinema-mono text-[10px] opacity-60">{pt.joined.replace('{n}', String(data.collaborators.length))}</div>
             {data.collaborators.map((c) => (
               <div key={c.id} className="flex items-center gap-2 px-2 py-1.5 rounded bg-white/5">
                 {c.userAvatarUrl ? (
@@ -184,14 +188,14 @@ export function InviteProjectButton({ projectId, isOwner }: InviteProjectButtonP
                   onChange={(e) => updateCollabRole(c.userId, e.target.value as ProjectRole)}
                   className="cinema-mono text-[10px] bg-[var(--cinema-surface-2)] border border-[var(--cinema-border)] rounded px-1 py-0.5"
                 >
-                  <option value="viewer">{ROLE_LABEL.viewer}</option>
-                  <option value="commenter">{ROLE_LABEL.commenter}</option>
-                  <option value="editor">{ROLE_LABEL.editor}</option>
+                  <option value="viewer">{pt.roleViewer}</option>
+                  <option value="commenter">{pt.roleCommenter}</option>
+                  <option value="editor">{pt.roleEditor}</option>
                 </select>
                 <button
                   onClick={() => removeCollab(c.userId, c.userName)}
                   className="opacity-60 hover:opacity-100 hover:text-[var(--cinema-red)]"
-                  title="移除"
+                  title={pt.remove}
                 >
                   <XIcon className="w-3 h-3" />
                 </button>
@@ -200,28 +204,28 @@ export function InviteProjectButton({ projectId, isOwner }: InviteProjectButtonP
           </div>
         )}
 
-        {/* 创建新邀请 */}
+        {/* Create a new invite */}
         <div className="space-y-2 pt-2 border-t border-white/5">
-          <div className="cinema-mono text-[10px] opacity-60">生成新邀请链接</div>
+          <div className="cinema-mono text-[10px] opacity-60">{pt.newLink}</div>
           <div className="flex items-center gap-2">
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as ProjectRole)}
               className="cinema-mono text-[10px] bg-[var(--cinema-surface-2)] border border-[var(--cinema-border)] rounded px-1.5 py-1 flex-1"
             >
-              <option value="viewer">只读 (viewer)</option>
-              <option value="commenter">可评论 (commenter)</option>
-              <option value="editor">可编辑 (editor)</option>
+              <option value="viewer">{pt.roleViewerOpt}</option>
+              <option value="commenter">{pt.roleCommenterOpt}</option>
+              <option value="editor">{pt.roleEditorOpt}</option>
             </select>
             <select
               value={expiresInDays}
               onChange={(e) => setExpiresInDays(e.target.value)}
               className="cinema-mono text-[10px] bg-[var(--cinema-surface-2)] border border-[var(--cinema-border)] rounded px-1.5 py-1"
             >
-              <option value="1">1 天</option>
-              <option value="7">7 天</option>
-              <option value="30">30 天</option>
-              <option value="0">永久</option>
+              <option value="1">{pt.expiry1d}</option>
+              <option value="7">{pt.expiry7d}</option>
+              <option value="30">{pt.expiry30d}</option>
+              <option value="0">{pt.expiryForever}</option>
             </select>
           </div>
           <button
@@ -230,36 +234,36 @@ export function InviteProjectButton({ projectId, isOwner }: InviteProjectButtonP
             className="cinema-btn cinema-btn-primary w-full !text-[11px] inline-flex items-center justify-center gap-1.5 disabled:opacity-40"
           >
             {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />}
-            生成 + 复制链接
+            {pt.generateCopy}
           </button>
         </div>
 
-        {/* 已生成的 token 列表 */}
+        {/* Generated token list */}
         {data && data.tokens.length > 0 && (
           <div className="space-y-1 pt-2 border-t border-white/5">
-            <div className="cinema-mono text-[10px] opacity-60">已发的链接 ({data.tokens.length})</div>
-            {data.tokens.slice(0, 8).map((t) => {
-              const isCopied = copiedToken === t.token;
+            <div className="cinema-mono text-[10px] opacity-60">{pt.sentLinks.replace('{n}', String(data.tokens.length))}</div>
+            {data.tokens.slice(0, 8).map((tok) => {
+              const isCopied = copiedToken === tok.token;
               return (
-                <div key={t.token} className="flex items-center gap-1.5 px-2 py-1 rounded bg-white/5">
-                  <span className="cinema-mono text-[10px] opacity-50 flex-shrink-0">{ROLE_LABEL[t.role]}</span>
+                <div key={tok.token} className="flex items-center gap-1.5 px-2 py-1 rounded bg-white/5">
+                  <span className="cinema-mono text-[10px] opacity-50 flex-shrink-0">{roleLabel(tok.role, pt)}</span>
                   <span className="cinema-mono text-[10px] opacity-70 flex-1 truncate">
-                    /{t.token.slice(0, 12)}...
+                    /{tok.token.slice(0, 12)}...
                   </span>
-                  <span className="cinema-mono text-[9px] opacity-50" title={`${t.viewCount} 次访问, ${t.acceptCount} 次接受`}>
-                    👁{t.viewCount} ✓{t.acceptCount}
+                  <span className="cinema-mono text-[9px] opacity-50" title={pt.visitStats.replace('{views}', String(tok.viewCount)).replace('{accepts}', String(tok.acceptCount))}>
+                    👁{tok.viewCount} ✓{tok.acceptCount}
                   </span>
                   <button
-                    onClick={() => copyUrl(t.url, t.token)}
+                    onClick={() => copyUrl(tok.url, tok.token)}
                     className="opacity-60 hover:opacity-100"
-                    title="复制链接"
+                    title={pt.copyLink}
                   >
                     {isCopied ? <Check className="w-3 h-3 text-[var(--cinema-green)]" /> : <Copy className="w-3 h-3" />}
                   </button>
                   <button
-                    onClick={() => revokeToken(t.token)}
+                    onClick={() => revokeToken(tok.token)}
                     className="opacity-60 hover:opacity-100 hover:text-[var(--cinema-red)]"
-                    title="吊销链接"
+                    title={pt.revokeLink}
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>
@@ -275,7 +279,7 @@ export function InviteProjectButton({ projectId, isOwner }: InviteProjectButtonP
         {loading && (
           <div className="cinema-mono text-[10px] opacity-50 inline-flex items-center gap-1">
             <Loader2 className="w-2.5 h-2.5 animate-spin" />
-            加载中
+            {t.common.loading}
           </div>
         )}
       </PopoverContent>

@@ -1,28 +1,35 @@
 'use client';
 
 /**
- * /dashboard/comic · 漫转视频分格台(v12.250 前端入口 → v12.247 /api/comic/panels)
+ * /dashboard/comic · comic-to-video panel desk (v12.250 UI → v12.247 /api/comic/panels)
  *
- * 漫转视频模式的前端入口:传一张漫画 → 后端用投影法自动**分格**(检出每格边界框)→
- * 本页把格子框叠在原图上可视化。
+ * Front door for comic-to-video: upload a page → backend projection detects
+ * **panels** (bounding boxes) → this page overlays boxes on the original.
  *
- * 诚实边界:分格 → **裁图**(v12.252,sharp 真裁出每格)→ 每格图交给单图变视频(u2v)加动效 →
- * 卡点拼接成动态漫剧。本页做到「分格 + 裁图 + 一键交接 u2v」;拼接复用既有 video-composer,是下一步。
- * 投影法对条漫/规则网格准;不规则跨栏布局切不准(需 CV,暂不支持),后端 hint 会提示。
+ * Honest scope: detect → **crop** (v12.252, sharp crops each panel) → each crop
+ * goes to I2V (u2v) for motion → beat-cut into a motion comic. This page does
+ * detect + crop + one-click handoff to u2v; stitch reuses video-composer (next).
+ * Projection is accurate on strip/regular grids; irregular/spanning layouts
+ * miss (needs CV, not supported); backend hint will say so.
  */
 
 import { useRef, useState } from 'react';
 import { Upload, Link as LinkIcon, GridFour, Warning as AlertTriangle, CircleNotch as Loader2, Rows, Scissors, FilmReel, Download, FilmSlate, X, Sparkle as Sparkles } from '@phosphor-icons/react';
 import Link from 'next/link';
 import { useToast } from '@/components/ui/toast-provider';
+import { useLocale } from '@/hooks/use-locale';
 
 interface Panel { x: number; y: number; w: number; h: number; row: number; col: number; }
 interface CroppedPanel extends Panel { url: string; }
 
-// 分格框轮换配色(相邻格不同色,肉眼好数)。
+type DashT = ReturnType<typeof useLocale>['t'] & { dashPages: Record<string, string> };
+
+// Panel-box palette (adjacent panels get different colors so they are easy to count).
 const BOX_COLORS = ['#E8C547', '#4A7EBB', '#3F8F7A', '#C4576D', '#9B6DC4', '#D4883B'];
 
 export default function ComicPanelsPage() {
+  const { t: loc } = useLocale();
+  const t = loc as DashT;
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [imageUrl, setImageUrl] = useState('');
   const [imagePreview, setImagePreview] = useState('');
@@ -34,30 +41,30 @@ export default function ComicPanelsPage() {
   const [summary, setSummary] = useState('');
   const [hint, setHint] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-  // v12.252 裁图态
+  // v12.252 crop state
   const [cropping, setCropping] = useState(false);
   const [cropped, setCropped] = useState<CroppedPanel[] | null>(null);
   const [cropError, setCropError] = useState('');
-  // v12.256 真片段 → 动态漫剧:按分格顺序贴每格动效片段,顺序拼接
+  // v12.256 real clips → motion comic: paste I2V clips in panel order, then stitch
   const [dramaClips, setDramaClips] = useState<string[]>([]);
   const [clipDraft, setClipDraft] = useState('');
   const [dramaMusic, setDramaMusic] = useState('');
   const [composing, setComposing] = useState(false);
   const [dramaUrl, setDramaUrl] = useState('');
-  const [dramaMusicDropped, setDramaMusicDropped] = useState(false); // 配乐被丢(格式不对/超 64MB)→ 诚实提示
+  const [dramaMusicDropped, setDramaMusicDropped] = useState(false); // music skipped (bad format / >64MB) → honest hint
   const [dramaError, setDramaError] = useState('');
   const { showToast } = useToast();
 
   const addDramaClip = () => {
     const u = clipDraft.trim();
     if (!u) return;
-    if (!/^(https?:\/\/|\/api\/serve-file)/.test(u)) { showToast({ title: '片段 URL 需为 http(s) 或站内 serve-file', type: 'error' }); return; }
+    if (!/^(https?:\/\/|\/api\/serve-file)/.test(u)) { showToast({ title: t.dashPages.clipUrlInvalid, type: 'error' }); return; }
     setDramaClips((prev) => (prev.includes(u) ? prev : [...prev, u]).slice(0, 30));
     setClipDraft('');
   };
 
   const composeDrama = async () => {
-    if (dramaClips.length < 2) { showToast({ title: '至少两段片段才能拼成动态漫剧', type: 'error' }); return; }
+    if (dramaClips.length < 2) { showToast({ title: t.dashPages.needTwoClips, type: 'error' }); return; }
     setComposing(true);
     setDramaUrl(''); setDramaMusicDropped(false); setDramaError('');
     try {
@@ -67,15 +74,15 @@ export default function ComicPanelsPage() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok || !body?.ok) {
-        const msg = body?.message || `合成失败 (HTTP ${res.status})`;
+        const msg = body?.message || t.dashPages.composeFailedHttp.replace('{status}', String(res.status));
         setDramaError(msg); showToast({ title: msg, type: 'error' });
         return;
       }
       setDramaUrl(body.finalVideoUrl || '');
       setDramaMusicDropped(!!body.musicDropped);
-      showToast({ title: body.musicDropped ? '动态漫剧已合成(配乐被跳过)' : '动态漫剧已合成', type: body.musicDropped ? 'warning' : 'success' });
+      showToast({ title: body.musicDropped ? t.dashPages.dramaDoneNoMusic : t.dashPages.dramaDone, type: body.musicDropped ? 'warning' : 'success' });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '网络错误,合成失败';
+      const msg = e instanceof Error ? e.message : t.dashPages.composeNetwork;
       setDramaError(msg); showToast({ title: msg, type: 'error' });
     } finally {
       setComposing(false);
@@ -83,48 +90,48 @@ export default function ComicPanelsPage() {
   };
 
   const uploadFile = async (file: File) => {
-    if (!file.type.startsWith('image/')) { showToast({ title: '只能上传图片', type: 'error' }); return; }
-    if (file.size > 10 * 1024 * 1024) { showToast({ title: '图片太大(上限 10MB)', type: 'error' }); return; }
+    if (!file.type.startsWith('image/')) { showToast({ title: t.dashPages.imagesOnly, type: 'error' }); return; }
+    if (file.size > 10 * 1024 * 1024) { showToast({ title: t.dashPages.imageTooLargeMb.replace('{n}', '10'), type: 'error' }); return; }
     const form = new FormData();
     form.append('file', file);
     try {
       const res = await fetch('/api/upload/character-face', { method: 'POST', body: form });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) { showToast({ title: body.error || '上传失败', type: 'error' }); return; }
+      if (!res.ok) { showToast({ title: body.error || t.product.dropFailed, type: 'error' }); return; }
       resetResult();
       setImageUrl(body.url);
       setImagePreview(body.url);
     } catch (e) {
-      // 断网/传输层失败:fetch 直接 throw,若不接住就是静默的未处理 rejection、用户毫无反馈。
-      showToast({ title: e instanceof Error ? e.message : '上传失败,请检查网络', type: 'error' });
+      // Transport/offline: fetch throws; without a catch it is a silent rejection.
+      showToast({ title: e instanceof Error ? e.message : t.dashPages.uploadNetwork, type: 'error' });
     }
   };
 
   const acceptUrl = async () => {
     const trimmed = urlDraft.trim();
     if (!trimmed) return;
-    if (!/^https?:\/\//i.test(trimmed)) { showToast({ title: 'URL 必须以 http(s):// 开头', type: 'error' }); return; }
+    if (!/^https?:\/\//i.test(trimmed)) { showToast({ title: t.dashPages.urlMustHttp, type: 'error' }); return; }
     try {
       const res = await fetch('/api/upload/character-face', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageUrl: trimmed }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) { showToast({ title: body.error || 'URL 抓取失败', type: 'error' }); return; }
+      if (!res.ok) { showToast({ title: body.error || t.dashPages.urlFetchFailed, type: 'error' }); return; }
       resetResult();
       setImageUrl(body.url);
       setImagePreview(body.url);
       setShowUrlInput(false);
       setUrlDraft('');
     } catch (e) {
-      showToast({ title: e instanceof Error ? e.message : 'URL 抓取失败,请检查网络', type: 'error' });
+      showToast({ title: e instanceof Error ? e.message : t.dashPages.urlFetchNetwork, type: 'error' });
     }
   };
 
   const resetResult = () => { setPanels(null); setSummary(''); setHint(''); setErrorMsg(''); setNatural(null); setCropped(null); setCropError(''); };
 
   const detect = async () => {
-    if (!imageUrl) { showToast({ title: '先上传一张漫画图', type: 'error' }); return; }
+    if (!imageUrl) { showToast({ title: t.dashPages.needComicImage, type: 'error' }); return; }
     setDetecting(true);
     setPanels(null); setErrorMsg(''); setHint(''); setCropped(null); setCropError('');
     try {
@@ -134,23 +141,23 @@ export default function ComicPanelsPage() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const msg = body.message || `分格失败 (HTTP ${res.status})`;
+        const msg = body.message || t.dashPages.panelFailedHttp.replace('{status}', String(res.status));
         setErrorMsg(msg); showToast({ title: msg, type: 'error' });
         return;
       }
       setPanels(body.panels || []);
       setSummary(body.summary || '');
       setHint(body.hint || '');
-      showToast({ title: `检出 ${body.panelCount} 格`, type: 'success' });
+      showToast({ title: t.dashPages.panelsDetected.replace('{n}', String(body.panelCount)), type: 'success' });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '网络错误,分格失败';
+      const msg = e instanceof Error ? e.message : t.dashPages.panelNetwork;
       setErrorMsg(msg); showToast({ title: msg, type: 'error' });
     } finally {
       setDetecting(false);
     }
   };
 
-  /** 裁图:把检出的每格从原图真正裁出来,得到可喂给单图变视频的素材图。 */
+  /** Crop each detected panel from the original so it can feed I2V. */
   const crop = async () => {
     if (!imageUrl) return;
     setCropping(true);
@@ -162,21 +169,21 @@ export default function ComicPanelsPage() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok || !body?.ok) {
-        const msg = body?.message || `裁图失败 (HTTP ${res.status})`;
+        const msg = body?.message || t.dashPages.cropFailedHttp.replace('{status}', String(res.status));
         setCropError(msg); showToast({ title: msg, type: 'error' });
         return;
       }
       const list: CroppedPanel[] = Array.isArray(body.panels) ? body.panels : [];
       setCropped(list);
       if (list.length === 0) {
-        // 0 格不是「成功裁出 0 格」—— 把后端 hint 显出来,给 warning 而非 success,别误导。
-        const msg = body.hint || '未裁出格子(不规则布局投影法切不准)';
-        setCropError(msg); showToast({ title: '未裁出格子', type: 'warning' });
+        // 0 panels is not "successfully cropped 0" — surface the backend hint as warning.
+        const msg = body.hint || t.dashPages.cropNoneHint;
+        setCropError(msg); showToast({ title: t.dashPages.cropNone, type: 'warning' });
       } else {
-        showToast({ title: `已裁出 ${body.count} 格`, type: 'success' });
+        showToast({ title: t.dashPages.croppedN.replace('{n}', String(body.count)), type: 'success' });
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '网络错误,裁图失败';
+      const msg = e instanceof Error ? e.message : t.dashPages.cropNetwork;
       setCropError(msg); showToast({ title: msg, type: 'error' });
     } finally {
       setCropping(false);
@@ -188,17 +195,17 @@ export default function ComicPanelsPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <GridFour className="w-6 h-6 text-[#E8C547]" weight="duotone" />
-          漫转视频 · 分格台
+          {t.dashPages.comicTitle}
         </h1>
         <p className="text-sm text-[var(--soft)] mt-1">
-          传一张漫画 → 投影法自动检出每格边界(条漫/规则网格最准)。分格后每格加动效 → 拼成动态漫剧(下一步)。
+          {t.dashPages.comicSubtitle}
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* 输入区 */}
+        {/* Input */}
         <div className="bg-[rgba(255,255,255,0.06)] border border-[var(--border)] rounded-2xl p-5 space-y-4">
-          <label className="text-xs text-[var(--soft)] uppercase tracking-wider">漫画图</label>
+          <label className="text-xs text-[var(--soft)] uppercase tracking-wider">{t.dashPages.comicImage}</label>
           <div
             onClick={() => !imagePreview && fileRef.current?.click()}
             className={`aspect-[3/4] max-h-[420px] rounded-xl overflow-hidden flex items-center justify-center border relative ${
@@ -206,7 +213,7 @@ export default function ComicPanelsPage() {
             }`}
           >
             {imagePreview ? (
-              // 原图 + 分格框叠层。框用百分比定位,自适应任意显示尺寸。
+              // Original + panel boxes. Boxes use percent so they scale with any display size.
               <div className="relative w-full h-full">
                 <img
                   loading="lazy" decoding="async" src={imagePreview} alt="comic"
@@ -233,7 +240,7 @@ export default function ComicPanelsPage() {
             ) : (
               <div className="text-center text-[var(--soft)]">
                 <Upload className="w-7 h-7 mx-auto mb-1 opacity-50" />
-                <div className="text-xs">点击上传 或 用 URL</div>
+                <div className="text-xs">{t.dashPages.clickOrUrl}</div>
               </div>
             )}
           </div>
@@ -241,10 +248,10 @@ export default function ComicPanelsPage() {
             onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); if (fileRef.current) fileRef.current.value = ''; }} />
           <div className="flex gap-2">
             <button onClick={() => fileRef.current?.click()} className="flex-1 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs inline-flex items-center justify-center gap-1.5">
-              <Upload className="w-3.5 h-3.5" /> 上传文件
+              <Upload className="w-3.5 h-3.5" /> {t.dashPages.uploadFile}
             </button>
             <button onClick={() => setShowUrlInput(v => !v)} className="flex-1 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs inline-flex items-center justify-center gap-1.5">
-              <LinkIcon className="w-3.5 h-3.5" /> 用 URL
+              <LinkIcon className="w-3.5 h-3.5" /> {t.dashPages.useUrl}
             </button>
           </div>
           {showUrlInput && (
@@ -252,7 +259,7 @@ export default function ComicPanelsPage() {
               <input type="url" value={urlDraft} onChange={e => setUrlDraft(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') acceptUrl(); }} placeholder="https://..."
                 className="flex-1 px-2 py-1 text-xs bg-black/30 border border-white/10 rounded focus:outline-none focus:border-[#E8C547]/50" />
-              <button onClick={acceptUrl} disabled={!urlDraft.trim()} className="px-3 py-1 text-xs rounded bg-[#E8C547]/15 text-[#E8C547] hover:bg-[#E8C547]/25 disabled:opacity-40">抓取</button>
+              <button onClick={acceptUrl} disabled={!urlDraft.trim()} className="px-3 py-1 text-xs rounded bg-[#E8C547]/15 text-[#E8C547] hover:bg-[#E8C547]/25 disabled:opacity-40">{t.dashPages.fetchUrl}</button>
             </div>
           )}
 
@@ -261,17 +268,17 @@ export default function ComicPanelsPage() {
             disabled={detecting || !imageUrl}
             className="w-full px-4 py-2.5 rounded-xl bg-[#E8C547] hover:bg-[#E8C547]/90 disabled:opacity-40 disabled:cursor-not-allowed text-black font-semibold inline-flex items-center justify-center gap-2"
           >
-            {detecting ? (<><Loader2 className="w-4 h-4 animate-spin" /> 分格中…</>) : (<><Rows className="w-4 h-4" weight="bold" /> 自动分格</>)}
+            {detecting ? (<><Loader2 className="w-4 h-4 animate-spin" /> {t.dashPages.detecting}</>) : (<><Rows className="w-4 h-4" weight="bold" /> {t.dashPages.autoDetect}</>)}
           </button>
         </div>
 
-        {/* 结果区 */}
+        {/* Result */}
         <div className="bg-[rgba(255,255,255,0.06)] border border-[var(--border)] rounded-2xl p-5">
-          <label className="text-xs text-[var(--soft)] uppercase tracking-wider">分格结果</label>
+          <label className="text-xs text-[var(--soft)] uppercase tracking-wider">{t.dashPages.panelResult}</label>
           {errorMsg ? (
             <div className="mt-3 text-center py-8">
               <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-rose-400" />
-              <div className="text-sm text-rose-300 mb-1">分格失败</div>
+              <div className="text-sm text-rose-300 mb-1">{t.dashPages.panelFailed}</div>
               <div className="text-[11px] text-white/50">{errorMsg}</div>
             </div>
           ) : panels ? (
@@ -282,10 +289,10 @@ export default function ComicPanelsPage() {
                   <table className="w-full text-xs tabular-nums">
                     <thead>
                       <tr className="text-[var(--soft)] text-left border-b border-white/10">
-                        <th className="py-1.5 pr-3 font-medium">格</th>
-                        <th className="py-1.5 pr-3 font-medium">行/列</th>
+                        <th className="py-1.5 pr-3 font-medium">{t.dashPages.colPanel}</th>
+                        <th className="py-1.5 pr-3 font-medium">{t.dashPages.colRowCol}</th>
                         <th className="py-1.5 pr-3 font-medium">x,y</th>
-                        <th className="py-1.5 font-medium">宽×高</th>
+                        <th className="py-1.5 font-medium">{t.dashPages.colSize}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -304,39 +311,39 @@ export default function ComicPanelsPage() {
                   </table>
                 </div>
               ) : (
-                <div className="text-[13px] text-[var(--soft)] py-4">没检出格子。</div>
+                <div className="text-[13px] text-[var(--soft)] py-4">{t.dashPages.noPanels}</div>
               )}
               {hint && <p className="text-[11px] text-amber-300/80 mt-3 leading-relaxed">⚠ {hint}</p>}
 
-              {/* v12.252 裁图:把每格裁成真图,再一键交给单图变视频加动效 */}
+              {/* v12.252 crop: real images per panel, then one-click I2V */}
               {panels.length > 0 && (
                 <button
                   onClick={crop}
                   disabled={cropping}
                   className="mt-4 w-full px-4 py-2 rounded-xl bg-[#E8C547] hover:bg-[#E8C547]/90 disabled:opacity-40 disabled:cursor-not-allowed text-black font-semibold inline-flex items-center justify-center gap-2 text-sm"
                 >
-                  {cropping ? (<><Loader2 className="w-4 h-4 animate-spin" /> 裁图中…</>) : (<><Scissors className="w-4 h-4" weight="bold" /> 裁切分格图</>)}
+                  {cropping ? (<><Loader2 className="w-4 h-4 animate-spin" /> {t.dashPages.cropping}</>) : (<><Scissors className="w-4 h-4" weight="bold" /> {t.dashPages.cropPanels}</>)}
                 </button>
               )}
               {cropError && <div className="mt-2 text-[12px] text-rose-300">✕ {cropError}</div>}
 
               {cropped && cropped.length > 0 && (
                 <div className="mt-4">
-                  <div className="text-[12px] text-white font-medium mb-2">分格图({cropped.length})—— 每格可下载,或直接送去加动效:</div>
+                  <div className="text-[12px] text-white font-medium mb-2">{t.dashPages.croppedList.replace('{n}', String(cropped.length))}</div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {cropped.map((c, i) => (
                       <div key={i} className="rounded-lg overflow-hidden border border-white/10 bg-black/20">
-                        <img loading="lazy" decoding="async" src={c.url} alt={`分格 ${i + 1}`} className="w-full h-auto object-contain bg-black/30" />
+                        <img loading="lazy" decoding="async" src={c.url} alt={t.dashPages.panelAlt.replace('{n}', String(i + 1))} className="w-full h-auto object-contain bg-black/30" />
                         <div className="flex items-center justify-between px-2 py-1.5 gap-1">
-                          <span className="text-[10px] text-[var(--soft)]">第 {i + 1} 格</span>
+                          <span className="text-[10px] text-[var(--soft)]">{t.dashPages.panelN.replace('{n}', String(i + 1))}</span>
                           <div className="flex items-center gap-1.5">
-                            <a href={c.url} target="_blank" rel="noopener" title="下载此格" className="text-[var(--soft)] hover:text-white"><Download className="w-3.5 h-3.5" /></a>
+                            <a href={c.url} target="_blank" rel="noopener" title={t.dashPages.downloadPanel} className="text-[var(--soft)] hover:text-white"><Download className="w-3.5 h-3.5" /></a>
                             <Link
                               href={`/dashboard/u2v?image=${encodeURIComponent(c.url)}`}
-                              title="用此格做单图变视频"
+                              title={t.dashPages.sendToU2v}
                               className="inline-flex items-center gap-1 text-[10px] text-[#E8C547] hover:text-[#E8C547]/80"
                             >
-                              <FilmReel className="w-3.5 h-3.5" /> 动效
+                              <FilmReel className="w-3.5 h-3.5" /> {t.dashPages.motionFx}
                             </Link>
                           </div>
                         </div>
@@ -347,18 +354,17 @@ export default function ComicPanelsPage() {
               )}
 
               <p className="text-[11px] text-[var(--soft)] mt-3 opacity-70 leading-relaxed">
-                ✦ 流程:分格 → 裁图(本页)→ 每格「单图变视频」加动效 → 下面**按分格顺序**贴回真片段拼成动态漫剧。
+                {t.dashPages.comicFlowHint}
               </p>
 
-              {/* v12.256 真片段 → 动态漫剧:按分格顺序贴每格动效片段,顺序拼接 + 可选配乐 */}
+              {/* v12.256 real clips → motion comic: paste I2V clips in reading order + optional music */}
               <div className="mt-5 pt-4 border-t border-white/10">
                 <div className="flex items-center gap-2 mb-2">
                   <FilmSlate className="w-4 h-4 text-[#E8C547]" weight="duotone" />
-                  <span className="text-sm text-white font-medium">拼成动态漫剧 · 真片段按分格顺序</span>
+                  <span className="text-sm text-white font-medium">{t.dashPages.dramaTitle}</span>
                 </div>
                 <p className="text-[11px] text-[var(--soft)] mb-3 opacity-70 leading-relaxed">
-                  把每格「单图变视频」出的成片 URL **按阅读顺序**贴进来(≥2 段),顺序拼接成动态漫剧。可选配乐。
-                  片段最好同编码/分辨率(通常同一 provider 出的就是),否则顺序拼接可能报错。
+                  {t.dashPages.dramaHint}
                 </p>
 
                 {dramaClips.length > 0 && (
@@ -367,7 +373,7 @@ export default function ComicPanelsPage() {
                       <li key={i} className="flex items-center gap-2 text-[11px] bg-black/25 rounded px-2 py-1">
                         <span className="w-4 h-4 rounded bg-[#E8C547]/15 text-[#E8C547] grid place-items-center font-mono shrink-0">{i + 1}</span>
                         <span className="flex-1 truncate text-[var(--muted)]" title={u}>{u}</span>
-                        <button onClick={() => setDramaClips((prev) => prev.filter((_, j) => j !== i))} title="移除" className="text-[var(--soft)] hover:text-rose-300"><X className="w-3 h-3" /></button>
+                        <button onClick={() => setDramaClips((prev) => prev.filter((_, j) => j !== i))} title={t.dashPages.remove} className="text-[var(--soft)] hover:text-rose-300"><X className="w-3 h-3" /></button>
                       </li>
                     ))}
                   </ul>
@@ -376,14 +382,14 @@ export default function ComicPanelsPage() {
                   <input
                     type="url" value={clipDraft} onChange={e => setClipDraft(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') addDramaClip(); }}
-                    placeholder="第 N 格的动效片段 URL(http(s) 或站内 serve-file)"
+                    placeholder={t.dashPages.clipUrlPh}
                     className="flex-1 px-2 py-1.5 bg-black/30 border border-white/10 rounded text-xs focus:outline-none focus:border-[#E8C547]/50"
                   />
-                  <button onClick={addDramaClip} disabled={!clipDraft.trim()} className="px-3 py-1 text-xs rounded bg-[#E8C547]/15 text-[#E8C547] hover:bg-[#E8C547]/25 disabled:opacity-40">加片段</button>
+                  <button onClick={addDramaClip} disabled={!clipDraft.trim()} className="px-3 py-1 text-xs rounded bg-[#E8C547]/15 text-[#E8C547] hover:bg-[#E8C547]/25 disabled:opacity-40">{t.dashPages.addClip}</button>
                 </div>
                 <input
                   type="url" value={dramaMusic} onChange={e => setDramaMusic(e.target.value)}
-                  placeholder="配乐 URL(可选,http(s) 或站内 serve-file)"
+                  placeholder={t.dashPages.musicUrlPh}
                   className="w-full px-3 py-2 mb-3 bg-black/30 border border-white/10 rounded-lg focus:outline-none focus:border-[#E8C547]/50 text-xs"
                 />
                 <button
@@ -391,18 +397,18 @@ export default function ComicPanelsPage() {
                   disabled={composing || dramaClips.length < 2}
                   className="w-full px-4 py-2.5 rounded-xl bg-[#E8C547] hover:bg-[#E8C547]/90 disabled:opacity-40 disabled:cursor-not-allowed text-black font-semibold inline-flex items-center justify-center gap-2 text-sm"
                 >
-                  {composing ? (<><Loader2 className="w-4 h-4 animate-spin" /> 拼接中…</>) : (<><FilmSlate className="w-4 h-4" weight="bold" /> 拼成动态漫剧({dramaClips.length} 段)</>)}
+                  {composing ? (<><Loader2 className="w-4 h-4 animate-spin" /> {t.dashPages.stitching}</>) : (<><FilmSlate className="w-4 h-4" weight="bold" /> {t.dashPages.composeDrama.replace('{n}', String(dramaClips.length))}</>)}
                 </button>
                 {dramaError && <div className="mt-2 text-[12px] text-rose-300">✕ {dramaError}</div>}
                 {dramaUrl && (
                   <div className="mt-4">
-                    <div className="text-[12px] text-emerald-400 mb-2 inline-flex items-center gap-1.5"><Sparkles className="w-4 h-4" weight="duotone" /> 动态漫剧合成完成</div>
+                    <div className="text-[12px] text-emerald-400 mb-2 inline-flex items-center gap-1.5"><Sparkles className="w-4 h-4" weight="duotone" /> {t.dashPages.dramaReady}</div>
                     {dramaMusicDropped && (
-                      <div className="text-[11px] text-amber-300/85 mb-2">⚠ 配乐未生效(URL 格式不对或超 64MB 被限流)—— 成片无 BGM,其余正常。</div>
+                      <div className="text-[11px] text-amber-300/85 mb-2">{t.dashPages.musicDroppedHint}</div>
                     )}
                     <video src={dramaUrl} controls className="w-full rounded-xl bg-black/40 max-h-[460px]" />
                     <a href={dramaUrl} target="_blank" rel="noopener" className="mt-2 inline-flex items-center gap-1.5 text-xs text-[var(--muted)] hover:text-white">
-                      <Download className="w-3.5 h-3.5" /> 打开 / 下载动态漫剧
+                      <Download className="w-3.5 h-3.5" /> {t.dashPages.openDownloadDrama}
                     </a>
                   </div>
                 )}
@@ -410,7 +416,7 @@ export default function ComicPanelsPage() {
             </div>
           ) : (
             <div className="mt-3 text-center text-[var(--soft)] text-sm opacity-60 py-10">
-              上传漫画后点「自动分格」——检出的格子会框在左图上,明细列在这里。
+              {t.dashPages.comicEmpty}
             </div>
           )}
         </div>

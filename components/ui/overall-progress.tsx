@@ -3,9 +3,12 @@
 import { useProjectWorkspaceStore } from '@/lib/store';
 import { useMemo } from 'react';
 import { STAGE_WEIGHTS, calculateOverallProgress, type StageProgress } from '@/lib/progress-calculator';
+import { useLocale } from '@/hooks/use-locale';
+
+type KitT = ReturnType<typeof useLocale>['t'] & { kitUi: Record<string, string> };
 
 /**
- * 节点 ID → 阶段键映射
+ * Node ID → stage key
  */
 const NODE_TO_STAGE: Record<string, keyof typeof STAGE_WEIGHTS> = {
   'node-director': 'DIRECTOR',
@@ -18,26 +21,27 @@ const NODE_TO_STAGE: Record<string, keyof typeof STAGE_WEIGHTS> = {
   'node-producer': 'REVIEW',
 };
 
-const STAGE_LABELS: Record<keyof typeof STAGE_WEIGHTS, string> = {
-  DIRECTOR: '导演分析',
-  WRITER: '编剧创作',
-  CHARACTER: '角色设计',
-  SCENE: '场景设计',
-  STORYBOARD: '分镜绘制',
-  VIDEO: '视频生成',
-  EDITOR: '剪辑合成',
-  REVIEW: '导演审核',
-};
-
 /**
- * 把每个节点的 {status, progress} 折算成总体进度 + 当前阶段标签。
- * 替代原先"每节点独立进度条"的散乱展示。
+ * Fold each node's {status, progress} into overall progress + current-stage label.
+ * Replaces the old per-node progress bars.
  */
 export function OverallProgressBar() {
+  const { t: loc } = useLocale();
+  const t = loc as KitT;
   const nodes = useProjectWorkspaceStore(s => s.nodes);
   const isProducing = useProjectWorkspaceStore(s => s.isProducing);
 
   const { overall, currentStageLabel, runningStages } = useMemo(() => {
+    const stageLabels: Record<keyof typeof STAGE_WEIGHTS, string> = {
+      DIRECTOR: t.kitUi.stageDirector,
+      WRITER: t.kitUi.stageWriter,
+      CHARACTER: t.product.characterDesign,
+      SCENE: t.product.sceneDesign,
+      STORYBOARD: t.kitUi.stageStoryboard,
+      VIDEO: t.product.videoGen,
+      EDITOR: t.product.phaseEdit,
+      REVIEW: t.product.phaseReview,
+    };
     const stages: StageProgress[] = [];
     let current: string | null = null;
 
@@ -48,13 +52,13 @@ export function OverallProgressBar() {
       const status = (data?.status || 'pending') as StageProgress['status'];
       const progress = typeof data?.progress === 'number' ? data.progress : (status === 'completed' ? 100 : 0);
       stages.push({ stage: stageKey, status, progress });
-      if (status === 'running' && !current) current = STAGE_LABELS[stageKey];
+      if (status === 'running' && !current) current = stageLabels[stageKey];
     }
 
     const overall = calculateOverallProgress(stages);
     const running = stages.filter(s => s.status === 'running');
     return { overall, currentStageLabel: current, runningStages: running };
-  }, [nodes]);
+  }, [nodes, t]);
 
   if (!isProducing && overall === 0) return null;
   if (!isProducing && overall >= 100) return null;
@@ -73,7 +77,7 @@ export function OverallProgressBar() {
         </div>
         {runningStages.length > 1 && (
           <div className="shrink-0 text-[10px] text-white/30">
-            并行 {runningStages.length} 阶段
+            {t.kitUi.parallelStages.replace('{n}', String(runningStages.length))}
           </div>
         )}
       </div>

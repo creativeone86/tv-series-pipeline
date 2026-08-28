@@ -14,9 +14,9 @@ describe('v12.149 · 引擎天气', () => {
       [{ host: 'api.qingyuntop.com', remainingSec: 540 }],
     );
     expect(segs[0]).toContain('MiniMax');
-    expect(segs[0]).toContain('余额/额度耗尽');
+    expect(segs[0]).toContain('credits exhausted');
     expect(segs[1]).toContain('qingyuntop');
-    expect(segs[1]).toContain('9 分钟');
+    expect(segs[1]).toContain('9 min');
   });
   it('v12.177:qingyuntop「该令牌额度已用尽」文案命中破产判定', async () => {
     const { isOutOfCreditsError } = await import('@/lib/gateway-budget');

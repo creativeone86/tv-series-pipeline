@@ -3,16 +3,16 @@
 /**
  * AssetGrid (v2.0 Sprint 0 D6)
  *
- * 全局资产记忆库的网格浏览 / 选择组件。
+ * Grid browse / select for the global asset memory.
  *
- * 能力：
- *  - 通过 /api/global-assets 拉取当前用户的资产
- *  - 按 type (character / scene / style / prop) 切 tab
- *  - 搜索（q 透传后端）
- *  - 多选模式（配合 Wizard "加入项目资产" 场景）
- *  - 空态引导"去创建"
+ * Capabilities:
+ *  - fetch the current user's assets via /api/global-assets
+ *  - tab by type (character / scene / style / prop)
+ *  - search (q passed to the backend)
+ *  - multi-select (Wizard "add to project assets")
+ *  - empty state nudges "go create"
  *
- * 使用：
+ * Usage:
  *   <AssetGrid
  *     selectable
  *     selected={selectedIds}
@@ -23,21 +23,25 @@
 import * as React from 'react';
 import type { GlobalAsset, GlobalAssetType } from '@/types/agents';
 import { cn } from '@/lib/utils';
+import { useLocale } from '@/hooks/use-locale';
+import type { Translations } from '@/lib/i18n';
+
+function typeTabs(t: Translations) {
+  return [
+    { key: 'all' as const, label: t.projects.filterAll, icon: '📦' },
+    { key: 'character' as const, label: t.product.tabCharacters, icon: '👤' },
+    { key: 'scene' as const, label: t.product.tabScenes, icon: '🏞' },
+    { key: 'style' as const, label: t.sharedUi.styleRole, icon: '🎨' },
+    { key: 'prop' as const, label: t.sharedUi.propRole, icon: '🗡' },
+  ];
+}
 
 // ──────────────────────────────────────────────────────────
 // Type tabs
 // ──────────────────────────────────────────────────────────
 
-const TYPE_TABS: Array<{ key: GlobalAssetType | 'all'; label: string; icon: string }> = [
-  { key: 'all', label: '全部', icon: '📦' },
-  { key: 'character', label: '角色', icon: '👤' },
-  { key: 'scene', label: '场景', icon: '🏞' },
-  { key: 'style', label: '风格', icon: '🎨' },
-  { key: 'prop', label: '道具', icon: '🗡' },
-];
-
 // ──────────────────────────────────────────────────────────
-// Fetcher —— 独立导出便于 mock / 测试
+// Fetcher — exported separately so tests can mock it
 // ──────────────────────────────────────────────────────────
 
 export async function fetchGlobalAssets(params: {
@@ -66,20 +70,20 @@ export async function fetchGlobalAssets(params: {
 // ──────────────────────────────────────────────────────────
 
 export interface AssetGridProps {
-  /** 是否允许多选 */
+  /** Allow multi-select */
   selectable?: boolean;
-  /** 当前选中的资产 id 列表 */
+  /** Currently selected asset ids */
   selected?: string[];
   onSelectionChange?: (next: string[]) => void;
-  /** 允许选择的最大数量（默认 20） */
+  /** Max selection count (default 20) */
   maxSelection?: number;
-  /** 初始 type 过滤 */
+  /** Initial type filter */
   initialType?: GlobalAssetType | 'all';
-  /** 提供自定义 fetcher（便于单测 mock） */
+  /** Custom fetcher (handy for unit-test mocks) */
   fetcher?: typeof fetchGlobalAssets;
-  /** JWT token（可选，从 localStorage 读） */
+  /** JWT token (optional; read from localStorage) */
   token?: string;
-  /** 点击创建按钮回调（用于跳到"新建资产"页面） */
+  /** Create-button callback (navigate to "new asset") */
   onCreateClick?: (type: GlobalAssetType | 'all') => void;
   className?: string;
 }
@@ -95,6 +99,8 @@ export function AssetGrid({
   onCreateClick,
   className,
 }: AssetGridProps) {
+  const { t } = useLocale();
+  const TYPE_TABS = typeTabs(t);
   const [type, setType] = React.useState<GlobalAssetType | 'all'>(initialType);
   const [query, setQuery] = React.useState('');
   const [debouncedQuery, setDebouncedQuery] = React.useState('');
@@ -137,7 +143,7 @@ export function AssetGrid({
     if (set.has(id)) {
       set.delete(id);
     } else {
-      if (set.size >= maxSelection) return; // 达到上限
+      if (set.size >= maxSelection) return; // at the cap
       set.add(id);
     }
     onSelectionChange?.(Array.from(set));
@@ -170,7 +176,7 @@ export function AssetGrid({
           type="search"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="搜索资产..."
+          placeholder={t.sharedUi.searchAssets}
           className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-[#E8C547]/60 focus:outline-none md:w-56"
           data-testid="asset-search"
         />
@@ -180,7 +186,7 @@ export function AssetGrid({
       {selectable && (
         <div className="flex items-center justify-between text-xs text-neutral-400">
           <span>
-            已选 <span className="font-semibold text-[#E8C547]">{selected.length}</span> /{' '}
+            {t.sharedUi.selectedPrefix} <span className="font-semibold text-[#E8C547]">{selected.length}</span> /{' '}
             {maxSelection}
           </span>
           {selected.length > 0 && (
@@ -189,7 +195,7 @@ export function AssetGrid({
               className="text-neutral-400 underline hover:text-white"
               onClick={() => onSelectionChange?.([])}
             >
-              清空
+              {t.common.reset}
             </button>
           )}
         </div>
@@ -200,7 +206,7 @@ export function AssetGrid({
         <AssetSkeletonGrid />
       ) : error ? (
         <div className="flex flex-col items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-300">
-          <span>加载资产失败</span>
+          <span>{t.sharedUi.loadAssetsFailed}</span>
           <span className="text-xs text-red-400/80">{error}</span>
         </div>
       ) : assets.length === 0 ? (
@@ -217,6 +223,8 @@ export function AssetGrid({
               selected={selected.includes(a.id)}
               selectable={selectable}
               onToggle={() => toggleSelect(a.id)}
+              typeLabel={TYPE_TABS.find(tab => tab.key === a.type)?.label ?? a.type}
+              typeIcon={TYPE_TABS.find(tab => tab.key === a.type)?.icon ?? ''}
             />
           ))}
         </div>
@@ -234,9 +242,12 @@ interface AssetCardProps {
   selected: boolean;
   selectable: boolean;
   onToggle: () => void;
+  typeLabel: string;
+  typeIcon: string;
 }
 
-function AssetCard({ asset, selected, selectable, onToggle }: AssetCardProps) {
+function AssetCard({ asset, selected, selectable, onToggle, typeLabel, typeIcon }: AssetCardProps) {
+  const { t } = useLocale();
   const [imgError, setImgError] = React.useState(false);
 
   return (
@@ -271,14 +282,14 @@ function AssetCard({ asset, selected, selectable, onToggle }: AssetCardProps) {
 
       {/* Type badge */}
       <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white backdrop-blur-sm">
-        {TYPE_TABS.find(t => t.key === asset.type)?.icon}{' '}
-        {TYPE_TABS.find(t => t.key === asset.type)?.label}
+        {typeIcon}{' '}
+        {typeLabel}
       </span>
 
-      {/* Usage count badge (被多少项目用过) */}
+      {/* Usage count badge (how many projects used this) */}
       {asset.referencedByProjects.length > 0 && (
         <span className="absolute right-2 top-2 rounded bg-[#E8C547]/90 px-1.5 py-0.5 text-[10px] font-semibold text-black">
-          用过 {asset.referencedByProjects.length}
+          {t.sharedUi.usedN.replace('{n}', String(asset.referencedByProjects.length))}
         </span>
       )}
 
@@ -292,7 +303,7 @@ function AssetCard({ asset, selected, selectable, onToggle }: AssetCardProps) {
         )}
       </div>
 
-      {/* 选中勾 */}
+      {/* Selected check */}
       {selectable && selected && (
         <div className="absolute right-2 bottom-[4.5rem] flex h-6 w-6 items-center justify-center rounded-full bg-[#E8C547] text-black shadow-lg">
           <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
@@ -335,7 +346,8 @@ interface EmptyStateProps {
 }
 
 function EmptyState({ type, onCreate, query }: EmptyStateProps) {
-  const typeInfo = TYPE_TABS.find(t => t.key === type);
+  const { t } = useLocale();
+  const typeInfo = typeTabs(t).find(tab => tab.key === type);
   const hasQuery = query && query.length > 0;
 
   return (
@@ -346,11 +358,11 @@ function EmptyState({ type, onCreate, query }: EmptyStateProps) {
       <div className="text-5xl opacity-40">{typeInfo?.icon || '📦'}</div>
       <div className="text-sm font-medium text-white">
         {hasQuery
-          ? `没有匹配 "${query}" 的${typeInfo?.label ?? ''}资产`
-          : `还没有${type === 'all' ? '' : typeInfo?.label ?? ''}资产`}
+          ? t.sharedUi.noMatchAssets.replace('{q}', query).replace('{type}', typeInfo?.label ?? '')
+          : t.sharedUi.noAssetsYet.replace('{type}', type === 'all' ? '' : (typeInfo?.label ?? ''))}
       </div>
       <div className="text-xs text-neutral-400">
-        {hasQuery ? '试试其它关键词' : '创建你的第一个全局资产，跨项目复用'}
+        {hasQuery ? t.sharedUi.tryOtherKeywords : t.sharedUi.createFirstAsset}
       </div>
       {!hasQuery && onCreate && (
         <button
@@ -358,7 +370,7 @@ function EmptyState({ type, onCreate, query }: EmptyStateProps) {
           onClick={() => onCreate(type)}
           className="mt-2 rounded-lg bg-gradient-to-r from-[#E8C547] to-[#FF6B35] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
         >
-          + 创建资产
+          + {t.sharedUi.createAsset}
         </button>
       )}
     </div>

@@ -3,14 +3,14 @@
 /**
  * InviteGate (v2.0 Sprint 0 D6)
  *
- * Beta 邀请码门禁 UI —— 注册页/首页用。
+ * Beta invite-code gate UI — used on register / home.
  *
- * 包含两个子组件：
- *  1. <InviteCodeField>  注册表单里的"邀请码"输入+实时校验
- *  2. <WaitlistForm>     无码用户的"申请内测"表单（邮箱 + 用途）
+ * Two subcomponents:
+ *  1. <InviteCodeField>  invite-code input + live validation on the register form
+ *  2. <WaitlistForm>     "request beta" form for users without a code (email + use case)
  *
- * 通过 `/api/invite-codes/validate` 做前端实时校验；后端 register
- * 会再用 `consumeInviteCode` 做原子占用。
+ * Front-end live-validates via `/api/invite-codes/validate`; register then
+ * atomically consumes the code with `consumeInviteCode`.
  */
 
 import * as React from 'react';
@@ -30,9 +30,9 @@ type ValidationState =
 export interface InviteCodeFieldProps {
   value: string;
   onChange: (code: string) => void;
-  /** 校验成功的回调（父组件可据此启用"注册"按钮） */
+  /** Called on successful validation (parent can enable the register button) */
   onValid?: (code: string) => void;
-  /** 校验失败的回调 */
+  /** Called on failed validation */
   onInvalid?: (error: string) => void;
   className?: string;
 }

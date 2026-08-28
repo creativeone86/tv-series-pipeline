@@ -1,64 +1,71 @@
 import MainLayout from '@/components/layout/MainLayout';
+import { cookies } from 'next/headers';
+import { getTranslations, normalizeLocale } from '@/lib/i18n';
 
-export default function StudioPage() {
+export default async function StudioPage() {
+  const jar = await cookies();
+  const tRaw = getTranslations(normalizeLocale(jar.get('qfmj-locale')?.value));
+  const t = tRaw as typeof tRaw & { publicUi: Record<string, string> };
+  const ui = t.publicUi;
+
   return (
     <MainLayout>
       <div className="space-y-6">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            欢迎来到 AI 漫剧工作室
+            {ui.welcomeTitle}
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            使用左侧工具栏开始创作，右侧面板调整参数
+            {ui.welcomeSubtitle}
           </p>
         </div>
 
-        {/* 快速开始卡片 */}
+        {/* Quick-start cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 p-6 rounded-lg border border-blue-200 dark:border-blue-800">
             <div className="text-3xl mb-3">📝</div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              文本生成
+              {ui.textGen}
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              使用 AI 生成漫画脚本和对话
+              {ui.textGenDesc}
             </p>
             <button className="text-sm text-blue-600 dark:text-blue-400 font-medium hover:underline">
-              开始创作 →
+              {t.home.heroCtaCreate}
             </button>
           </div>
 
           <div className="bg-gradient-to-br from-rose-50 to-rose-100 dark:from-rose-900/20 dark:to-rose-800/20 p-6 rounded-lg border border-rose-200 dark:border-rose-800">
             <div className="text-3xl mb-3">🎨</div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              图片生成
+              {ui.imageGen}
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              生成漫画场景和角色图片
+              {ui.imageGenDesc}
             </p>
             <button className="text-sm text-[#E8C547] dark:text-[#E8C547] font-medium hover:underline">
-              开始创作 →
+              {t.home.heroCtaCreate}
             </button>
           </div>
 
           <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 p-6 rounded-lg border border-green-200 dark:border-green-800">
             <div className="text-3xl mb-3">🎬</div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              视频生成
+              {ui.videoGen}
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              将场景转换为动态视频
+              {ui.videoGenDesc}
             </p>
             <button className="text-sm text-green-600 dark:text-green-400 font-medium hover:underline">
-              开始创作 →
+              {t.home.heroCtaCreate}
             </button>
           </div>
         </div>
 
-        {/* 最近项目 */}
+        {/* Recent projects */}
         <div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-            最近项目
+            {ui.recentProjects}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1, 2, 3].map((i) => (
@@ -70,10 +77,10 @@ export default function StudioPage() {
                   <span className="text-4xl">🎬</span>
                 </div>
                 <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-                  项目 {i}
+                  {ui.projectN.replace('{n}', String(i))}
                 </h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  最后编辑：2 小时前
+                  {ui.lastEditedHours.replace('{n}', '2')}
                 </p>
               </div>
             ))}

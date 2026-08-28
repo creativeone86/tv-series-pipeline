@@ -10,36 +10,36 @@ describe('CharacterManager', () => {
   it('renders character list', () => {
     render(<CharacterManager characters={mockCharacters} onChange={() => {}} />);
     expect(screen.getByText('小明')).toBeInTheDocument();
-    expect(screen.getByText('角色一致性管理')).toBeInTheDocument();
+    expect(screen.getByText('Character consistency')).toBeInTheDocument();
   });
 
   it('shows empty state when no characters', () => {
     render(<CharacterManager characters={[]} onChange={() => {}} />);
-    expect(screen.getByText('还没有角色，点击上方按钮添加')).toBeInTheDocument();
+    expect(screen.getByText('No characters yet, click the button above to add one')).toBeInTheDocument();
   });
 
   it('adds a new character', () => {
     let chars: CharacterProfile[] = [];
     const onChange = (c: CharacterProfile[]) => { chars = c; };
     render(<CharacterManager characters={chars} onChange={onChange} />);
-    fireEvent.click(screen.getByText('+ 添加角色'));
+    fireEvent.click(screen.getByText('+ Add character'));
     expect(chars.length).toBe(1);
-    expect(chars[0].name).toBe('新角色');
+    expect(chars[0].name).toBe('New character');
   });
 
   it('removes a character', () => {
     let chars = [...mockCharacters];
     const onChange = (c: CharacterProfile[]) => { chars = c; };
     render(<CharacterManager characters={chars} onChange={onChange} />);
-    fireEvent.click(screen.getByText('删除'));
+    fireEvent.click(screen.getByText('Delete'));
     expect(chars.length).toBe(0);
   });
 
   it('enters edit mode on click', () => {
     render(<CharacterManager characters={mockCharacters} onChange={() => {}} />);
-    fireEvent.click(screen.getByText('编辑'));
+    fireEvent.click(screen.getByText('Edit'));
     expect(screen.getByDisplayValue('小明')).toBeInTheDocument();
-    expect(screen.getByText('保存')).toBeInTheDocument();
+    expect(screen.getByText('Save')).toBeInTheDocument();
   });
 
   it('displays character tags', () => {

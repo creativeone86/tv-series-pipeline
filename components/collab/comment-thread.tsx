@@ -3,16 +3,16 @@
 /**
  * v3.0 P0.1 — CommentThread for one (projectId, targetType, targetId).
  *
- * 行为:
- *   - 拉 /api/projects/[id]/comments?targetType=&targetId= 列出评论
- *   - 30s 轮询刷新 (v3.0 P0.2 会接 Yjs 改成实时同步)
- *   - 输入框走 MentionTextarea, 提交时 POST 评论
- *   - 每个根评论可点 "回复" → 出现一层嵌套的输入框
- *   - 自己写的评论可点 🗑️ 删除 (软删, UI 显 [已删除])
+ * Behavior:
+ *   - GET /api/projects/[id]/comments?targetType=&targetId= for the list
+ *   - 30s poll (v3.0 P0.2 will switch to Yjs live)
+ *   - input is MentionTextarea; submit POSTs a comment
+ *   - each root can "Reply" → nested input
+ *   - own comments can be 🗑️ deleted (soft-delete, UI shows [deleted])
  *
- * 显示规则:
- *   - 软删评论: content 替换为 "[已删除]", 删除按钮隐藏, 但子 reply 仍渲染
- *   - mentions: content 里的 @Name 用 cinema-amber 高亮
+ * Display:
+ *   - soft-deleted: content becomes "[deleted]", hide delete, still render replies
+ *   - mentions: @Name highlighted cinema-amber
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -32,20 +32,20 @@ export interface CommentThreadProps {
   projectId: string;
   targetType: CommentTargetType;
   targetId: string;
-  /** 显示在卡片上方的标签 — 例如 "PROJECT" / "SHOT 3" */
+  /** Label above the card — e.g. "PROJECT" / "SHOT 3" */
   contextLabel?: string;
-  /** 当前用户 id, 用来判断是否能删 */
+  /** Current user id, used to decide who can delete */
   currentUserId?: string | null;
   /**
-   * v3.0 P0.1: 自动轮询间隔; 0 = 不轮询 (子线程默认 0 省电).
-   * v3.0 P0.2 后变成 fallback — 主路径走 Yjs 实时, 轮询用于:
-   *   1. 初次进入页面 (拉取 server 已存历史)
-   *   2. WS 断连时兜底刷新
+   * v3.0 P0.1: auto-poll interval; 0 = no poll (child threads default 0 to save power).
+   * After v3.0 P0.2 this is a fallback — the main path is Yjs live. Poll is for:
+   *   1. first page load (server history)
+   *   2. refresh when WS drops
    */
   pollIntervalMs?: number;
   /**
-   * v3.0 P0.2: 设 false 跳过 Yjs 连接 (例如 SSR / 静态预览页).
-   * 默认 true — 实时同步.
+   * v3.0 P0.2: set false to skip Yjs (e.g. SSR / static preview).
+   * Default true — live sync.
    */
   enableRealtime?: boolean;
 }
@@ -67,13 +67,13 @@ function groupByThread(comments: FetchedComment[]): Thread[] {
   return roots.map((r) => ({ root: r, replies: repliesOf.get(r.id) || [] }));
 }
 
-function renderContent(content: string, deleted: boolean, deletedLabel = '[已删除]'): React.ReactNode {
+function renderContent(content: string, deleted: boolean, deletedLabel = '[deleted]'): React.ReactNode {
   if (deleted) {
     return <span className="opacity-40 italic">{deletedLabel}</span>;
   }
-  // 把 @name 高亮成 cinema-amber chip
+  // Highlight @name as a cinema-amber chip
   const parts: React.ReactNode[] = [];
-  const re = /(@[一-龥A-Za-z0-9_]{1,30})/g;
+  const re = /(@[\u4e00-\u9fa5A-Za-z0-9_]{1,30})/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let key = 0;
@@ -132,7 +132,7 @@ function CommentItem({ comment, currentUserId, onReplyClick, onDeleteClick, inde
         <div className="cinema-mono text-[12px] leading-relaxed break-words whitespace-pre-wrap">
           {renderContent(comment.content, deleted, t.collab.deleted)}
         </div>
-        {/* v3.x E.1: 附件渲染 — 图片缩略图 / 视频 controls / 文件链接 */}
+        {/* v3.x E.1: attachments — image thumbs / video controls / file links */}
         {!deleted && Array.isArray((comment as any).attachments) && (comment as any).attachments.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
             {((comment as any).attachments as Array<{ url: string; type: string; filename?: string }>).map((att, i) => (
@@ -197,18 +197,18 @@ export function CommentThread({
   const [submitting, setSubmitting] = useState(false);
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyDraft, setReplyDraft] = useState('');
-  // v3.x E.1: 附件状态
+  // v3.x E.1: attachment state
   const [draftAttachments, setDraftAttachments] = useState<CommentAttachmentShape[]>([]);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
 
   const uploadAttachment = async (file: File) => {
     if (uploadingAttachment) return;
     if (draftAttachments.length >= 6) {
-      setError('附件最多 6 个');
+      setError(t.sharedUi.attMax6);
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      setError(`${file.name} 超过 10MB 上限`);
+      setError(t.sharedUi.attOver10.replace('{name}', file.name));
       return;
     }
     setUploadingAttachment(true);
@@ -219,19 +219,19 @@ export function CommentThread({
       const res = await fetch('/api/upload/comment-attachment', { method: 'POST', body: form });
       const body = await res.json();
       if (!res.ok || !body?.url) {
-        setError(body?.error || `上传失败 (${res.status})`);
+        setError(body?.error || t.sharedUi.uploadFailedStatus.replace('{status}', String(res.status)));
         return;
       }
       setDraftAttachments((prev) => [...prev, { url: body.url, type: body.type, size: body.size, filename: body.filename }]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '上传失败');
+      setError(e instanceof Error ? e.message : t.product.dropFailed);
     } finally {
       setUploadingAttachment(false);
     }
   };
 
-  // v3.0 P0.2: Yjs 实时 — 一个项目一个 doc, 所有 target 的评论都在同一 Y.Array
-  // 这里按 targetType+targetId filter 出本组件关心的子集.
+  // v3.0 P0.2: Yjs live — one doc per project; all target comments share one Y.Array
+  // Filter here by targetType+targetId to the subset this component cares about.
   const yjs = useYjs(enableRealtime ? `project-${projectId}` : null);
 
   const fetchComments = useCallback(async () => {
@@ -249,10 +249,10 @@ export function CommentThread({
     }
   }, [projectId, targetType, targetId]);
 
-  // 初次 + WS 重连时拉 server 端权威列表 (Yjs 仅做实时 push, 不做权威源)
+  // First load + WS reconnect: pull the authoritative server list (Yjs is live push only)
   useEffect(() => {
     fetchComments();
-    // v10.2.0: 未启 Yjs 实时时,改用 SSE 推送(项目评论频道)取代固定轮询;轮询降为慢速兜底。
+    // v10.2.0: without Yjs, SSE on the project comments channel replaces fixed polling; poll is a slow fallback.
     if (!enableRealtime) {
       const sub = subscribeSSE(`/api/projects/${encodeURIComponent(projectId)}/comments/stream`, {
         onEvent: (ev) => { if (ev.event === 'comment') fetchComments(); },
@@ -261,24 +261,24 @@ export function CommentThread({
       const t = fallbackMs > 0 ? setInterval(fetchComments, fallbackMs) : null;
       return () => { sub.close(); if (t) clearInterval(t); };
     }
-    // Yjs 实时模式: 仍保留低频轮询作为 WS 断连兜底, 间隔显著拉长省电
+    // Yjs live: keep a low-frequency poll as WS-drop fallback, interval stretched to save power
     if (enableRealtime && pollIntervalMs > 0) {
-      const fallbackInterval = Math.max(pollIntervalMs, 60_000) * 4; // ≥4 分钟
+      const fallbackInterval = Math.max(pollIntervalMs, 60_000) * 4; // ≥4 minutes
       const t = setInterval(fetchComments, fallbackInterval);
       return () => clearInterval(t);
     }
   }, [fetchComments, pollIntervalMs, enableRealtime, projectId]);
 
-  // Yjs Y.Array 监听 — 新评论 push 进来, 按 targetId filter 后 merge 到 state
+  // Yjs Y.Array observer — incoming comments, filter by targetId, merge into state
   useEffect(() => {
     if (!yjs) return;
     const arr = yjs.doc.getArray<{ [k: string]: unknown }>('comments');
     const onChange = () => {
-      // v12.327:这里原本是 `arr.toArray() as unknown as FetchedComment[]`,然后
-      // `{ ...prev, ...yc }` 让 Yjs 版**整体覆盖**服务端版。而 Y.Array 是 CRDT,
-      // 项目内任何协作者都能往里写任意对象 —— 于是推一个带已存在 id 的对象,就能
-      // 在所有人界面上改掉别人评论的作者名和正文。那句断言把「这是不可信数据」
-      // 藏掉了。改为:新评论须整体过校验;已存在的 id 只吸收 deletedAt/updatedAt。
+      // v12.327: this used to be `arr.toArray() as unknown as FetchedComment[]`, then
+      // `{ ...prev, ...yc }` let the Yjs copy **fully overwrite** the server copy. Y.Array is a CRDT,
+      // so any collaborator can push any object — a payload with an existing id could
+      // rewrite another author's name and body on every client. That cast hid "this is untrusted".
+      // New comments must pass validation; existing ids only absorb deletedAt/updatedAt.
       const raw = arr.toArray() as unknown[];
       if (raw.length === 0) return;
       setComments((prev) => mergeYjsComments<FetchedComment>(
@@ -288,14 +288,14 @@ export function CommentThread({
       ));
     };
     arr.observe(onChange);
-    // 初次也跑一遍, 把已有的 Y.Array 内容 merge 进来
+    // Also run once to merge existing Y.Array contents
     onChange();
     return () => arr.unobserve(onChange);
   }, [yjs, targetType, targetId]);
 
   const post = async (content: string, parentId: string | null) => {
     const trimmed = content.trim();
-    // v3.x E.1: 允许"附件无文字"评论
+    // v3.x E.1: allow attachment-only comments (no text)
     const isMainComment = parentId === null;
     const attachmentsForPost = isMainComment ? draftAttachments : [];
     if (!trimmed && attachmentsForPost.length === 0) return;
@@ -311,7 +311,7 @@ export function CommentThread({
       });
       const body = await res.json();
       if (!res.ok) {
-        alert(body.error || `发送失败 (${res.status})`);
+        alert(body.error || t.sharedUi.sendFailedStatus.replace('{status}', String(res.status)));
         return;
       }
       if (parentId) {
@@ -319,9 +319,9 @@ export function CommentThread({
         setReplyDraft('');
       } else {
         setDraft('');
-        setDraftAttachments([]); // v3.x E.1: 清空附件
+        setDraftAttachments([]); // v3.x E.1: clear attachments
       }
-      // 乐观刷新
+      // Optimistic refresh
       await fetchComments();
     } finally {
       setSubmitting(false);
@@ -336,7 +336,7 @@ export function CommentThread({
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      alert(body.error || '删除失败');
+      alert(body.error || t.sharedUi.deleteFailed);
       return;
     }
     await fetchComments();
@@ -352,7 +352,7 @@ export function CommentThread({
           COMMENTS{contextLabel ? ` · ${contextLabel}` : ''}
         </div>
         <div className="flex items-center gap-2">
-          {/* v3.0 P0.2: WS 连接状态 chip */}
+          {/* v3.0 P0.2: WS connection chip */}
           {enableRealtime && yjs && (
             <span
               className={`cinema-mono text-[9px] inline-flex items-center gap-1 ${
@@ -361,17 +361,17 @@ export function CommentThread({
                 : 'text-[var(--cinema-amber)]'
               }`}
               title={
-                yjs.status === 'connected' ? '实时同步已开 (Yjs WS)'
-                : yjs.status === 'connecting' ? '正在连接实时同步...'
-                : 'WS 已断, 走轮询兜底 — 检查 npm run dev:ws'
+                yjs.status === 'connected' ? t.sharedUi.liveSyncOn
+                : yjs.status === 'connecting' ? t.sharedUi.liveSyncConnecting
+                : t.sharedUi.liveSyncOff
               }
             >
               {yjs.status === 'connected' ? <Radio className="w-2.5 h-2.5" /> : <RadioReceiver className="w-2.5 h-2.5" />}
-              {yjs.status === 'connected' ? '实时' : yjs.status === 'connecting' ? '...' : '离线'}
+              {yjs.status === 'connected' ? t.sharedUi.live : yjs.status === 'connecting' ? '...' : t.sharedUi.offline}
             </span>
           )}
           <span className="cinema-mono text-[10px] opacity-50">
-            {comments.filter((c) => !c.deletedAt).length} 条
+            {t.sharedUi.commentsN.replace('{n}', String(comments.filter((c) => !c.deletedAt).length))}
           </span>
         </div>
       </div>
@@ -383,11 +383,11 @@ export function CommentThread({
       <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
         {loading ? (
           <div className="cinema-mono text-[11px] opacity-50 py-4 text-center inline-flex items-center justify-center gap-2">
-            <Loader2 className="w-3 h-3 animate-spin" /> 加载中
+            <Loader2 className="w-3 h-3 animate-spin" /> {t.common.loading}
           </div>
         ) : threads.length === 0 ? (
           <div className="cinema-mono text-[11px] opacity-50 py-4 text-center">
-            还没有评论, 第 1 个评论从你开始 ✨
+            {t.collab.commentEmpty}
           </div>
         ) : (
           threads.map(({ root, replies }) => (
@@ -416,7 +416,7 @@ export function CommentThread({
                     value={replyDraft}
                     onChange={setReplyDraft}
                     rows={2}
-                    placeholder={`回复 ${root.authorName}... ⌘+Enter 发送`}
+                    placeholder={t.sharedUi.replyToName.replace('{name}', root.authorName)}
                     onSubmit={() => post(replyDraft, root.id)}
                     autoFocus
                   />
@@ -427,13 +427,13 @@ export function CommentThread({
                       className="cinema-btn cinema-btn-primary !px-2.5 !py-1 !text-[11px] inline-flex items-center gap-1 disabled:opacity-40"
                     >
                       {submitting ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Send className="w-2.5 h-2.5" />}
-                      发送
+                      {t.collab.send}
                     </button>
                     <button
                       onClick={() => { setReplyTo(null); setReplyDraft(''); }}
                       className="cinema-mono text-[10px] opacity-50 hover:opacity-100"
                     >
-                      取消
+                      {t.common.cancel}
                     </button>
                   </div>
                 </div>
@@ -443,7 +443,7 @@ export function CommentThread({
         )}
       </div>
 
-      {/* 新评论输入 */}
+      {/* New comment input */}
       <div
         className="space-y-2 pt-2 border-t border-white/5"
         onDrop={async (e) => {
@@ -464,7 +464,7 @@ export function CommentThread({
           placeholder={t.collab.commentPlaceholder}
           onSubmit={() => post(draft, null)}
         />
-        {/* v3.x E.1: 附件预览 */}
+        {/* v3.x E.1: attachment preview */}
         {draftAttachments.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {draftAttachments.map((att, i) => (
@@ -483,7 +483,7 @@ export function CommentThread({
                 <button
                   onClick={() => setDraftAttachments((prev) => prev.filter((_, idx) => idx !== i))}
                   className="absolute top-0.5 right-0.5 p-0.5 rounded bg-black/60 text-white/80 opacity-0 group-hover/att:opacity-100 transition-opacity"
-                  title="移除附件"
+                  title={t.sharedUi.removeAttachment}
                 >
                   <XIcon className="w-2.5 h-2.5" />
                 </button>
@@ -497,14 +497,14 @@ export function CommentThread({
               className={`cinema-mono text-[10px] inline-flex items-center gap-1 px-2 py-0.5 rounded border border-[var(--cinema-border)] cursor-pointer hover:border-[var(--cinema-amber)] transition-colors ${
                 uploadingAttachment || draftAttachments.length >= 6 ? 'opacity-40 cursor-not-allowed' : ''
               }`}
-              title={draftAttachments.length >= 6 ? '已达 6 附件上限' : '上传图片/视频 (≤10MB, 最多 6 个)'}
+              title={draftAttachments.length >= 6 ? t.sharedUi.attCap6 : t.sharedUi.uploadMediaHint}
             >
               {uploadingAttachment ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
               ) : (
                 <Paperclip className="w-3 h-3" />
               )}
-              附件
+              {t.sharedUi.attachment}
               <input
                 type="file"
                 accept="image/*,video/*"
@@ -526,7 +526,7 @@ export function CommentThread({
             className="cinema-btn cinema-btn-primary !px-3 !py-1 !text-[11px] inline-flex items-center gap-1 disabled:opacity-40"
           >
             {submitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-            发送评论
+            {t.sharedUi.sendComment}
           </button>
         </div>
       </div>

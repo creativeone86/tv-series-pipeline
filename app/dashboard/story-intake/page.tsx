@@ -1,10 +1,12 @@
 'use client';
 
 /**
- * v6.2.1 — 长篇拆解工作台 UI.
- * 粘贴长篇小说/剧本 → 自动分集预览 + 叙事模式选择 → 逐集送入创作工坊 (orchestrator).
- * 拆分逻辑全在 lib/story-intake (已单测, client-safe); 这里只做交互 + 把某集 + 叙事指令
- * 经 sessionStorage 交给 /dashboard/create (避免长文本超 URL 长度).
+ * v6.2.1 — long-form split workbench UI.
+ * Paste a novel/script → auto episode preview + narration mode → send each
+ * episode into the workshop (orchestrator).
+ * Split logic lives in lib/story-intake (tested, client-safe); this page is
+ * interaction + handing an episode + narration directive to /dashboard/create
+ * via sessionStorage (avoids oversize URLs).
  */
 
 import { useState, useEffect } from 'react';
@@ -18,20 +20,30 @@ import { buildNarrationTrack } from '@/lib/narration-track';
 import {
   buildSeasonBatch, nextPending, markJob, batchProgress, type SeasonBatchPlan,
 } from '@/lib/season-batch';
+import { useLocale } from '@/hooks/use-locale';
 
 const BATCH_KEY = 'qfmj-season-batch';
 
+type DashT = ReturnType<typeof useLocale>['t'] & { dashPages: Record<string, string> };
+
 export default function StoryIntakePage() {
+  const { locale, t: loc } = useLocale();
+  const t = loc as DashT;
   const router = useRouter();
   const [text, setText] = useState('');
   const [mode, setMode] = useState<NarrationMode>('dialogue');
   const [targetChars, setTargetChars] = useState<string>('');
   const [episodes, setEpisodes] = useState<Episode[] | null>(null);
-  // v6.2.2: 整季批量 (持久化到 localStorage, 跨页面续跑)
+  // v6.2.2: season batch (persisted in localStorage, resume across pages)
   const [batch, setBatch] = useState<SeasonBatchPlan | null>(null);
-  // v6.2.3: N 集并行解说音轨编排
+  // v6.2.3: N-episode parallel narration-track orchestration
   const [narrating, setNarrating] = useState(false);
   const [narrateReport, setNarrateReport] = useState<any | null>(null);
+
+  const modeLabel = (m: { id: string; label: string }) =>
+    locale === 'en' ? (t.dashPages[`siMode_${m.id}`] || m.label) : m.label;
+  const modeDesc = (m: { id: string; description: string }) =>
+    locale === 'en' ? (t.dashPages[`siModeDesc_${m.id}`] || m.description) : m.description;
 
   useEffect(() => {
     try {
@@ -61,7 +73,7 @@ export default function StoryIntakePage() {
 
   const sendToCreate = (ep: Episode) => {
     const nm = getNarrationMode(mode);
-    seedAndGo(`【叙事模式:${nm.label}】${nm.directive}\n\n${ep.title}\n${ep.text}`);
+    seedAndGo(`${t.dashPages.siSeedPrefix.replace('{mode}', nm.label)}${nm.directive}\n\n${ep.title}\n${ep.text}`);
   };
 
   const startBatch = () => {
@@ -69,7 +81,7 @@ export default function StoryIntakePage() {
     persistBatch(buildSeasonBatch(episodes, { mode }));
   };
 
-  // v6.2.3: 整季并行真出解说音轨 (后端 orchestrateSeason 有界并发)
+  // v6.2.3: season-parallel real narration tracks (backend orchestrateSeason, bounded concurrency)
   const narrateSeason = async () => {
     if (!episodes || episodes.length === 0) return;
     setNarrating(true); setNarrateReport(null);
@@ -79,9 +91,9 @@ export default function StoryIntakePage() {
         body: JSON.stringify({ episodes, mode, concurrency: 3 }),
       });
       const d = await res.json();
-      setNarrateReport(res.ok ? d : { error: d?.message || '生成失败' });
+      setNarrateReport(res.ok ? d : { error: d?.message || t.dashPages.generateFailed });
     } catch (e: any) {
-      setNarrateReport({ error: e?.message || '生成失败' });
+      setNarrateReport({ error: e?.message || t.dashPages.generateFailed });
     } finally {
       setNarrating(false);
     }
@@ -96,7 +108,7 @@ export default function StoryIntakePage() {
     seedAndGo(job.seed);
   };
 
-  // v12.194:AI 问书 —— 长文本 → 人物关系/设定/高光档案(超长三段采样)
+  // v12.194: AI ask-the-book — long text → cast / setting / highlight dossier (3-segment sample)
   const [profile, setProfile] = useState<any>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const askBook = async () => {
@@ -108,8 +120,8 @@ export default function StoryIntakePage() {
         body: JSON.stringify({ text }),
       });
       const d = await r.json();
-      setProfile(r.ok ? d.profile : { error: d?.message || '分析失败' });
-    } catch { setProfile({ error: '网络错误' }); }
+      setProfile(r.ok ? d.profile : { error: d?.message || t.dashPages.analyzeFailed });
+    } catch { setProfile({ error: t.dashPages.networkError }); }
     finally { setAnalyzing(false); }
   };
   const totalChars = text.trim().length;
@@ -120,34 +132,34 @@ export default function StoryIntakePage() {
       <div className="mb-6">
         <h2 className="text-2xl font-bold flex items-center gap-2">
           <ScrollText className="w-6 h-6 text-amber-400" />
-          长篇拆解
+          {t.sidebar.storyIntake}
         </h2>
         <p className="text-sm text-[var(--muted)] mt-1">
-          粘贴长篇小说 / 剧本 → 自动分集 + 选叙事模式 → 逐集送入创作工坊
+          {t.dashPages.siSubtitle}
         </p>
-        {/* v12.194:AI 问书 */}
+        {/* v12.194: AI ask-the-book */}
         <div className="mt-3 flex items-center gap-3">
           <button onClick={askBook} disabled={analyzing || totalChars < 500} className="px-3 py-1.5 rounded-lg text-[12px] border border-amber-500/30 text-amber-300 hover:bg-amber-500/10 disabled:opacity-40">
-            {analyzing ? '📖 通读中…' : '📖 AI 问书(人物关系/设定/高光)'}
+            {analyzing ? t.dashPages.siReading : t.dashPages.siAskBook}
           </button>
-          {profile?.sampledOnly && <span className="text-[10px] text-gray-500">超长文本已三段采样(开头/中段/结尾)</span>}
+          {profile?.sampledOnly && <span className="text-[10px] text-gray-500">{t.dashPages.siSampled}</span>}
         </div>
         {profile && !profile.error && (
           <div className="mt-3 grid md:grid-cols-3 gap-3 text-[11px]">
             <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-              <div className="font-medium mb-1.5">👤 人物({(profile.characters || []).length})</div>
+              <div className="font-medium mb-1.5">{t.dashPages.siPeople.replace('{n}', String((profile.characters || []).length))}</div>
               {(profile.characters || []).slice(0, 8).map((c: any) => (
                 <div key={c.name} className="mb-1.5"><span className="text-amber-300">{c.name}</span> <span className="opacity-50">{c.role}</span><div className="opacity-70">{c.traits}</div><div className="opacity-50">{c.relationships}</div></div>
               ))}
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-              <div className="font-medium mb-1.5">🗺 设定({(profile.settings || []).length})</div>
+              <div className="font-medium mb-1.5">{t.dashPages.siSettings.replace('{n}', String((profile.settings || []).length))}</div>
               {(profile.settings || []).slice(0, 10).map((x: any) => (
                 <div key={x.term} className="mb-1"><span className="text-cyan-300">{x.term}</span> <span className="opacity-70">{x.definition}</span></div>
               ))}
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-              <div className="font-medium mb-1.5">✨ 高光({(profile.highlights || []).length})</div>
+              <div className="font-medium mb-1.5">{t.dashPages.siHighlights.replace('{n}', String((profile.highlights || []).length))}</div>
               {(profile.highlights || []).slice(0, 8).map((h: any, i: number) => (
                 <div key={i} className="mb-1.5"><div className="opacity-90">{h.scene}</div><div className="opacity-50">{h.why} · {h.positionHint}</div></div>
               ))}
@@ -157,27 +169,27 @@ export default function StoryIntakePage() {
         {profile?.error && <div className="mt-2 text-[11px] text-red-400">{profile.error}</div>}
       </div>
 
-      {/* v6.2.2: 整季批量进度 (持久化, 跨页面续跑) */}
+      {/* v6.2.2: season-batch progress (persisted, resume across pages) */}
       {batch && batch.jobs.length > 0 && (() => {
         const prog = batchProgress(batch.jobs);
         const next = nextPending(batch.jobs);
         return (
           <div className="mb-5 rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium text-white flex items-center gap-1.5"><ListChecks className="w-4 h-4 text-amber-400" />整季批量 · {batch.modeLabel}</p>
-              <button onClick={() => persistBatch(null)} className="text-[11px] text-[var(--muted)] hover:text-white inline-flex items-center gap-1"><RotateCcw className="w-3 h-3" />重置</button>
+              <p className="text-sm font-medium text-white flex items-center gap-1.5"><ListChecks className="w-4 h-4 text-amber-400" />{t.dashPages.siBatchTitle.replace('{mode}', batch.modeLabel)}</p>
+              <button onClick={() => persistBatch(null)} className="text-[11px] text-[var(--muted)] hover:text-white inline-flex items-center gap-1"><RotateCcw className="w-3 h-3" />{t.common.reset}</button>
             </div>
             <div className="h-1.5 rounded-full bg-white/10 overflow-hidden mb-2">
               <div className="h-full bg-amber-400 transition-all" style={{ width: `${prog.pct}%` }} />
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span className="text-[11px] text-[var(--muted)]">已送 {prog.done} / {prog.total} 集</span>
+              <span className="text-[11px] text-[var(--muted)]">{t.dashPages.siBatchSent.replace('{done}', String(prog.done)).replace('{total}', String(prog.total))}</span>
               {next ? (
                 <button onClick={sendNextBatch} className="px-4 py-1.5 rounded-xl text-[12px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 inline-flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5" />送入下一集 (EP{next.episodeIndex} {next.title})<ChevronRight className="w-3.5 h-3.5" />
+                  <Sparkles className="w-3.5 h-3.5" />{t.dashPages.siSendNext.replace('{n}', String(next.episodeIndex)).replace('{title}', next.title)}<ChevronRight className="w-3.5 h-3.5" />
                 </button>
               ) : (
-                <span className="text-[12px] text-emerald-400">✓ 全季已送入创作</span>
+                <span className="text-[12px] text-emerald-400">{t.dashPages.siBatchDone}</span>
               )}
             </div>
           </div>
@@ -188,16 +200,16 @@ export default function StoryIntakePage() {
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder={'粘贴整部小说或长剧本…\n\n· 有「第X章 / Chapter N / ## 标题」标记 → 按标记分集\n· 没有标记 → 按目标字数自动分集'}
+        placeholder={t.dashPages.siPastePh}
         rows={10}
         className="w-full bg-black/40 border border-[var(--border)] rounded-2xl p-4 text-sm text-white placeholder:text-[var(--muted)] outline-none focus:border-amber-500/40 transition-colors resize-y"
       />
 
       {/* Controls */}
       <div className="mt-3 flex flex-col gap-3">
-        {/* 叙事模式 */}
+        {/* Narration mode — lib labels; en uses dashPages fallback (no nameEn on the lib row) */}
         <div>
-          <p className="text-xs text-[var(--muted)] mb-1.5 flex items-center gap-1"><Mic className="w-3 h-3" /> 叙事模式</p>
+          <p className="text-xs text-[var(--muted)] mb-1.5 flex items-center gap-1"><Mic className="w-3 h-3" /> {t.dashPages.siNarrationMode}</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {NARRATION_MODES.map((m) => (
               <button
@@ -207,23 +219,23 @@ export default function StoryIntakePage() {
                   mode === m.id ? 'border-amber-500/50 bg-amber-500/10' : 'border-[var(--border)] bg-white/[0.02] hover:border-white/20'
                 }`}
               >
-                <div className={`text-sm font-medium ${mode === m.id ? 'text-amber-300' : 'text-white'}`}>{m.label}</div>
-                <div className="text-[11px] text-[var(--muted)] mt-0.5 leading-snug">{m.description}</div>
-                {m.generatesNarrationTrack && <div className="text-[10px] text-violet-300/80 mt-1">+ 解说音轨</div>}
+                <div className={`text-sm font-medium ${mode === m.id ? 'text-amber-300' : 'text-white'}`}>{modeLabel(m)}</div>
+                <div className="text-[11px] text-[var(--muted)] mt-0.5 leading-snug">{modeDesc(m)}</div>
+                {m.generatesNarrationTrack && <div className="text-[10px] text-violet-300/80 mt-1">{t.dashPages.siPlusTrack}</div>}
               </button>
             ))}
           </div>
         </div>
 
-        {/* target + 拆解 */}
+        {/* target + split */}
         <div className="flex items-end gap-3 flex-wrap">
           <div>
-            <p className="text-xs text-[var(--muted)] mb-1.5">单集目标字数(可选,无章节标记时生效)</p>
+            <p className="text-xs text-[var(--muted)] mb-1.5">{t.dashPages.siTargetChars}</p>
             <input
               type="number"
               value={targetChars}
               onChange={(e) => setTargetChars(e.target.value)}
-              placeholder="默认 2000"
+              placeholder={t.dashPages.siTargetPh}
               className="w-40 bg-black/40 border border-[var(--border)] rounded-xl px-3 py-2 text-sm text-white placeholder:text-[var(--muted)] outline-none focus:border-amber-500/40"
             />
           </div>
@@ -232,9 +244,9 @@ export default function StoryIntakePage() {
             disabled={totalChars === 0}
             className="px-5 py-2 rounded-xl text-sm font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2"
           >
-            <Layers className="w-4 h-4" /> 智能拆解
+            <Layers className="w-4 h-4" /> {t.dashPages.siSmartSplit}
           </button>
-          {totalChars > 0 && <span className="text-[11px] text-[var(--muted)] pb-2">共 {totalChars} 字</span>}
+          {totalChars > 0 && <span className="text-[11px] text-[var(--muted)] pb-2">{t.dashPages.siCharsTotal.replace('{n}', String(totalChars))}</span>}
         </div>
       </div>
 
@@ -242,11 +254,11 @@ export default function StoryIntakePage() {
       {episodes && (
         <div className="mt-6">
           {episodes.length === 0 ? (
-            <p className="text-sm text-[var(--muted)] text-center py-10">未识别到可拆解的内容</p>
+            <p className="text-sm text-[var(--muted)] text-center py-10">{t.dashPages.siNoEpisodes}</p>
           ) : (
             <>
               <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-                <p className="text-sm font-medium text-white">拆出 {episodes.length} 集 · 叙事:{getNarrationMode(mode).label}</p>
+                <p className="text-sm font-medium text-white">{t.dashPages.siSplitSummary.replace('{n}', String(episodes.length)).replace('{mode}', modeLabel(getNarrationMode(mode)))}</p>
                 <div className="flex items-center gap-2">
                   {getNarrationMode(mode).generatesNarrationTrack && (
                     <button
@@ -255,19 +267,19 @@ export default function StoryIntakePage() {
                       className="px-3.5 py-1.5 rounded-xl text-[12px] font-medium bg-sky-500/15 text-sky-200 border border-sky-500/30 hover:bg-sky-500/25 transition-all inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {narrating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AudioLines className="w-3.5 h-3.5" />}
-                      整季并行解说音轨
+                      {t.dashPages.siSeasonNarrate}
                     </button>
                   )}
                   <button
                     onClick={startBatch}
                     className="px-3.5 py-1.5 rounded-xl text-[12px] font-medium bg-violet-500/15 text-violet-200 border border-violet-500/30 hover:bg-violet-500/25 transition-all inline-flex items-center gap-1.5"
                   >
-                    <ListChecks className="w-3.5 h-3.5" />整季批量创作
+                    <ListChecks className="w-3.5 h-3.5" />{t.dashPages.siSeasonBatch}
                   </button>
                 </div>
               </div>
 
-              {/* v6.2.3: 整季并行解说音轨结果 */}
+              {/* v6.2.3: season-parallel narration-track result */}
               {narrateReport && (
                 <div className="mb-4 rounded-2xl border border-sky-500/30 bg-sky-500/[0.06] p-4">
                   {narrateReport.error ? (
@@ -278,8 +290,8 @@ export default function StoryIntakePage() {
                     return (
                       <>
                         <div className="flex items-center justify-between mb-2">
-                          <p className="text-sm font-medium text-white flex items-center gap-1.5"><AudioLines className="w-4 h-4 text-sky-300" />解说音轨编排 · 并发 {narrateReport.concurrency}</p>
-                          <span className="text-[11px] text-[var(--muted)]">成功 {r.ok}/{r.total} 集{r.failed ? ` · 失败 ${r.failed}` : ''}</span>
+                          <p className="text-sm font-medium text-white flex items-center gap-1.5"><AudioLines className="w-4 h-4 text-sky-300" />{t.dashPages.siNarrateReport.replace('{n}', String(narrateReport.concurrency))}</p>
+                          <span className="text-[11px] text-[var(--muted)]">{t.dashPages.siNarrateOk.replace('{ok}', String(r.ok)).replace('{total}', String(r.total))}{r.failed ? t.dashPages.siNarrateFail.replace('{n}', String(r.failed)) : ''}</span>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                           {r.results.map((x: any) => (
@@ -291,10 +303,10 @@ export default function StoryIntakePage() {
                               </div>
                               {x.output && (
                                 <p className="mt-1 text-[10px] text-[var(--muted)]">
-                                  {x.output.segments} 句 · ~{x.output.durationSec}s · {x.output.voiceLabel}
+                                  {t.dashPages.siSegMeta.replace('{n}', String(x.output.segments)).replace('{sec}', String(x.output.durationSec)).replace('{voice}', x.output.voiceLabel)}
                                   {x.output.rendered
-                                    ? <span className="text-emerald-400"> · 已出音频 {x.output.okCount}</span>
-                                    : <span className="text-amber-400"> · 计划就绪 (待配置 TTS)</span>}
+                                    ? <span className="text-emerald-400"> {t.dashPages.siAudioOut.replace('{n}', String(x.output.okCount))}</span>
+                                    : <span className="text-amber-400"> {t.dashPages.siPlanReady}</span>}
                                 </p>
                               )}
                               {x.error && <p className="mt-1 text-[10px] text-rose-300/90">{x.error}</p>}
@@ -303,7 +315,7 @@ export default function StoryIntakePage() {
                         </div>
                         {!anyRendered && (
                           <p className="mt-2 text-[10px] text-[var(--soft)]">
-                            📌 解说音轨计划已并行编排完成;配置 <code className="text-amber-300">MINIMAX_API_KEY</code> 后将真出 mp3 音频。
+                            {t.dashPages.siNeedTtsBefore} <code className="text-amber-300">MINIMAX_API_KEY</code> {t.dashPages.siNeedTtsAfter}
                           </p>
                         )}
                       </>
@@ -318,7 +330,7 @@ export default function StoryIntakePage() {
                       <h4 className="text-sm font-semibold text-white truncate">
                         <span className="text-amber-400 mr-1.5">EP{ep.index}</span>{ep.title}
                       </h4>
-                      <span className="text-[10px] text-[var(--muted)] shrink-0">{ep.charCount} 字</span>
+                      <span className="text-[10px] text-[var(--muted)] shrink-0">{t.dashPages.siCharsN.replace('{n}', String(ep.charCount))}</span>
                     </div>
                     <p className="text-[12px] text-[var(--muted)] leading-relaxed line-clamp-3 flex-1">
                       {ep.text.slice(0, 160)}
@@ -327,7 +339,7 @@ export default function StoryIntakePage() {
                       const nt = buildNarrationTrack({ text: ep.text, mode });
                       return nt.enabled && nt.segments.length > 0 ? (
                         <p className="mt-2 text-[10px] text-violet-300/80 flex items-center gap-1">
-                          <Volume2 className="w-3 h-3" />旁白 {nt.segments.length} 句 · ~{nt.totalDurationSec}s · {nt.voiceLabel}
+                          <Volume2 className="w-3 h-3" />{t.dashPages.siVoiceover.replace('{n}', String(nt.segments.length)).replace('{sec}', String(nt.totalDurationSec)).replace('{voice}', nt.voiceLabel)}
                         </p>
                       ) : null;
                     })()}
@@ -335,7 +347,7 @@ export default function StoryIntakePage() {
                       onClick={() => sendToCreate(ep)}
                       className="mt-3 inline-flex items-center justify-center gap-1.5 py-2 rounded-xl text-[12px] font-medium bg-[#E8C547]/15 text-amber-300 border border-amber-500/25 hover:bg-amber-500/25 transition-all"
                     >
-                      <Sparkles className="w-3.5 h-3.5" /> 用此集创作
+                      <Sparkles className="w-3.5 h-3.5" /> {t.dashPages.siCreateFromEp}
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>

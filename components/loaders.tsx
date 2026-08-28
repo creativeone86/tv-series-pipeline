@@ -1,11 +1,14 @@
-// 加载状态组件
+'use client';
+
+import { useLocale } from '@/hooks/use-locale';
 
 export function PageLoader() {
+  const { t } = useLocale();
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center">
       <div className="text-center space-y-4">
         <div className="w-16 h-16 border-4 border-[#E8C547]/30 border-t-rose-500 rounded-full animate-spin mx-auto" />
-        <p className="text-gray-400">加载中...</p>
+        <p className="text-gray-400">{t.common.loading}</p>
       </div>
     </div>
   );

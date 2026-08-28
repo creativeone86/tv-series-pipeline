@@ -1,18 +1,19 @@
 'use client';
 
 /**
- * Cinema 视觉 primitive — 跟 oiioii 拉开签名距离的影院专属组件
+ * Cinema visual primitives — signature distance from oiioii
  *
- * 全部用 cinema-theme.css 里的 css var,只在 .cinema-page 容器下生效。
+ * All css vars from cinema-theme.css; only apply under .cinema-page.
  *
- * 设计原则:
- *   - 影院/dashboard/Logic Pro 三家视觉合体
- *   - 不抄 oiioii 的粉色 / blob mascot / 点阵画布
- *   - 信息密度高,但层级清晰
+ * Design:
+ *   - cinema / dashboard / Logic Pro visual mix
+ *   - do not copy oiioii pink / blob mascot / dot canvas
+ *   - high density, clear hierarchy
  */
 
 import type { ComponentType, ReactNode } from 'react';
 import { BorderBeam, Spotlight, TextGenerateEffect } from './effects';
+import { useLocale } from '@/hooks/use-locale';
 import {
   Tooltip,
   TooltipContent,
@@ -21,7 +22,7 @@ import {
 } from '@/components/ui/tooltip';
 
 // ──────────────────────────────────────────────────────────
-// TimecodeChip — 影院时码 00:00:05:12 (帧级别)
+// TimecodeChip — cinema timecode 00:00:05:12 (frame-accurate)
 // ──────────────────────────────────────────────────────────
 export function TimecodeChip({
   seconds,
@@ -48,7 +49,7 @@ export function TimecodeChip({
 function pad(n: number) { return n.toString().padStart(2, '0'); }
 
 // ──────────────────────────────────────────────────────────
-// AspectChip — 画幅比例 (16:9 · 1.85:1 · 2.35:1)
+// AspectChip — aspect ratio (16:9 · 1.85:1 · 2.35:1)
 // ──────────────────────────────────────────────────────────
 export function AspectChip({ ratio }: { ratio: string }) {
   const cinemaName: Record<string, string> = {
@@ -69,7 +70,7 @@ export function AspectChip({ ratio }: { ratio: string }) {
 }
 
 // ──────────────────────────────────────────────────────────
-// FilmStripDivider — 装饰性胶片孔洞分隔
+// FilmStripDivider — decorative film-sprocket divider
 // ──────────────────────────────────────────────────────────
 export function FilmStripDivider({ label }: { label?: string }) {
   if (!label) return <div className="cinema-filmstrip" />;
@@ -83,7 +84,7 @@ export function FilmStripDivider({ label }: { label?: string }) {
 }
 
 // ──────────────────────────────────────────────────────────
-// TechReadout — 等宽技术读数,Notion-code 风
+// TechReadout — mono technical readout, Notion-code feel
 // ──────────────────────────────────────────────────────────
 export function TechReadout({
   pairs,
@@ -103,15 +104,15 @@ export function TechReadout({
 }
 
 // ──────────────────────────────────────────────────────────
-// Eyebrow — 等宽小标签 (RUNNING / READY / CUE)
+// Eyebrow — mono micro label (RUNNING / READY / CUE)
 // ──────────────────────────────────────────────────────────
 export function Eyebrow({ children }: { children: ReactNode }) {
   return <span className="cinema-eyebrow">{children}</span>;
 }
 
 // ──────────────────────────────────────────────────────────
-// SlateCard — 电影场记板风格的卡片头
-// 灵感:剧组拍摄前在板子上写片名 + 场号,这里把项目标题做成"slate"
+// SlateCard — clapperboard-style card header
+// Inspired by writing title + scene on a slate before a take; project title becomes the slate
 // ──────────────────────────────────────────────────────────
 export function SlateCard({
   title,
@@ -128,18 +129,19 @@ export function SlateCard({
   take?: string;
   director?: string;
   notes?: string;
-  /** v2.13.3: 是否在卡片边缘加 amber 旋转光束 (Aceternity 风, 默认开) */
+  /** v2.13.3: Whether to add an amber rotating beam on the card edge (Aceternity-style, default on) */
   beam?: boolean;
-  /** v2.13.4: 是否加 Aceternity Spotlight SVG 锥光(默认开) */
+  /** v2.13.4: Whether to add the Aceternity Spotlight SVG cone (default on) */
   spotlight?: boolean;
-  /** v2.13.4: notes 是否用词级别 stagger 动画显现(默认开;短文/无中文时也安全) */
+  /** v2.13.4: Whether notes use word-level stagger (default on; safe for short / non-CJK text) */
   animateNotes?: boolean;
 }) {
+  const { t } = useLocale();
   return (
     <div className="cinema-card-hi p-5 relative overflow-hidden cinema-spotlight">
       {spotlight && <Spotlight position="top-right" fill="rgba(201, 163, 94, 0.18)" />}
       {beam && <BorderBeam size={220} duration={9} colorTo="rgba(201, 163, 94, 0.55)" />}
-      {/* 顶部斜纹装饰 — 模拟黑白场记板 */}
+      {/* top stripe decoration — black/white slate */}
       <div
         className="absolute top-0 left-0 right-0 h-2 opacity-30"
         style={{
@@ -147,22 +149,22 @@ export function SlateCard({
             'repeating-linear-gradient(45deg, var(--cinema-text), var(--cinema-text) 8px, var(--cinema-bg) 8px, var(--cinema-bg) 16px)',
         }}
       />
-      {/* v2.13.5: SCENE / TAKE 用 Radix Tooltip 解释 — 替代裸 title="...",
-          accessible + 触摸屏长按才触发, 不污染移动端 */}
+      {/* v2.13.5: SCENE / TAKE explained with Radix Tooltip — instead of a raw title="...",
+          accessible + long-press on touch, no mobile hover pollution */}
       <TooltipProvider delayDuration={200}>
         <div className="pt-3 grid grid-cols-[auto_1fr_auto_auto] gap-x-6 gap-y-2 items-baseline relative">
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="cursor-help"><Eyebrow>SCENE</Eyebrow></span>
             </TooltipTrigger>
-            <TooltipContent side="top">场号 · 当前在剧本里的第几场</TooltipContent>
+            <TooltipContent side="top">{t.sharedUi.sceneTooltip}</TooltipContent>
           </Tooltip>
           <span className="cinema-mono text-sm">{scene || '—'}</span>
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="cursor-help"><Eyebrow>TAKE</Eyebrow></span>
             </TooltipTrigger>
-            <TooltipContent side="top">本场已写第几遍 · 按字数自动递增</TooltipContent>
+            <TooltipContent side="top">{t.sharedUi.takeTooltip}</TooltipContent>
           </Tooltip>
           <span className="cinema-mono text-sm">{take || '—'}</span>
         </div>
@@ -187,7 +189,7 @@ export function SlateCard({
 }
 
 // ──────────────────────────────────────────────────────────
-// StatusBar — Logic Pro 风格底部状态栏
+// StatusBar — Logic Pro-style bottom status bar
 // ──────────────────────────────────────────────────────────
 export function StatusBar({
   items,
@@ -225,7 +227,7 @@ export function StatusBar({
 }
 
 // ──────────────────────────────────────────────────────────
-// MeterBar — 0-100 数值条 (Cameo 一致性 / cw 强度等)
+// MeterBar — 0-100 meter (Cameo consistency / cw strength)
 // ──────────────────────────────────────────────────────────
 export function MeterBar({
   value,
@@ -255,8 +257,8 @@ export function MeterBar({
 }
 
 // ──────────────────────────────────────────────────────────
-// EmptyState — 统一空状态 (图标 + 标题 + 可选提示 + 可选 CTA)
-// 替代各面板散乱的「纯文字 / 无图标 / 不渲染」空态,统一影院语言。
+// EmptyState — shared empty state (icon + title + optional hint + optional CTA)
+// Replaces scattered "plain text / no icon / render nothing" empties with one cinema language.
 // ──────────────────────────────────────────────────────────
 export function EmptyState({
   icon: Icon,

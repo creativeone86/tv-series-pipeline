@@ -12,12 +12,12 @@ import { useToast } from '@/components/ui/toast-provider';
 import { useLocale } from '@/hooks/use-locale';
 import { IMG_PREVIEW_DEFAULT } from '@/lib/placeholder-images';
 import { buildInitialNodes, initialEdges } from '@/components/pipeline-canvas';
-import { storyTemplates, type StoryTemplate } from '@/lib/story-templates';
+import { type StoryTemplate } from '@/lib/story-templates';
 import { CharacterLockSection, type LockedCharacter } from '@/components/create/character-lock-section';
 import { EngineWeather } from '@/components/create/engine-weather';
 import { MultimodalRefShelf } from '@/components/multimodal-ref-shelf';
 import type { ReferenceAsset } from '@/lib/multimodal-ref';
-// v2.13 cinema redesign — opt-in primitives, 不影响其他页
+// v2.13 cinema redesign — opt-in primitives, other pages unchanged
 import {
   SlateCard,
   AspectChip,
@@ -41,22 +41,90 @@ import { saveCreatePrefs, loadCreatePrefs } from '@/lib/create-prefs';
 import { LanguagePicker } from '@/components/create/language-picker';
 import { getSystemLanguage } from '@/lib/system-language';
 
-// Pika-style art presets with visual indicators and color themes
+// Pika-style art presets — ids/icons/colors only; labels via t.workshop
 const stylePresets = [
-  { id: 'poetic-mist', label: '诗意水墨', en: 'Poetic Mist', color: 'from-slate-600 to-blue-900', icon: '🌫️', desc: '朦胧意境' },
-  { id: 'neo-noir', label: '新黑色', en: 'Neo Noir', color: 'from-gray-900 to-red-950', icon: '🌃', desc: '暗黑悬疑' },
-  { id: 'ink-wash', label: '水墨丹青', en: 'Ink Wash', color: 'from-stone-700 to-stone-900', icon: '🎋', desc: '东方写意' },
-  { id: 'dreamwave', label: '梦境波浪', en: 'Dreamwave', color: 'from-indigo-600 to-rose-500', icon: '🌊', desc: '迷幻梦境' },
-  { id: 'cyber-neon', label: '赛博霓虹', en: 'Cyber Neon', color: 'from-cyan-600 to-violet-700', icon: '⚡', desc: '未来科幻' },
-  { id: 'anime-3d', label: '3D国创', en: 'Anime 3D', color: 'from-amber-600 to-orange-700', icon: '🏮', desc: '国漫风格' },
-  { id: 'cinematic', label: '电影写实', en: 'Cinematic', color: 'from-neutral-700 to-neutral-900', icon: '🎬', desc: '院线品质' },
-  { id: 'ghibli', label: '吉卜力风', en: 'Ghibli', color: 'from-green-600 to-emerald-800', icon: '🍃', desc: '温暖治愈' },
-  // v9.5.5: 与风格画廊新增画风对齐 (二次元 / 国漫细分);en 用画廊 nameEn,预览图复用 /styles/<id>.jpg
-  { id: 'american-comic', label: '美漫', en: 'American Comic', color: 'from-red-700 to-amber-600', icon: '💥', desc: '美式超英漫画' },
-  { id: 'mihoyo-game', label: '原神崩坏', en: 'Game Anime (miHoYo)', color: 'from-sky-500 to-violet-600', icon: '🎮', desc: '游戏 CG 二次元' },
-  { id: 'wushan-ink', label: '雾山水墨', en: 'Ink-Wash Action', color: 'from-stone-600 to-zinc-800', icon: '🖌️', desc: '水墨飞白动作' },
-  { id: 'haitang-ethereal', label: '海棠唯美', en: 'Ethereal Donghua', color: 'from-orange-500 to-rose-600', icon: '🏮', desc: '唯美梦幻国漫' },
+  { id: 'poetic-mist', en: 'Poetic Mist', color: 'from-slate-600 to-blue-900', icon: '🌫️' },
+  { id: 'neo-noir', en: 'Neo Noir', color: 'from-gray-900 to-red-950', icon: '🌃' },
+  { id: 'ink-wash', en: 'Ink Wash', color: 'from-stone-700 to-stone-900', icon: '🎋' },
+  { id: 'dreamwave', en: 'Dreamwave', color: 'from-indigo-600 to-rose-500', icon: '🌊' },
+  { id: 'cyber-neon', en: 'Cyber Neon', color: 'from-cyan-600 to-violet-700', icon: '⚡' },
+  { id: 'anime-3d', en: 'Anime 3D', color: 'from-amber-600 to-orange-700', icon: '🏮' },
+  { id: 'cinematic', en: 'Cinematic', color: 'from-neutral-700 to-neutral-900', icon: '🎬' },
+  { id: 'ghibli', en: 'Ghibli', color: 'from-green-600 to-emerald-800', icon: '🍃' },
+  // v9.5.5: aligned with style gallery (anime / donghua splits); en = gallery nameEn, thumbs at /styles/<id>.jpg
+  { id: 'american-comic', en: 'American Comic', color: 'from-red-700 to-amber-600', icon: '💥' },
+  { id: 'mihoyo-game', en: 'Game Anime (miHoYo)', color: 'from-sky-500 to-violet-600', icon: '🎮' },
+  { id: 'wushan-ink', en: 'Ink-Wash Action', color: 'from-stone-600 to-zinc-800', icon: '🖌️' },
+  { id: 'haitang-ethereal', en: 'Ethereal Donghua', color: 'from-orange-500 to-rose-600', icon: '🏮' },
 ];
+
+/** Chinese labels from lib story-templates.styleRecommendation — match only, not shown. */
+const STYLE_ZH: Record<string, string> = {
+  'poetic-mist': '\u8bd7\u610f\u6c34\u58a8',
+  'neo-noir': '\u65b0\u9ed1\u8272',
+  'ink-wash': '\u6c34\u58a8\u4e39\u9752',
+  dreamwave: '\u68a6\u5883\u6ce2\u6d6a',
+  'cyber-neon': '\u8d5b\u535a\u9713\u8679',
+  'anime-3d': '3D\u56fd\u521b',
+  cinematic: '\u7535\u5f71\u5199\u5b9e',
+  ghibli: '\u5409\u535c\u529b\u98ce',
+  'american-comic': '\u7f8e\u6f2b',
+  'mihoyo-game': '\u539f\u795e\u5d29\u574f',
+  'wushan-ink': '\u96fe\u5c71\u6c34\u58a8',
+  'haitang-ethereal': '\u6d77\u68e0\u552f\u7f8e',
+};
+
+const STYLE_I18N: Record<string, { label: string; desc: string }> = {
+  'poetic-mist': { label: 'poeticMist', desc: 'poeticMistDesc' },
+  'neo-noir': { label: 'neoNoir', desc: 'neoNoirDesc' },
+  'ink-wash': { label: 'inkWash', desc: 'inkWashDesc' },
+  dreamwave: { label: 'dreamwave', desc: 'dreamwaveDesc' },
+  'cyber-neon': { label: 'cyberNeon', desc: 'cyberNeonDesc' },
+  'anime-3d': { label: 'anime3d', desc: 'anime3dDesc' },
+  cinematic: { label: 'cinematic', desc: 'cinematicDesc' },
+  ghibli: { label: 'ghibli', desc: 'ghibliDesc' },
+  'american-comic': { label: 'americanComic', desc: 'americanComicDesc' },
+  'mihoyo-game': { label: 'mihoyoGame', desc: 'mihoyoGameDesc' },
+  'wushan-ink': { label: 'wushanInk', desc: 'wushanInkDesc' },
+  'haitang-ethereal': { label: 'haitangEthereal', desc: 'haitangEtherealDesc' },
+};
+
+const EXAMPLE_IDEA_DEFS = [
+  { id: 'cyberpunk', icon: Zap },
+  { id: 'palace', icon: Sparkles },
+  { id: 'wasteland', icon: Wand2 },
+  { id: 'magic', icon: Lightbulb },
+] as const;
+
+/** Backend SSE / script-parser protocol tokens (escaped so this TSX stays Han-free). */
+const SSE = {
+  director: '\u5bfc\u6f14',
+  analyze: '\u5206\u6790',
+  writer: '\u7f16\u5267',
+  script: '\u5267\u672c',
+  charDesigner: '\u89d2\u8272\u8bbe\u8ba1\u5e08',
+  sceneDesigner: '\u573a\u666f\u8bbe\u8ba1\u5e08',
+  storyboarder: '\u5206\u955c\u5e08',
+  video: '\u89c6\u9891',
+  generate: '\u751f\u6210',
+  editor: '\u526a\u8f91\u5e08',
+  editMux: '\u526a\u8f91\u5408\u6210',
+  score: '\u914d\u4e50',
+  producer: '\u5236\u7247\u4eba',
+  review: '\u5ba1\u6838',
+  autoOpt: '\u81ea\u52a8\u4f18\u5316',
+  secondReview: '\u4e8c\u6b21\u5ba1\u6838',
+};
+const SCRIPT_FMT = {
+  chapter1: '\u7b2c 1 \u7ae0',
+  draft: '(\u8349\u7a3f)',
+  scene: '\u573a\u666f',
+  day: '\u65e5',
+  actionPrefix: '\u25b3\u753b\u9762\uff1a',
+};
+const EDIT_STYLE_FAST = '\u5feb\u8282\u594f\u71c3\u5411';
+const EDIT_STYLE_SLOW = '\u6162\u53d9\u6292\u60c5';
+const TAG_PERSONAL = '\u4e2a\u4eba';
 
 // Dynamically load MJ-generated style preview images
 function useStylePreviews() {
@@ -69,23 +137,16 @@ function useStylePreviews() {
   }, []);
   return previews;
 }
-const durationOptions = ['3s', '5s', '8s']; // 调整为适配当前API能力的时长选项
-// v10.6.0 竖屏优先:9:16 置首 = 新项目默认竖屏(2026 短剧主战场);横屏仍一键可选
+const durationOptions = ['3s', '5s', '8s']; // durations the current API can honor
+// v10.6.0 portrait-first: 9:16 first = new projects default vertical (2026 short-drama); landscape still one tap
 const aspectOptions = ['9:16', '16:9', '1:1', '2.35:1'];
 
-
-const exampleIdeas = [
-  { title: '赛博朋克侦探', content: '2077年的新东京，一位赛博侦探接到神秘委托，调查连环失踪案，却发现背后隐藏着惊天阴谋', icon: Zap },
-  { title: '古代宫廷', content: '大唐盛世，一位才女入宫，凭借智慧在后宫中周旋，最终成为影响朝政的关键人物', icon: Sparkles },
-  { title: '末日废土', content: '核战后的世界，幸存者们在废墟中寻找希望，一个神秘信号指引他们前往传说中的避难所', icon: Wand2 },
-  { title: '魔法学院', content: '魔法学院新生入学，发现自己拥有罕见的魔法天赋，却也因此卷入了一场古老的魔法战争', icon: Lightbulb },
-];
-
 export default function DashboardCreatePage() {
-  const { t, locale } = useLocale();
-  const zhUi = locale === 'zh-CN' || locale === 'zh-TW';
-  const styleLabel = (p: (typeof stylePresets)[number]) => (zhUi ? p.label : p.en);
-  const styleDesc = (p: (typeof stylePresets)[number]) => (zhUi ? p.desc : p.en);
+  const { t: tRaw, locale } = useLocale();
+  const t = tRaw as typeof tRaw & { workshop: Record<string, string> };
+  const w = t.workshop ?? {};
+  const styleLabel = (p: (typeof stylePresets)[number]) => w[STYLE_I18N[p.id]?.label] || p.en;
+  const styleDesc = (p: (typeof stylePresets)[number]) => w[STYLE_I18N[p.id]?.desc] || p.en;
   const searchParams = useSearchParams();
   const [idea, setIdea] = useState('');
   const [urlInput, setUrlInput] = useState('');
@@ -94,16 +155,16 @@ export default function DashboardCreatePage() {
   const [videoProvider, setVideoProvider] = useState('veo');
   const [style, setStyle] = useState(stylePresets[0].en);
   const [selectedTemplate, setSelectedTemplate] = useState<StoryTemplate | null>(null);
-  // v2.18 P1: 模板展开 / 详情逻辑 已迁移到 <TemplateLibraryPicker> 内, 老 expandedTemplate 状态废弃
+  // v2.18 P1: template expand/detail lives in <TemplateLibraryPicker>; expandedTemplate removed
 
-  // Vidu-style: pre-fill idea from URL query param (from cases page "用这个创作")
+  // Vidu-style: pre-fill idea from URL query (cases page "use this")
   useEffect(() => {
     const ideaParam = searchParams.get('idea');
     if (ideaParam) {
       setIdea(decodeURIComponent(ideaParam));
       return;
     }
-    // v6.2.1: 长篇拆解的某一集经 sessionStorage 传入 (长文本避免超 URL 长度上限)
+    // v6.2.1: long-form split episode arrives via sessionStorage (avoids URL length caps)
     try {
       const seed = sessionStorage.getItem('qfmj-create-seed');
       if (seed) {
@@ -111,7 +172,7 @@ export default function DashboardCreatePage() {
         sessionStorage.removeItem('qfmj-create-seed');
       }
     } catch { /* ignore */ }
-    // v6.3: 风格画廊「套用此风格」经 sessionStorage 传入风格名
+    // v6.3: style gallery "apply this look" arrives via sessionStorage
     try {
       const styleSeed = sessionStorage.getItem('qfmj-create-style');
       if (styleSeed) {
@@ -119,7 +180,7 @@ export default function DashboardCreatePage() {
         sessionStorage.removeItem('qfmj-create-style');
       }
     } catch { /* ignore */ }
-    // v9.6.8 (T2 模板市场): 「用此模板起片」经 sessionStorage 预填 画风 + 多参元素 + 锁定角色
+    // v9.6.8 (T2 template market): "start from template" pre-fills look + refs + locked cast
     try {
       const tplRaw = sessionStorage.getItem('qfmj-create-template');
       if (tplRaw) {
@@ -127,27 +188,27 @@ export default function DashboardCreatePage() {
         if (tpl.styleEn || tpl.style) setStyle(tpl.styleEn || tpl.style!);
         if (Array.isArray(tpl.references) && tpl.references.length) setReferences(tpl.references);
         if (Array.isArray(tpl.lockedCharacters) && tpl.lockedCharacters.length) setLockedCharacters(tpl.lockedCharacters);
-        // v9.7.9:音色覆盖暂存,待新项目生成后应用(项目此刻尚未创建)
+        // v9.7.9: stash voice overrides until the new project exists
         if (tpl.voiceOverrides && Object.keys(tpl.voiceOverrides).length) sessionStorage.setItem('qfmj-pending-voice-overrides', JSON.stringify(tpl.voiceOverrides));
         sessionStorage.removeItem('qfmj-create-template');
       }
     } catch { /* ignore */ }
   }, [searchParams]);
-  const [duration, setDuration] = useState(durationOptions[1]); // 默认5秒
+  const [duration, setDuration] = useState(durationOptions[1]); // default 5s
   const [aspect, setAspect] = useState(aspectOptions[0]);
-  // v2.12 Phase 1: 多角色锁脸 (1-3 人,前置在创作管线里)
+  // v2.12 Phase 1: multi-cast face lock (1-3), front-loaded in the pipeline
   const [lockedCharacters, setLockedCharacters] = useState<LockedCharacter[]>([]);
-  const [references, setReferences] = useState<ReferenceAsset[]>([]); // v9.5.6: 多参元素(对标可灵 Elements)
-  // v2.14 P1.1: 全局默认镜头语言 — 选了之后所有镜头都默认走这个运镜, 单镜可在分镜调整时覆盖
+  const [references, setReferences] = useState<ReferenceAsset[]>([]); // v9.5.6: multi-ref shelf (Kling Elements-style)
+  // v2.14 P1.1: global default camera language — all shots inherit; per-shot can override
   const [cameraDefault, setCameraDefault] = useState<string | null>(null);
-  // v12.0.4: 一句指令调剪辑风格(''=默认中速 / preset / 自由文本)→ 智能剪辑管线 pacing+转场
+  // v12.0.4: one-line edit style ('' = mid-tempo / preset / free text) → pacing + transitions
   const [editStyle, setEditStyle] = useState('');
-  // v12.134 issue #2: 剧本语言('auto'=按创意自动检测 / 显式语种码)
+  // v12.134 issue #2: script language ('auto' = detect from idea / explicit code)
   const [scriptLanguage, setScriptLanguage] = useState('auto');
-  // v12.143: 分镜草图锁(对标阅文分镜面板)—— 每镜先出构图草图再锁构图渲染,默认关
+  // v12.143: storyboard sketch lock — sketch then lock framing; off by default
   const [sketchLock, setSketchLock] = useState(false);
 
-  // v12.145: 创作偏好跨会话记忆(Miora Agent Memory 第一步)—— 挂载时恢复上次配置
+  // v12.145: remember create prefs across sessions (Miora Agent Memory step 1)
   useEffect(() => {
     const p = loadCreatePrefs();
     if (!p) { const sys = getSystemLanguage(); if (sys !== 'auto') setScriptLanguage(sys); return; } // v12.165
@@ -156,13 +217,13 @@ export default function DashboardCreatePage() {
     if (p.cameraDefault !== undefined) setCameraDefault(p.cameraDefault);
     if (typeof p.editStyle === 'string') setEditStyle(p.editStyle);
     if (p.scriptLanguage) setScriptLanguage(p.scriptLanguage);
-    else { const sys = getSystemLanguage(); if (sys !== 'auto') setScriptLanguage(sys); } // v12.165 系统默认兜底
+    else { const sys = getSystemLanguage(); if (sys !== 'auto') setScriptLanguage(sys); } // v12.165 system-language fallback
     if (typeof p.sketchLock === 'boolean') setSketchLock(p.sketchLock);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // v2.15 G9: 草稿数 (1=直接走 Writer; 2/3=先 hit /api/script-drafts 拿对比卡, 用户选完再走完整流程)
+  // v2.15 G9: draft count (1 = Writer direct; 2/3 = /api/script-drafts compare, then full run)
   const [draftCount, setDraftCount] = useState<1 | 2 | 3>(1);
-  // v10.5.3: 简易/专业开关 —— 默认 pro(与既有 UI 逐像素一致,验收条款);localStorage 记忆
+  // v10.5.3: simple/pro switch — default pro (pixel-match existing UI); localStorage persists
   const [createMode, setCreateMode] = useState<'simple' | 'pro'>('pro');
   useEffect(() => {
     try {
@@ -175,7 +236,7 @@ export default function DashboardCreatePage() {
     try { localStorage.setItem('qfmj-create-mode', m); } catch { /* ignore */ }
   };
   const [showDraftCompare, setShowDraftCompare] = useState(false);
-  // v2.18 P1.3: 试拍 1 镜端到端 modal
+  // v2.18 P1.3: 1-shot test-preview modal
   const [showPreview, setShowPreview] = useState(false);
   const [workspaceProject, setWorkspaceProject] = useState<Project | null>(null);
   const { showToast } = useToast();
@@ -193,9 +254,11 @@ export default function DashboardCreatePage() {
       setSelectedTemplate(template);
       setIdea(template.exampleIdea);
       // Set recommended style if it matches one of the presets
-      const matchedPreset = stylePresets.find(p => p.label === template.styleRecommendation || p.en === template.styleRecommendation);
+      const matchedPreset = stylePresets.find(p =>
+        p.en === template.styleRecommendation || STYLE_ZH[p.id] === template.styleRecommendation,
+      );
       if (matchedPreset) setStyle(matchedPreset.en);
-      // v2.18: 模板带 recommendedDuration / recommendedAspect / recommendedCamera 时自动填表单
+      // v2.18: auto-fill form when template has recommendedDuration / Aspect / Camera
       if (template.recommendedDuration && durationOptions.includes(`${template.recommendedDuration}s` as any)) {
         setDuration(`${template.recommendedDuration}s` as any);
       }
@@ -229,14 +292,14 @@ export default function DashboardCreatePage() {
           setIdea(data.idea);
           setUrlHint(null);
         } else {
-          setUrlHint('自动提取失败,请手动输入');
+          setUrlHint(w.urlExtractFailed || 'Auto-extract failed, please enter manually');
         }
       } else {
-        setUrlHint('自动提取失败,请手动输入');
+        setUrlHint(w.urlExtractFailed || 'Auto-extract failed, please enter manually');
       }
     } catch {
       clearTimeout(timer);
-      setUrlHint('自动提取失败,请手动输入');
+      setUrlHint(w.urlExtractFailed || 'Auto-extract failed, please enter manually');
     } finally {
       setUrlExtracting(false);
     }
@@ -245,11 +308,11 @@ export default function DashboardCreatePage() {
   const handleStartCreation = async () => {
     const validation = validateIdea(idea);
     if (!validation.valid) {
-      showToast({ title: validation.error || '输入无效', type: 'error' });
+      showToast({ title: validation.error || w.invalidInput || t.common.error, type: 'error' });
       return;
     }
 
-    // v2.15 G9: draftCount > 1 → 先弹草稿对比 modal, 用户选完再走完整流程
+    // v2.15 G9: draftCount > 1 → compare-drafts modal first, then full pipeline
     if (draftCount > 1) {
       setShowDraftCompare(true);
       return;
@@ -258,20 +321,20 @@ export default function DashboardCreatePage() {
     return runFullPipeline(idea);
   };
 
-  // v2.15 G9: 用户从对比卡选了一版草稿 → 把草稿的 synopsis + shots 拼成"准剧本",
-  // 作为新 idea 提交给 /api/create-stream — orchestrator 的 isFullScriptInput() 会
-  // 检测到结构化剧本特征, 走 parsedScript 适配模式, 编剧 agent 会基于此版做高质量改编。
+  // v2.15 G9: picked draft → stitch synopsis + shots into a quasi-script idea.
+  // /api/create-stream + isFullScriptInput() detect screenplay markers and
+  // adapt via parsedScript; Writer rewrites from this version.
   const handleDraftPicked = (draft: ScriptDraft) => {
     setShowDraftCompare(false);
     if (!draft.script) return;
     const lines: string[] = [];
-    lines.push(`第 1 章 ${draft.script.title || '(草稿)'}`);
+    lines.push(`${SCRIPT_FMT.chapter1} ${draft.script.title || SCRIPT_FMT.draft}`);
     lines.push('');
     if (draft.script.synopsis) lines.push(draft.script.synopsis);
     lines.push('');
     for (const sh of draft.script.shots || []) {
-      lines.push(`${sh.shotNumber}-1 ${sh.sceneDescription || '场景'} 日`);
-      if (sh.action) lines.push(`△画面：${sh.action}`);
+      lines.push(`${sh.shotNumber}-1 ${sh.sceneDescription || SCRIPT_FMT.scene} ${SCRIPT_FMT.day}`);
+      if (sh.action) lines.push(`${SCRIPT_FMT.actionPrefix}${sh.action}`);
       if (sh.dialogue && sh.characters?.[0]) {
         lines.push(`${sh.characters[0]}：${sh.dialogue}`);
       }
@@ -279,14 +342,13 @@ export default function DashboardCreatePage() {
     }
     const adapted = lines.join('\n');
     setIdea(adapted);
-    showToast({ title: `已采用草稿 #${draft.draftId.slice(-4)}, 进入完整创作流程`, type: 'success' });
-    // 立刻提交完整 pipeline (用 adapted 而非 setIdea 的异步值)
+    showToast({ title: (w.draftAdopted || 'Adopted draft #{id}, starting full pipeline').replace('{id}', draft.draftId.slice(-4)), type: 'success' });
+    // Submit immediately with adapted (setIdea is async)
     runFullPipeline(adapted);
   };
 
-  // v2.19 P0.2: opts.previewSeedImage — 试拍 modal "用这张图走全流程" 透下来的图,
-  // /api/create-stream 收到后 setPreviewSeedImage 注入到 orchestrator,
-  // 第 1 镜的 storyboard 渲染会直接复用它, 跳过对应 MJ 调用。
+  // v2.19 P0.2: opts.previewSeedImage — test-shot modal "use this image for full run".
+  // create-stream sets previewSeedImage on the orchestrator; shot 1 storyboard reuses it (skip MJ).
   const runFullPipeline = async (rawIdea: string, opts?: { previewSeedImage?: string }) => {
     const sanitizedIdea = sanitizeInput(rawIdea);
     const projectId = `proj-${Date.now()}`;
@@ -304,20 +366,20 @@ export default function DashboardCreatePage() {
     setAssets([]);
     setNodes(buildInitialNodes([]));
     setEdges(initialEdges);
-    // v12.x(#3 修复):清掉上一轮的制片人评分 / 评审历史 / agent 气泡,新任务不再残留旧分数
+    // v12.x(#3): clear prior producer score / review history / agent bubbles
     useProjectWorkspaceStore.getState().clearAgentOutputs();
     setIsProducing(true);
     setWorkspaceProject(project);
-    // v12.5.0(#4):登记全局「进行中任务」→ 切模块/刷新后仍可见 + 一键返回,不再「丢任务」
+    // v12.5.0(#4): register in-progress job so module switch / refresh can return to it
     useActiveGenerationStore.getState().start({ projectId, idea: sanitizedIdea });
 
     addChatMessage(AgentRole.WRITER, {
       id: `msg-sys-${Date.now()}`, projectId, agentRole: AgentRole.WRITER, role: 'assistant',
-      content: `收到创意：「${sanitizedIdea}」\n\n正在为你构思剧本、角色和分镜...`, createdAt: new Date().toISOString(),
+      content: (w.chatReceivedIdea || 'Got your idea: “{idea}”\n\nWriting script, characters, and boards...').replace('{idea}', sanitizedIdea), createdAt: new Date().toISOString(),
     });
 
     try {
-      // v12.145: 记住本次创作配置,下次自动恢复
+      // v12.145: remember this create config for next visit
       saveCreatePrefs({ style, aspect, cameraDefault, editStyle, scriptLanguage, sketchLock });
       const response = await fetch('/api/create-stream', {
         method: 'POST',
@@ -325,28 +387,27 @@ export default function DashboardCreatePage() {
         body: JSON.stringify({
           idea: sanitizedIdea, videoProvider, style, duration, aspect, projectId,
           templateId: selectedTemplate?.id,
-          // v2.12 Phase 1: 携带 1-3 角色锁脸;create-stream 会持久化到 projects.locked_characters,
-          // 并把第一个角色 imageUrl 同步到 projects.primary_character_ref(兜底现有单角色编排链路)
+          // v2.12 Phase 1: 1-3 locked faces; persist to locked_characters, first imageUrl → primary_character_ref
           lockedCharacters: lockedCharacters.length > 0 ? lockedCharacters : undefined,
-          // v2.14 P1.1: 全局默认镜头语言 id (CAMERA_LANGUAGE_PRESETS), 影响所有镜头的运镜默认值
+          // v2.14 P1.1: global camera-language id (CAMERA_LANGUAGE_PRESETS)
           cameraDefault: cameraDefault || undefined,
-          // v2.19 P0.2: 试拍图 → 第 1 镜首帧复用 (orchestrator 跳过 generateImage)
+          // v2.19 P0.2: test-shot → reuse as shot 1 first frame (skip generateImage)
           previewSeedImage: opts?.previewSeedImage || undefined,
-          // v9.5.6: 多参元素(角色/风格/场景/道具/...)— create-stream 经 bindElements 路由进 cref/sref/构图
+          // v9.5.6: multi-refs (cast/look/scene/prop/...) — bindElements → cref/sref/framing
           references: references.length ? references : undefined,
-          // v12.0.4: 一句指令调剪辑风格(空 → 默认中速)
+          // v12.0.4: one-line edit style (empty → mid-tempo)
           editStyle: editStyle.trim() || undefined,
-          // v12.134 issue #2: 显式选剧本语言('auto' → 后端按创意自动检测)
+          // v12.134 issue #2: explicit script language ('auto' → detect from idea)
           language: scriptLanguage !== 'auto' ? scriptLanguage : undefined,
-          // v12.143: 分镜草图锁(每镜先草图后锁构图,更可控但每镜多一次出图)
+          // v12.143: sketch lock (sketch then lock framing; +1 image per shot)
           sketchLock: sketchLock || undefined,
         }),
       });
-      if (!response.ok) throw new Error('创作失败');
+      if (!response.ok) throw new Error(w.createFailed || 'Creation failed');
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      if (!reader) throw new Error('无法读取响应流');
+      if (!reader) throw new Error(w.streamReadFailed || 'Could not read response stream');
 
       while (true) {
         const { done, value } = await reader.read();
@@ -361,7 +422,7 @@ export default function DashboardCreatePage() {
         }
       }
 
-      // v9.7.9:一键起片携带的音色覆盖 → 新项目已建好,落到该项目(下次合成配音按此音色)
+      // v9.7.9: pending voice overrides from one-tap start → apply now that the project exists
       try {
         const pendingVO = sessionStorage.getItem('qfmj-pending-voice-overrides');
         if (pendingVO) {
@@ -373,22 +434,22 @@ export default function DashboardCreatePage() {
             }).catch(() => {});
           }
         }
-      } catch { /* 音色覆盖应用失败不影响成片 */ }
+      } catch { /* voice-override apply failure must not block the film */ }
     } catch (error) {
-      showToast({ title: error instanceof Error ? error.message : '创作失败', type: 'error' });
+      showToast({ title: error instanceof Error ? error.message : (w.createFailed || 'Creation failed'), type: 'error' });
     } finally {
       setIsProducing(false);
-      useActiveGenerationStore.getState().finish(); // v12.5.0(#4):任务结束,清全局指示
+      useActiveGenerationStore.getState().finish(); // v12.5.0(#4): job done, clear global indicator
     }
   };
 
-  // ── SSE 事件处理 ──
+  // ── SSE handlers ──
   const handleSSEEvent = (event: any, projectId: string) => {
     const { type, data } = event;
     const ts = new Date().toISOString();
     const s = useProjectWorkspaceStore.getState();
 
-    // v12.5.0(#4):里程碑事件 → 更新全局指示条阶段名(切模块也能看到进度)
+    // v12.5.0(#4): milestone → update global phase label (visible across modules)
     const phaseMap: Record<string, string> = {
       plan: t.product.phasePlan, script: t.product.phaseScript, characters: t.product.phaseCharacters,
       scenes: t.product.phaseScenes, storyboardPlans: t.product.phaseStoryboardPlans,
@@ -404,14 +465,14 @@ export default function DashboardCreatePage() {
       case 'projectId':
         break;
 
-      // Agent 吐槽气泡
+      // Agent talk bubble
       case 'agentTalk': {
         const role = data.role as AgentRole;
         s.addChatMessage(role, { id: `msg-talk-${Date.now()}-${Math.random()}`, projectId, agentRole: role, role: 'assistant', content: data.text, createdAt: ts });
         break;
       }
 
-      // LLM 心跳 — 推进当前 running 节点的进度
+      // LLM heartbeat — nudge the running node's progress
       case 'heartbeat': {
         const nodes = s.nodes;
         const runningNode = nodes.find(n => (n.data as any)?.status === 'running');
@@ -424,10 +485,10 @@ export default function DashboardCreatePage() {
         break;
       }
 
-      // MJ 进度
-      // v2.11 #4: 单图百分比写到 imageProgress 字段, 不再覆盖节点的 stage-level progress.
-      // 节点 progress 由 orchestrator 的 this.update(role, { progress }) 单源聚合 (i+1/total),
-      // mjProgress/videoProgress 只反映"当前正在出的那一张图自身的进度"
+      // MJ progress
+      // v2.11 #4: per-image % goes to imageProgress, do not overwrite stage-level progress.
+      // Node progress is aggregated by orchestrator this.update(role, { progress }) (i+1/total).
+      // mjProgress/videoProgress only reflect the image currently rendering.
       case 'mjProgress': {
         const pctMatch = (data.progress || '').match(/(\d+)/);
         if (pctMatch) {
@@ -436,19 +497,19 @@ export default function DashboardCreatePage() {
           if (runningNode) {
             s.updateNodeData(runningNode.id, {
               imageProgress: parseInt(pctMatch[1]),
-              imageProgressLabel: data.label || '当前图像',
+              imageProgressLabel: data.label || w.currentImage || 'Current image',
             } as any);
           }
         }
         break;
       }
 
-      // Veo 视频生成进度（每个镜头独立进度）
-      // 同样: 写到镜头资产 + 节点的 currentShotProgress 字段, 不动 stage-level progress
+      // Veo video progress (per shot)
+      // Same: write shot asset + node currentShotProgress, leave stage-level progress alone
       case 'videoProgress': {
         const progress = typeof data.progress === 'number' ? data.progress : 0;
         s.updateNodeData('node-video', { currentShotProgress: progress, status: 'running' } as any);
-        // 更新对应镜头视频资产的生成状态
+        // Update that shot's video-asset generate status
         if (data.shotNumber) {
           const va = s.assets.find(a => a.type === 'video' && a.shotNumber === data.shotNumber);
           if (va) {
@@ -460,41 +521,41 @@ export default function DashboardCreatePage() {
 
       case 'status': {
         const msg: string = data.message || '';
-        if (msg.includes('导演') && msg.includes('分析')) {
+        if (msg.includes(SSE.director) && msg.includes(SSE.analyze)) {
           s.updateNodeData('node-director', { status: 'running', progress: 50 });
           s.updateNodeData('node-writer', { status: 'running', progress: 10 });
           s.setActiveAgent(AgentRole.WRITER);
-        } else if (msg.includes('编剧') && msg.includes('剧本')) {
+        } else if (msg.includes(SSE.writer) && msg.includes(SSE.script)) {
           s.updateNodeData('node-director', { status: 'completed', progress: 100 });
           s.updateNodeData('node-writer', { status: 'running', progress: 40 });
           s.setActiveAgent(AgentRole.WRITER);
-        } else if (msg.includes('角色设计师')) {
+        } else if (msg.includes(SSE.charDesigner)) {
           s.updateNodeData('node-writer', { status: 'completed', progress: 100 });
           s.updateNodeData('node-character', { status: 'running', progress: 20 });
           s.setActiveAgent(AgentRole.CHARACTER_DESIGNER);
-        } else if (msg.includes('场景设计师')) {
+        } else if (msg.includes(SSE.sceneDesigner)) {
           s.updateNodeData('node-character', { status: 'completed', progress: 100 });
           s.updateNodeData('node-scene', { status: 'running', progress: 20 });
           s.setActiveAgent(AgentRole.SCENE_DESIGNER);
-        } else if (msg.includes('分镜师')) {
+        } else if (msg.includes(SSE.storyboarder)) {
           s.updateNodeData('node-scene', { status: 'completed', progress: 100 });
           s.updateNodeData('node-storyboard', { status: 'running', progress: 20 });
           s.setActiveAgent(AgentRole.STORYBOARD);
-        } else if (msg.includes('视频') && msg.includes('生成')) {
+        } else if (msg.includes(SSE.video) && msg.includes(SSE.generate)) {
           s.updateNodeData('node-storyboard', { status: 'completed', progress: 100 });
           s.updateNodeData('node-video', { status: 'running', progress: 20 });
           s.setActiveAgent(AgentRole.VIDEO_PRODUCER);
-        } else if (msg.includes('剪辑师') || msg.includes('剪辑合成') || msg.includes('配乐')) {
+        } else if (msg.includes(SSE.editor) || msg.includes(SSE.editMux) || msg.includes(SSE.score)) {
           s.updateNodeData('node-video', { status: 'completed', progress: 100 });
           s.updateNodeData('node-editor', { status: 'running', progress: 30 });
           s.setActiveAgent(AgentRole.EDITOR);
-        } else if (msg.includes('制片人') && msg.includes('审核')) {
+        } else if (msg.includes(SSE.producer) && msg.includes(SSE.review)) {
           s.updateNodeData('node-editor', { status: 'completed', progress: 100 });
           s.updateNodeData('node-producer', { status: 'running', progress: 30 });
           s.setActiveAgent(AgentRole.PRODUCER);
-        } else if (msg.includes('自动优化')) {
+        } else if (msg.includes(SSE.autoOpt)) {
           s.updateNodeData('node-producer', { status: 'reviewing', progress: 50 });
-        } else if (msg.includes('二次审核')) {
+        } else if (msg.includes(SSE.secondReview)) {
           s.updateNodeData('node-producer', { status: 'running', progress: 80 });
           s.setActiveAgent(AgentRole.PRODUCER);
         }
@@ -503,15 +564,15 @@ export default function DashboardCreatePage() {
 
       case 'plan': {
         s.updateNodeData('node-writer', { status: 'running', progress: 30 });
-        s.addAsset({ id: `asset-script-${Date.now()}`, projectId, type: 'script', name: '剧本', data: { synopsis: '', genre: data.genre, style: data.style, shots: [] }, mediaUrls: [], version: 1, createdAt: ts, updatedAt: ts });
+        s.addAsset({ id: `asset-script-${Date.now()}`, projectId, type: 'script', name: t.product.tabScript, data: { synopsis: '', genre: data.genre, style: data.style, shots: [] }, mediaUrls: [], version: 1, createdAt: ts, updatedAt: ts });
         (data.characters || []).forEach((c: any, i: number) => {
           s.addAsset({ id: `asset-char-${Date.now()}-${i}`, projectId, type: 'character', name: c.name, data: { description: c.description }, mediaUrls: [], version: 1, createdAt: ts, updatedAt: ts });
         });
         (data.scenes || []).forEach((sc: any, i: number) => {
-          s.addAsset({ id: `asset-scene-${Date.now()}-${i}`, projectId, type: 'scene', name: sc.name || sc.location || `场景${i + 1}`, data: { description: sc.description, location: sc.location }, mediaUrls: [], version: 1, createdAt: ts, updatedAt: ts });
+          s.addAsset({ id: `asset-scene-${Date.now()}-${i}`, projectId, type: 'scene', name: sc.name || sc.location || (w.assetSceneN || 'Scene {n}').replace('{n}', String(i + 1)), data: { description: sc.description, location: sc.location }, mediaUrls: [], version: 1, createdAt: ts, updatedAt: ts });
         });
         refreshNodeAssets();
-        s.addChatMessage(AgentRole.WRITER, { id: `msg-plan-${Date.now()}`, projectId, agentRole: AgentRole.WRITER, role: 'assistant', content: `导演已制定计划：${data.genre}风格，${data.characters?.length || 0}个角色，${data.scenes?.length || 0}个场景。`, createdAt: ts });
+        s.addChatMessage(AgentRole.WRITER, { id: `msg-plan-${Date.now()}`, projectId, agentRole: AgentRole.WRITER, role: 'assistant', content: (w.chatPlanReady || 'Director planned: {genre} look, {chars} characters, {scenes} scenes.').replace('{genre}', data.genre).replace('{chars}', String(data.characters?.length || 0)).replace('{scenes}', String(data.scenes?.length || 0)), createdAt: ts });
         break;
       }
 
@@ -520,21 +581,21 @@ export default function DashboardCreatePage() {
         if (sa) s.updateAsset(sa.id, { data: { ...sa.data, synopsis: data.synopsis, title: data.title, shots: data.shots } });
         s.updateNodeData('node-writer', { status: 'completed', progress: 100 });
         refreshNodeAssets();
-        s.addChatMessage(AgentRole.WRITER, { id: `msg-script-${Date.now()}`, projectId, agentRole: AgentRole.WRITER, role: 'assistant', content: `剧本「${data.title}」创作完成！\n\n${data.synopsis}\n\n共 ${data.shots?.length || 0} 个镜头。`, createdAt: ts });
+        s.addChatMessage(AgentRole.WRITER, { id: `msg-script-${Date.now()}`, projectId, agentRole: AgentRole.WRITER, role: 'assistant', content: (w.chatScriptDone || 'Script “{title}” is ready!\n\n{synopsis}\n\n{n} shots.').replace('{title}', data.title).replace('{synopsis}', data.synopsis).replace('{n}', String(data.shots?.length || 0)), createdAt: ts });
         break;
       }
 
       case 'characters': {
         (data || []).forEach((c: any) => {
           const ca = s.assets.find(a => a.type === 'character' && a.name === c.character);
-          // 允许 data: URI（mockSvg 占位图）在 UI 上显示，让卡片至少有视觉反馈
-          // 持久化层（route.ts saveAsset）已有独立 data: 过滤，不会写入 DB
+          // Allow data: URIs (mockSvg placeholders) so cards have a visual
+          // Persistence (route.ts saveAsset) already filters data: and will not write them to DB
           const mediaUrls = c.imageUrl ? [c.imageUrl] : [];
           if (ca) s.updateAsset(ca.id, { mediaUrls });
         });
         s.updateNodeData('node-character', { status: 'completed', progress: 100 });
         refreshNodeAssets();
-        s.addChatMessage(AgentRole.CHARACTER_DESIGNER, { id: `msg-chars-${Date.now()}`, projectId, agentRole: AgentRole.CHARACTER_DESIGNER, role: 'assistant', content: `${data?.length || 0}个角色设计完成！`, createdAt: ts });
+        s.addChatMessage(AgentRole.CHARACTER_DESIGNER, { id: `msg-chars-${Date.now()}`, projectId, agentRole: AgentRole.CHARACTER_DESIGNER, role: 'assistant', content: (w.chatCharsDone || '{n} character designs ready!').replace('{n}', String(data?.length || 0)), createdAt: ts });
         break;
       }
 
@@ -546,49 +607,49 @@ export default function DashboardCreatePage() {
         });
         s.updateNodeData('node-scene', { status: 'completed', progress: 100 });
         refreshNodeAssets();
-        s.addChatMessage(AgentRole.SCENE_DESIGNER, { id: `msg-scenes-${Date.now()}`, projectId, agentRole: AgentRole.SCENE_DESIGNER, role: 'assistant', content: `${data?.length || 0}个场景概念图设计完成！`, createdAt: ts });
+        s.addChatMessage(AgentRole.SCENE_DESIGNER, { id: `msg-scenes-${Date.now()}`, projectId, agentRole: AgentRole.SCENE_DESIGNER, role: 'assistant', content: (w.chatScenesDone || '{n} scene concepts ready!').replace('{n}', String(data?.length || 0)), createdAt: ts });
         break;
       }
 
       case 'storyboardPlans': {
-        // 第1阶段：纯文本分镜描述（暂无图片）
+        // Phase 1: text-only board descriptions (no images yet)
         (data || []).forEach((sb: any, i: number) => {
           const sn = sb.shotNumber || i + 1;
-          s.addAsset({ id: `asset-sb-${Date.now()}-${i}`, projectId, type: 'storyboard', name: `镜头 ${sn}`, data: { description: sb.prompt, planData: (sb as any).planData, duration: 10 }, mediaUrls: [], shotNumber: sn, version: 1, createdAt: ts, updatedAt: ts });
+          s.addAsset({ id: `asset-sb-${Date.now()}-${i}`, projectId, type: 'storyboard', name: t.product.shotN.replace('{n}', String(sn)), data: { description: sb.prompt, planData: (sb as any).planData, duration: 10 }, mediaUrls: [], shotNumber: sn, version: 1, createdAt: ts, updatedAt: ts });
         });
         s.updateNodeData('node-storyboard', { status: 'running', progress: 50 });
         refreshNodeAssets();
-        s.addChatMessage(AgentRole.STORYBOARD, { id: `msg-sbplan-${ts}`, projectId, agentRole: AgentRole.STORYBOARD, role: 'assistant', content: `${data?.length || 0}个分镜描述规划完成，正在统一渲染分镜图...`, createdAt: ts });
+        s.addChatMessage(AgentRole.STORYBOARD, { id: `msg-sbplan-${ts}`, projectId, agentRole: AgentRole.STORYBOARD, role: 'assistant', content: (w.chatBoardsPlanned || '{n} board descriptions planned, rendering boards...').replace('{n}', String(data?.length || 0)), createdAt: ts });
         break;
       }
 
       case 'storyboardSketch': {
-        // v12.144(草图锁全片模式):每镜构图草图 → 存资产,分镜面板显示草图缩略
+        // v12.144 (full-film sketch lock): per-shot framing sketch → asset; boards panel shows thumb
         const sk = data as { shotNumber?: number; sketchUrl?: string };
         if (sk?.shotNumber && sk?.sketchUrl) {
-          s.addAsset({ id: `asset-sksk-${Date.now()}-${sk.shotNumber}`, projectId, type: 'storyboard-sketch', name: `Shot ${sk.shotNumber} 草图`, data: {}, mediaUrls: [sk.sketchUrl], shotNumber: sk.shotNumber, version: 1, createdAt: ts, updatedAt: ts });
+          s.addAsset({ id: `asset-sksk-${Date.now()}-${sk.shotNumber}`, projectId, type: 'storyboard-sketch', name: (w.assetSketchN || 'Shot {n} sketch').replace('{n}', String(sk.shotNumber)), data: {}, mediaUrls: [sk.sketchUrl], shotNumber: sk.shotNumber, version: 1, createdAt: ts, updatedAt: ts });
           refreshNodeAssets();
         }
         break;
       }
 
       case 'storyboards': {
-        // 第2阶段：渲染完成的分镜图，更新已有的分镜资产
+        // Phase 2: rendered boards — update existing storyboard assets
         const existing = s.assets.filter(a => a.type === 'storyboard');
         (data || []).forEach((sb: any, i: number) => {
           const sn = sb.shotNumber || i + 1;
           const ex = existing.find(a => a.shotNumber === sn);
           const sbMediaUrls = sb.imageUrl ? [sb.imageUrl] : [];
           if (ex) { s.updateAsset(ex.id, { mediaUrls: sbMediaUrls, data: { ...ex.data, description: sb.prompt } }); }
-          else { s.addAsset({ id: `asset-sb-${Date.now()}-${i}`, projectId, type: 'storyboard', name: `镜头 ${sn}`, data: { description: sb.prompt, duration: 10 }, mediaUrls: sbMediaUrls, shotNumber: sn, version: 1, createdAt: ts, updatedAt: ts }); }
+          else { s.addAsset({ id: `asset-sb-${Date.now()}-${i}`, projectId, type: 'storyboard', name: t.product.shotN.replace('{n}', String(sn)), data: { description: sb.prompt, duration: 10 }, mediaUrls: sbMediaUrls, shotNumber: sn, version: 1, createdAt: ts, updatedAt: ts }); }
         });
         s.updateNodeData('node-storyboard', { status: 'completed', progress: 100 });
         refreshNodeAssets();
-        s.addChatMessage(AgentRole.STORYBOARD, { id: `msg-sb-${ts}-${Math.random()}`, projectId, agentRole: AgentRole.STORYBOARD, role: 'assistant', content: `${data?.length || 0}个分镜图渲染完成！角色/场景/画风一致性已确保 ✅`, createdAt: ts });
+        s.addChatMessage(AgentRole.STORYBOARD, { id: `msg-sb-${ts}-${Math.random()}`, projectId, agentRole: AgentRole.STORYBOARD, role: 'assistant', content: (w.chatBoardsDone || '{n} boards rendered! Cast/scene/look consistency locked ✅').replace('{n}', String(data?.length || 0)), createdAt: ts });
         break;
       }
 
-      // 逐条视频完成（实时推送，每生成一段就展示一段）
+      // Per-clip video done (live push — show each clip as it finishes)
       case 'videoClip': {
         const v = data;
         const sn = v.shotNumber || 1;
@@ -596,46 +657,49 @@ export default function DashboardCreatePage() {
         if (existing) {
           s.updateAsset(existing.id, { mediaUrls: v.videoUrl ? [v.videoUrl] : [], data: { duration: v.duration || 5, status: 'completed' } });
         } else {
-          s.addAsset({ id: `asset-video-${Date.now()}-${sn}`, projectId, type: 'video', name: `视频 ${sn}`, data: { duration: v.duration || 5, status: 'completed' }, mediaUrls: v.videoUrl ? [v.videoUrl] : [], shotNumber: sn, version: 1, createdAt: ts, updatedAt: ts });
+          s.addAsset({ id: `asset-video-${Date.now()}-${sn}`, projectId, type: 'video', name: (w.assetVideoN || 'Video {n}').replace('{n}', String(sn)), data: { duration: v.duration || 5, status: 'completed' }, mediaUrls: v.videoUrl ? [v.videoUrl] : [], shotNumber: sn, version: 1, createdAt: ts, updatedAt: ts });
         }
         refreshNodeAssets();
         break;
       }
 
       case 'videos': {
-        // 全部视频生成完成（最终确认，确保所有视频都已更新）
+        // All videos done (final confirm — every clip updated)
         const existingVids = s.assets.filter(a => a.type === 'video');
         (data || []).forEach((v: any, i: number) => {
           const sn = v.shotNumber || i + 1;
           const ex = existingVids.find(a => a.shotNumber === sn);
           if (ex) { s.updateAsset(ex.id, { mediaUrls: v.videoUrl ? [v.videoUrl] : [], data: { duration: v.duration || 5, status: 'completed' } }); }
-          else { s.addAsset({ id: `asset-video-${Date.now()}-${i}`, projectId, type: 'video', name: `视频 ${sn}`, data: { duration: v.duration || 5, status: 'completed' }, mediaUrls: v.videoUrl ? [v.videoUrl] : [], shotNumber: sn, version: 1, createdAt: ts, updatedAt: ts }); }
+          else { s.addAsset({ id: `asset-video-${Date.now()}-${i}`, projectId, type: 'video', name: (w.assetVideoN || 'Video {n}').replace('{n}', String(sn)), data: { duration: v.duration || 5, status: 'completed' }, mediaUrls: v.videoUrl ? [v.videoUrl] : [], shotNumber: sn, version: 1, createdAt: ts, updatedAt: ts }); }
         });
         s.updateNodeData('node-video', { status: 'completed', progress: 100 });
         refreshNodeAssets();
-        s.addChatMessage(AgentRole.VIDEO_PRODUCER, { id: `msg-vid-${ts}-${Math.random()}`, projectId, agentRole: AgentRole.VIDEO_PRODUCER, role: 'assistant', content: `${data?.length || 0}个视频片段全部生成完成！如需重新生成，请告诉我镜头编号和时长。`, createdAt: ts });
+        s.addChatMessage(AgentRole.VIDEO_PRODUCER, { id: `msg-vid-${ts}-${Math.random()}`, projectId, agentRole: AgentRole.VIDEO_PRODUCER, role: 'assistant', content: (w.chatVideosDone || '{n} video clips ready! Ask for a shot number and duration to regenerate.').replace('{n}', String(data?.length || 0)), createdAt: ts });
         break;
       }
 
-      // v10.6.2: 节奏/钩子审计(Writer 后首发,Editor BGM 析拍后回填重推)→ 并入 script 资产
+      // v10.6.2: pacing/hook audit (after Writer; Editor BGM re-push) → merge onto script asset
       case 'pacingAudit': {
         const sa = s.assets.find(a => a.type === 'script');
         if (sa) s.updateAsset(sa.id, { data: { ...sa.data, pacingReport: data } });
         break;
       }
-      // v12.340:连续性主表。editor-agent 从 v12.16.0 起就 emit 这个事件,而这里
-      // **一直没有对应 case** —— 事件进了 switch 的 default 被静默丢弃。跨镜光照漂移、
-      // 画幅/帧率不一致这些出片前该看见的隐患,算了却从不呈现给用户。
-      // 落法与 pacingAudit 同源:挂在 script 资产的 data 上,由既有资产面板消费。
+      // v12.340: continuity sheet. editor-agent has emitted this since v12.16.0
+      // but this switch had no case — events fell through default and were dropped.
+      // Cross-shot lighting / aspect / fps issues were computed but never shown.
+      // Same as pacingAudit: hang on script asset data for the existing panel.
       case 'continuitySheet': {
         const sa = s.assets.find(a => a.type === 'script');
         if (sa) s.updateAsset(sa.id, { data: { ...sa.data, continuitySheet: data } });
-        // 校验不过时在对话里点名说清楚 —— agentTalk 只说了「发现 N 处」,没说是哪几处
+        // Spell out failing checks in chat — agentTalk only said "found N", not which
         const issues: string[] = (data as any)?.check?.issues || [];
         if (issues.length) {
           s.addChatMessage(AgentRole.EDITOR, {
             id: `msg-cont-${Date.now()}`, projectId, agentRole: AgentRole.EDITOR,
-            role: 'agent', content: `连续性主表:${issues.length} 处隐患 —— ${issues.slice(0, 3).join(';')}${issues.length > 3 ? ` 等 ${issues.length} 处` : ''}`,
+            role: 'agent', content: (w.chatContinuityIssues || 'Continuity sheet: {n} issues — {list}{more}')
+              .replace('{n}', String(issues.length))
+              .replace('{list}', issues.slice(0, 3).join(';'))
+              .replace('{more}', issues.length > 3 ? (w.chatContinuityMore || ' and {n} more').replace('{n}', String(issues.length)) : ''),
             timestamp: new Date().toISOString(),
           } as any);
         }
@@ -645,7 +709,7 @@ export default function DashboardCreatePage() {
         s.updateNodeData('node-editor', { status: 'completed', progress: 100, editResult: data } as any);
         refreshNodeAssets();
         s.addChatMessage(AgentRole.EDITOR, { id: `msg-edit-${Date.now()}`, projectId, agentRole: AgentRole.EDITOR, role: 'assistant',
-          content: `剪辑完成！${data.videoCount}个镜头，总时长${data.totalDuration}秒 ✂️`, createdAt: ts });
+          content: (w.chatEditDone || 'Edit done! {n} shots, {sec}s total ✂️').replace('{n}', String(data.videoCount)).replace('{sec}', String(data.totalDuration)), createdAt: ts });
         break;
       }
 
@@ -657,7 +721,12 @@ export default function DashboardCreatePage() {
         const score = data.overallScore || 0;
         const emoji = score >= 80 ? '👍' : score >= 70 ? '🤔' : '😤';
         s.addChatMessage(AgentRole.PRODUCER, { id: `msg-rev-${ts}-${Math.random()}`, projectId, agentRole: AgentRole.PRODUCER, role: 'assistant',
-          content: `审核完成！综合评分：${score}/100 ${emoji}\n\n${data.summary}\n\n${data.items?.length ? `发现 ${data.items.length} 个改进建议。` : '没有需要改进的地方。'}${data.passed ? '\n\n✅ 审核通过！' : '\n\n⚠️ 未通过，正在自动优化...'}`, createdAt: ts });
+          content: (w.chatReviewDone || 'Review done! Score: {score}/100 {emoji}\n\n{summary}\n\n{items}{pass}')
+            .replace('{score}', String(score))
+            .replace('{emoji}', emoji)
+            .replace('{summary}', data.summary)
+            .replace('{items}', data.items?.length ? (w.chatReviewItems || 'Found {n} suggestions.').replace('{n}', String(data.items.length)) : (w.chatReviewNone || 'Nothing to improve.'))
+            .replace('{pass}', data.passed ? (w.chatReviewPass || '\n\n✅ Review passed!') : (w.chatReviewFail || '\n\n⚠️ Did not pass, auto-optimizing...')), createdAt: ts });
         break;
       }
 
@@ -665,21 +734,21 @@ export default function DashboardCreatePage() {
         s.updateNodeData('node-producer', { status: 'completed', progress: 100 });
         refreshNodeAssets();
         s.addChatMessage(AgentRole.PRODUCER, { id: `msg-done-${Date.now()}`, projectId, agentRole: AgentRole.PRODUCER, role: 'assistant',
-          content: '创作流程全部完成！所有资产已保存到项目中。\n\n你可以在「我的资产」中查看已确认的数字资产，或继续和各 Agent 对话进行调整。', createdAt: ts });
+          content: w.chatComplete || 'Pipeline finished! All assets saved.\n\nOpen My Assets for confirmed assets, or keep chatting with agents to adjust.', createdAt: ts });
         break;
       }
 
       case 'pipelineError': {
-        // 非致命错误,某个步骤失败但流程继续;支持"重试此步"
+        // Non-fatal: a step failed but the pipeline continues; support "retry this step"
         const { code, userMsg, retryable, stage, details } = data || {};
         const shotNumber = details?.shotNumber;
         showToast({
-          title: userMsg || '步骤失败',
-          description: `[${code || 'UNKNOWN'}] 阶段:${stage || '-'}`,
+          title: userMsg || w.stepFailed || 'Step failed',
+          description: `[${code || 'UNKNOWN'}] ${(w.stageLabel || 'stage:{stage}').replace('{stage}', stage || '-')}`,
           type: 'warning',
           duration: 8000,
           action: retryable && shotNumber && projectId ? {
-            label: `重试镜头 ${shotNumber}`,
+            label: (w.retryShot || 'Retry shot {n}').replace('{n}', String(shotNumber)),
             onClick: () => {
               fetch(`/api/projects/${projectId}/regenerate-shot`, {
                 method: 'POST',
@@ -693,12 +762,12 @@ export default function DashboardCreatePage() {
       }
 
       case 'error': {
-        const title = data.userMsg || data.message || '创作出错';
+        const title = data.userMsg || data.message || w.createError || 'Creation error';
         const desc = data.code ? `[${data.code}] ${data.stage || ''}` : undefined;
         showToast({
           title, description: desc, type: 'error', duration: 8000,
           action: data.retryable ? {
-            label: '重新开始当前步骤',
+            label: w.retryCurrentStep || 'Restart current step',
             onClick: () => window.location.reload(),
           } : undefined,
         });
@@ -714,7 +783,7 @@ export default function DashboardCreatePage() {
       'node-writer': ['script', 'character'],
       'node-character': ['character'],
       'node-scene': ['scene'],
-      'node-storyboard': ['storyboard', 'storyboard-sketch'], // v12.144 面板含草图
+      'node-storyboard': ['storyboard', 'storyboard-sketch'], // v12.144 panel includes sketches
       'node-video': ['video'],
       'node-editor': ['timeline', 'final_video', 'music'],
     };
@@ -723,19 +792,19 @@ export default function DashboardCreatePage() {
     }
   };
 
-  // ── 已进入创作模式 ──
+  // ── Already in production mode ──
   if (workspaceProject) {
     return <CreationWorkspace project={workspaceProject} />;
   }
 
-  // ── 创意输入入口 (v2.13 cinema redesign) ──
-  // 影院仪表盘 + 工作室软件密度 — 不抄 oiioii 的粉色 / blob mascot / 点阵画布
+  // ── Idea entry (v2.13 cinema redesign) ──
+  // Cinema dashboard + studio density — not oiioii pink / blob mascot / dot canvas
   const ideaCharCount = idea.trim().length;
   const isReady = ideaCharCount >= 10;
-  const totalDurationSec = parseFloat(duration.replace(/[^\d.]/g, '')) * 6; // 估 6 镜
+  const totalDurationSec = parseFloat(duration.replace(/[^\d.]/g, '')) * 6; // ~6 shots
   return (
     <div className="cinema-page -mx-[5vw] -my-6 px-[5vw] py-6">
-      {/* v2.15 G9: 草稿对比 modal — draftCount > 1 且用户点 ROLL 时弹出 */}
+      {/* v2.15 G9: draft-compare modal — shown when draftCount > 1 and user hits ROLL */}
       {showDraftCompare && (
         <ScriptDraftsCompare
           idea={idea}
@@ -746,10 +815,9 @@ export default function DashboardCreatePage() {
         />
       )}
 
-      {/* v2.18 P1.3: 试拍 modal — 1 镜端到端预览 */}
-      {/* v2.19 P0.2: seed 接到 runFullPipeline 直接走 — 不再过 handleStartCreation
-          (handleStartCreation 会重置很多状态, 也可能弹 draft compare modal, 而试拍场景
-          用户已经做完选择, 直接进 pipeline 即可) */}
+      {/* v2.18 P1.3: test-shot modal — 1-shot end-to-end preview */}
+      {/* v2.19 P0.2: seed goes straight to runFullPipeline — skip handleStartCreation
+          (that path resets state and may open draft-compare; test-shot already chose) */}
       {showPreview && (
         <PreviewShotModal
           idea={idea}
@@ -759,7 +827,7 @@ export default function DashboardCreatePage() {
           onAccept={(seed) => {
             setShowPreview(false);
             if (seed?.imageUrl) {
-              showToast({ title: `已复用试拍图作为第 1 镜首帧, 进入完整创作`, type: 'success' });
+              showToast({ title: w.previewSeeded || 'Reused test-shot as shot 1 first frame, starting full pipeline', type: 'success' });
               runFullPipeline(idea, { previewSeedImage: seed.imageUrl });
             } else {
               handleStartCreation();
@@ -769,24 +837,24 @@ export default function DashboardCreatePage() {
         />
       )}
 
-      {/* v10.1.2: 演示模式提示 — 无图像/视频引擎 key 时,告知产出为占位/示意 + 指引启用 */}
+      {/* v10.1.2: demo banner — no image/video engine key → placeholder + how to enable */}
       <DemoModeBanner />
-      {/* v10.5.3: 首跑三步引导(写创意→选风格→ROLL);完成/跳过后不再弹 */}
+      {/* v10.5.3: first-run 3-step guide (idea → look → ROLL); hide after done/skip */}
       <FirstRunGuide />
 
-      {/* ── 顶部:场记板 (Slate) 形式标题 + Action — 替代单调 h2 ── */}
+      {/* ── Top: slate title + actions (instead of a flat h2) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-start mb-6">
         <SlateCard
-          title="创作工坊"
+          title={t.sidebar.workshop}
           scene="01"
           take={ideaCharCount > 0 ? String(Math.floor(ideaCharCount / 50) + 1).padStart(2, '0') : '—'}
           director="ChrisChen667788"
-          notes="从一句创意到完整短剧 — 设定文本 · 角色 · 风格 · 时长后开机"
+          notes={w.slateNotes || 'From one idea to a full short — set copy, cast, look, and duration, then ROLL'}
         />
         <div className="flex flex-col gap-2 items-stretch sm:items-end">
-          {/* v10.5.3: 简易/专业开关 —— 简易只留「创意→风格→时长画幅→ROLL」主干 */}
-          <div className="inline-flex self-stretch sm:self-end rounded-lg border border-[var(--cinema-border-hi)] overflow-hidden" role="group" aria-label="创作模式">
-            {([['simple', '简易'], ['pro', '专业']] as const).map(([m, label]) => (
+          {/* v10.5.3: simple/pro switch — simple keeps idea → look → duration/aspect → ROLL */}
+          <div className="inline-flex self-stretch sm:self-end rounded-lg border border-[var(--cinema-border-hi)] overflow-hidden" role="group" aria-label={w.createModeAria || 'Creation mode'}>
+            {([['simple', w.modeSimple || 'Simple'], ['pro', w.modePro || 'Pro']] as const).map(([m, label]) => (
               <button
                 key={m}
                 type="button"
@@ -802,15 +870,15 @@ export default function DashboardCreatePage() {
               </button>
             ))}
           </div>
-          {/* v2.18 P1.3: 试拍按钮 — 30-60s 出 1 镜让用户先看 vibe 再决定走全流程 */}
+          {/* v2.18 P1.3: test-shot — 30-60s for 1 shot so user sees vibe before full run */}
           <button
             onClick={() => setShowPreview(true)}
             disabled={!isReady}
             className="cinema-btn !px-4 !py-2 !text-[12px] inline-flex items-center justify-center gap-1.5 disabled:opacity-40 whitespace-nowrap"
-            title={isReady ? '生成 1 张图 + 5s 视频, 30-60s, 不消耗完整 pipeline 算力' : '至少输入 10 个字符'}
+            title={isReady ? (w.previewShotTitle || '1 image + 5s video, 30–60s, no full pipeline') : (w.needTenChars || 'Enter at least 10 characters')}
           >
             <FilmSlate className="w-3.5 h-3.5" weight="duotone" />
-            试拍 1 镜
+            {w.previewShot || 'Test shot ×1'}
           </button>
           <MovingBorderButton
             data-guide="roll"
@@ -825,30 +893,30 @@ export default function DashboardCreatePage() {
             className={`cinema-btn cinema-btn-primary !px-6 !py-3 !text-[13px] whitespace-nowrap ${
               !isReady ? 'opacity-100' : ''
             }`}
-            title={isReady ? '进入创作工坊' : '至少输入 10 个字符'}
+            title={isReady ? (w.enterWorkshop || t.sidebar.workshop) : (w.needTenChars || 'Enter at least 10 characters')}
           >
             <span className="inline-flex items-center gap-1.5">
-              {isReady ? <><Play size={13} weight="fill" /> 开机 · ROLL</> : <><Pencil size={13} /> 待输入创意</>}
+              {isReady ? <><Play size={13} weight="fill" /> {w.rollReady || 'ROLL'}</> : <><Pencil size={13} /> {w.awaitingIdea || 'Awaiting idea'}</>}
             </span>
           </MovingBorderButton>
-          {/* v8.3 P5: 创意生成器并入此处 (不再独立 nav 模块) — 结构化导演级提示词 + 影片/LUT/导演预设 */}
+          {/* v8.3 P5: idea generator lives here (no standalone nav) — director prompts + look/LUT/camera */}
           <Link
             href="/dashboard/master-prompt"
             className="text-[11px] text-[var(--cinema-text-2)] hover:text-[var(--cinema-amber)] transition-colors inline-flex items-center justify-end gap-1 whitespace-nowrap"
-            title="结构化导演级提示词 · 影片 look / LUT / 导演运镜预设 · 专业术语表"
+            title={w.noInspirationTitle || 'Director-grade prompts · film look / LUT / camera presets · glossary'}
           >
-            <Sparkles size={12} weight="duotone" /> 没灵感?用创意生成器搭一段导演级提示词 →
+            <Sparkles size={12} weight="duotone" /> {w.noInspiration || 'No idea? Build a director-grade prompt →'}
           </Link>
         </div>
       </div>
 
-      <FilmStripDivider label="ACT 1 · 创意 + 设定" />
+      <FilmStripDivider label={w.act1 || 'ACT 1 · Idea + setup'} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="cinema-card p-5 flex flex-col gap-5">
-          {/* v12.149:引擎天气 —— 创作前可见哪路引擎不健康(全健康不占位) */}
+          {/* v12.149: engine weather — show unhealthy engines before create (hidden if all healthy) */}
           <EngineWeather />
-          {/* URL→创意入口 */}
+          {/* URL → idea */}
           <div className="mb-3">
             <div className="flex gap-2">
               <input
@@ -856,7 +924,7 @@ export default function DashboardCreatePage() {
                 value={urlInput}
                 onChange={(e) => { setUrlInput(e.target.value); setUrlHint(null); }}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleExtractUrl(); } }}
-                placeholder="贴商品/品牌页链接,自动提取创意"
+                placeholder={w.urlPlaceholder || 'Paste a product/brand URL to extract an idea'}
                 className="cinema-input flex-1 text-sm"
                 disabled={urlExtracting}
               />
@@ -866,7 +934,7 @@ export default function DashboardCreatePage() {
                 disabled={urlExtracting || !urlInput.trim()}
                 className="cinema-btn-ghost text-sm px-3 shrink-0 disabled:opacity-40"
               >
-                {urlExtracting ? '提取中…' : '提取'}
+                {urlExtracting ? (w.extracting || 'Extracting…') : (w.extract || 'Extract')}
               </button>
             </div>
             {urlHint && (
@@ -876,7 +944,7 @@ export default function DashboardCreatePage() {
 
           <label className="block">
             <div className="flex items-center justify-between mb-2">
-              <Eyebrow>Script · 创意 / 剧本</Eyebrow>
+              <Eyebrow>{w.scriptEyebrow || 'Script · Idea / screenplay'}</Eyebrow>
               <span className="cinema-mono text-[10px] opacity-60 tabular-nums">
                 {ideaCharCount} chars
               </span>
@@ -885,26 +953,26 @@ export default function DashboardCreatePage() {
               value={idea}
               onChange={(e) => setIdea(e.target.value)}
               rows={10}
-              placeholder={"支持两种输入:\n1. 简短创意:暮色城市中的旅人,霓虹雨夜...\n2. 完整剧本:直接粘贴含场景、角色对白、△画面描述的剧本文本"}
+              placeholder={w.ideaPlaceholder || 'Two ways to start:\n1. Short idea: a traveler in a dusk city, neon rain...\n2. Full script: paste scenes, dialogue, and action lines'}
               data-guide="idea"
               className="cinema-textarea"
             />
           </label>
 
-          {/* v2.18 P1: 模板库 — 搜索 / tag 筛选 / 个人模板 / 克隆 / 保存当前 集中入口 */}
+          {/* v2.18 P1: template library — search / tags / personal / clone / save current */}
           {createMode === 'pro' && <TemplateLibraryPicker
             selectedId={selectedTemplate?.id || null}
-            onSelect={(t) => {
-              if (t === null) setSelectedTemplate(null);
-              else handleSelectTemplate(t);
+            onSelect={(tpl) => {
+              if (tpl === null) setSelectedTemplate(null);
+              else handleSelectTemplate(tpl);
             }}
             onSaveCurrentAsTemplate={async () => {
               const trimmedIdea = idea.trim();
               if (!trimmedIdea || trimmedIdea.length < 10) {
-                showToast({ title: '至少输入 10 字 idea 后才能存为模板', type: 'error' });
+                showToast({ title: w.templateNeedIdea || 'Enter at least 10 characters before saving a template', type: 'error' });
                 return;
               }
-              const name = window.prompt('给这个模板起个名字 (≤40 字)', '我的模板');
+              const name = window.prompt(w.templateNamePrompt || 'Name this template (≤40 chars)', w.templateNameDefault || 'My template');
               if (!name?.trim()) return;
               try {
                 const res = await fetch('/api/global-assets', {
@@ -913,18 +981,18 @@ export default function DashboardCreatePage() {
                   body: JSON.stringify({
                     type: 'template',
                     name: name.trim().slice(0, 40),
-                    description: `自定义模板 · ${style} · ${duration} · ${aspect}`,
+                    description: (w.templateDesc || 'Custom template · {style} · {duration} · {aspect}').replace('{style}', style).replace('{duration}', duration).replace('{aspect}', aspect),
                     metadata: {
                       icon: '⭐',
                       nameEn: 'Custom',
                       exampleIdea: trimmedIdea,
-                      structureHint: '基于用户当前 idea 的自定义模板, 无预设结构提示, Director/Writer 按 idea 自由发挥',
+                      structureHint: w.customTemplateHint || 'Custom template from the current idea; no preset structure — Director/Writer follow the idea',
                       emotionCurve: '',
                       keyElements: [],
                       styleRecommendation: style,
                       shotCount: { min: 4, max: 8 },
                       colorPalette: '',
-                      tags: ['个人', style],
+                      tags: [TAG_PERSONAL, style],
                       recommendedDuration: parseInt(duration.replace(/[^\d]/g, '')) as 5 | 6 | 10 | 15,
                       recommendedAspect: aspect as any,
                       recommendedCamera: cameraDefault || undefined,
@@ -933,12 +1001,12 @@ export default function DashboardCreatePage() {
                 });
                 if (!res.ok) {
                   const body = await res.json().catch(() => ({}));
-                  showToast({ title: '保存失败: ' + (body.error || res.status), type: 'error' });
+                  showToast({ title: (w.templateSaveFailed || 'Save failed: {error}').replace('{error}', String(body.error || res.status)), type: 'error' });
                   return;
                 }
-                showToast({ title: `已保存模板「${name.trim()}」, 下次创作直接选`, type: 'success' });
+                showToast({ title: (w.templateSaved || 'Saved template “{name}”. Pick it next time you create.').replace('{name}', name.trim()), type: 'success' });
               } catch (e) {
-                showToast({ title: e instanceof Error ? e.message : '保存失败', type: 'error' });
+                showToast({ title: e instanceof Error ? e.message : (w.templateSaveFailed || 'Save failed: {error}').replace('{error}', ''), type: 'error' });
               }
             }}
           />}
@@ -946,7 +1014,7 @@ export default function DashboardCreatePage() {
           {/* Style preset shelf — cinema redesign */}
           <div data-guide="style">
             <div className="flex items-center justify-between mb-2">
-              <Eyebrow>Look · 画风预设</Eyebrow>
+              <Eyebrow>{w.lookEyebrow || 'Look · Style presets'}</Eyebrow>
               <span className="cinema-mono text-[10px] opacity-50">{stylePresets.length} looks</span>
             </div>
             <div className="flex gap-1.5 overflow-x-auto pb-2 custom-scrollbar -mx-1 px-1">
@@ -967,7 +1035,7 @@ export default function DashboardCreatePage() {
                       {stylePreviews[preset.id] ? (
                         <img loading="lazy" decoding="async" src={stylePreviews[preset.id]} alt={styleLabel(preset)} className="absolute inset-0 w-full h-full object-cover" />
                       ) : (
-                        // v8.3 P6.3: AI 金色 emblem 兜底 (无动态预览图时), 再无图则露出 emoji
+                        // v8.3 P6.3: gold emblem fallback when no live preview; then emoji
                         <div className="absolute inset-0 grid place-items-center text-3xl bg-[var(--cinema-surface-2)]">
                           <span aria-hidden>{preset.icon}</span>
                           <img src={`/look-icons/${preset.id}.jpg`} alt="" aria-hidden loading="lazy"
@@ -975,9 +1043,9 @@ export default function DashboardCreatePage() {
                             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                         </div>
                       )}
-                      {/* 顶部胶片孔暗化 */}
+                      {/* Top sprocket dim */}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
-                      {/* 选中态:左上 LOOK NN */}
+                      {/* Selected: LOOK NN top-left */}
                       <div className="absolute top-1.5 left-1.5 cinema-mono text-[8px] tracking-widest opacity-90 text-white/90 bg-black/40 px-1 rounded">
                         LOOK {String(idx + 1).padStart(2, '0')}
                       </div>
@@ -997,25 +1065,25 @@ export default function DashboardCreatePage() {
             </div>
           </div>
 
-          {/* v2.12 Phase 1 — 角色锁脸前置(1-3 人)(v10.5.3: 专业模式专属) */}
+          {/* v2.12 Phase 1 — face-lock (1-3), pro mode only as of v10.5.3 */}
           {createMode === 'pro' && (
             <>
               <CharacterLockSection
                 value={lockedCharacters}
                 onChange={setLockedCharacters}
               />
-              {/* v9.5.6: 多参元素货架(对标可灵 Elements)— 角色/风格/场景/道具/运镜/音色 → 路由进 cref/sref/构图 */}
+              {/* v9.5.6: multi-ref shelf (Kling Elements-style) — cast/look/scene/prop/camera/voice → cref/sref/framing */}
               <div className="mt-5">
                 <MultimodalRefShelf refs={references} onChange={setReferences} />
               </div>
             </>
           )}
 
-          <FilmStripDivider label="ACT 2 · 镜头规格" />
+          <FilmStripDivider label={w.act2 || 'ACT 2 · Shot specs'} />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
-              <Eyebrow>Duration · 单镜时长</Eyebrow>
+              <Eyebrow>{w.durationEyebrow || 'Duration · Shot length'}</Eyebrow>
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {durationOptions.map((d) => (
                   <button
@@ -1030,7 +1098,7 @@ export default function DashboardCreatePage() {
             </div>
 
             <div>
-              <Eyebrow>Aspect · 画幅</Eyebrow>
+              <Eyebrow>{w.aspectEyebrow || 'Aspect · Frame'}</Eyebrow>
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {aspectOptions.map((a) => (
                   <button
@@ -1046,12 +1114,12 @@ export default function DashboardCreatePage() {
           </div>
 
           {createMode === 'pro' && <div>
-            <Eyebrow>Engine · 视频引擎</Eyebrow>
+            <Eyebrow>{w.engineEyebrow || t.create.videoProviderLabel}</Eyebrow>
             <div className="grid grid-cols-3 gap-2 mt-2">
               {[
                 { id: 'veo', label: 'Veo 3.1', sub: 'cinematic · slow' },
                 { id: 'minimax', label: 'Minimax', sub: 'balanced · fast' },
-                { id: 'keling', label: '可灵 AI', sub: '官方API · 已接入' }, // v12.157:key 已接,别名在 engine-order 归一
+                { id: 'keling', label: w.klingLabel || 'Kling AI', sub: w.klingSub || 'Official API · connected' }, // v12.157: key wired; alias normalized in engine-order
               ].map((v) => (
                 <button
                   key={v.id}
@@ -1071,19 +1139,19 @@ export default function DashboardCreatePage() {
             </div>
           </div>}
 
-          {/* v2.14 P1.1 + v2.16 P1.2: 全局默认镜头语言 — 包到 cinema-card-hi 与周围 cards 视觉对齐 */}
+          {/* v2.14 P1.1 + v2.16 P1.2: global camera language — cinema-card-hi to match neighbors */}
           {createMode === 'pro' && <div className="cinema-card-hi p-3">
             <CameraLanguagePicker value={cameraDefault} onChange={setCameraDefault} />
           </div>}
 
-          {/* v12.0.4: 一句指令调剪辑风格 — 喂智能剪辑管线(情绪压缩力度 + 转场软硬) */}
+          {/* v12.0.4: one-line edit style — feeds smart edit (emotion squeeze + transition hardness) */}
           {createMode === 'pro' && <div className="cinema-card-hi p-3" data-testid="edit-style-picker">
-            <div className="cinema-mono text-[10px] opacity-50 mb-1.5 tracking-wider">剪辑风格 · 一句话调节奏</div>
+            <div className="cinema-mono text-[10px] opacity-50 mb-1.5 tracking-wider">{w.editStyleTitle || 'Edit style · one-line pacing'}</div>
             <div className="flex flex-wrap gap-1.5 mb-2">
               {[
-                { v: '', label: zhUi ? '默认中速' : 'Default mid-tempo' },
-                { v: '快节奏燃向', label: zhUi ? '⚡ 快节奏燃向' : '⚡ Fast & punchy' },
-                { v: '慢叙抒情', label: zhUi ? '🌙 慢叙抒情' : '🌙 Slow & lyrical' },
+                { v: '', label: w.editStyleDefault || 'Default mid-tempo' },
+                { v: EDIT_STYLE_FAST, label: w.editStyleFast || '⚡ Fast & punchy' },
+                { v: EDIT_STYLE_SLOW, label: w.editStyleSlow || '🌙 Slow & lyrical' },
               ].map((p) => (
                 <button
                   key={p.label}
@@ -1099,17 +1167,17 @@ export default function DashboardCreatePage() {
               type="text"
               value={editStyle}
               onChange={(e) => setEditStyle(e.target.value)}
-              placeholder="或自定义:「抖音爆款卡点」「王家卫式留白」(配 LLM key 智能解析)"
+              placeholder={w.editStylePlaceholder || 'Or custom: “beat-cut shorts” “Wong Kar-wai pauses” (needs LLM key)'}
               className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-gray-500 focus:outline-none focus:border-[var(--cinema-amber)] transition-colors"
             />
           </div>}
 
-          {/* v12.165:制作语言(共享 LanguagePicker;⭐可设系统默认,各制作入口继承) */}
+          {/* v12.165: production language (shared LanguagePicker; star sets system default) */}
           <div data-testid="script-language-picker">
-            <LanguagePicker value={scriptLanguage} onChange={setScriptLanguage} label="剧本语言 · 台词/旁白/配音语种" />
+            <LanguagePicker value={scriptLanguage} onChange={setScriptLanguage} label={w.scriptLanguageLabel || 'Script language · dialogue / VO / TTS'} />
           </div>
 
-          {/* v12.143: 分镜草图锁(对标阅文分镜面板)—— 生成前约束构图/镜头语言 */}
+          {/* v12.143: storyboard sketch lock — constrain framing / camera before generate */}
           <div className="cinema-card-hi p-3" data-testid="sketch-lock-toggle">
             <label className="flex items-start gap-2.5 cursor-pointer">
               <input
@@ -1119,13 +1187,13 @@ export default function DashboardCreatePage() {
                 className="mt-0.5"
               />
               <div>
-                <div className="cinema-mono text-[11px]">🎬 分镜草图锁 <span className="opacity-40">(实验 · 构图更可控)</span></div>
-                <div className="cinema-mono text-[9px] opacity-40 mt-0.5">每镜先出黑白构图草图,再按草图锁构图/机位渲染分镜 —— 输出更贴镜头语言设计;代价:每镜多一次出图。草图会保存,可在镜头工坊逐镜查看/替换。</div>
+                <div className="cinema-mono text-[11px]">🎬 {w.sketchLockTitle || 'Storyboard sketch lock'} <span className="opacity-40">{w.sketchLockBadge || '(experimental · more controllable framing)'}</span></div>
+                <div className="cinema-mono text-[9px] opacity-40 mt-0.5">{w.sketchLockDesc || 'Each shot gets a B/W framing sketch first, then boards lock to that framing/camera — closer to the designed lens language; cost: +1 image per shot. Sketches are saved and can be viewed/replaced per shot in Shot Workshop.'}</div>
               </div>
             </label>
           </div>
 
-          {/* v2.15 G8 + v2.16 P1.2: 我的风格库 — 同款卡片包装 */}
+          {/* v2.15 G8 + v2.16 P1.2: my style library — same card wrap */}
           {createMode === 'pro' && <div className="cinema-card-hi p-3">
             <StyleLoraLibrary
               currentStyle={style}
@@ -1133,36 +1201,36 @@ export default function DashboardCreatePage() {
               onApply={(applied) => {
                 if (applied.stylePreset) setStyle(applied.stylePreset);
                 setCameraDefault(applied.cameraDefault);
-                showToast({ title: `已应用风格: ${applied.stylePreset || ''}`, type: 'success' });
+                showToast({ title: (w.styleApplied || 'Applied style: {style}').replace('{style}', applied.stylePreset || ''), type: 'success' });
               }}
             />
           </div>}
 
-          {/* v2.15 G9: 草稿数 — 1=直跑, 2/3=先弹对比卡 */}
+          {/* v2.15 G9: draft count — 1 = direct; 2/3 = compare cards first */}
           {createMode === 'pro' && <div>
-            <Eyebrow>Drafts · 草稿对比</Eyebrow>
+            <Eyebrow>{w.draftsEyebrow || 'Drafts · Compare'}</Eyebrow>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {([1, 2, 3] as const).map((n) => (
                 <button
                   key={n}
                   onClick={() => setDraftCount(n)}
-                  title={n === 1 ? '直接生成 1 个剧本' : `先生成 ${n} 个版本对比, 选完再走完整流程`}
+                  title={n === 1 ? (w.draftDirectTitle || 'Generate 1 script directly') : (w.draftCompareTitle || 'Generate {n} versions, then pick one').replace('{n}', String(n))}
                   className={`cinema-btn !px-3 !py-1 cinema-mono !text-[11px] ${draftCount === n ? 'cinema-btn-primary' : ''}`}
                 >
-                  {n === 1 ? '直跑 ×1' : `对比 ×${n}`}
+                  {n === 1 ? (w.draftDirect || 'Direct ×1') : (w.draftCompare || 'Compare ×{n}').replace('{n}', String(n))}
                 </button>
               ))}
             </div>
             {draftCount > 1 && (
               <div className="cinema-mono text-[10px] opacity-60 mt-1">
-                ↑ 点 ROLL 后会先弹 {draftCount} 个剧本草稿对比, 选完再走完整流程 (额外 +30-60s)
+                {(w.draftCompareHint || '↑ After ROLL, compare {n} drafts first (+30–60s)').replace('{n}', String(draftCount))}
               </div>
             )}
           </div>}
 
-          {/* 技术读数面板 — 当前选择的实时反馈 */}
+          {/* Tech readout — live feedback of current choices */}
           <div className="cinema-card-hi p-3">
-            <Eyebrow>Readout · 设定预览</Eyebrow>
+            <Eyebrow>{w.readoutEyebrow || 'Readout · Setup preview'}</Eyebrow>
             <div className="mt-2">
               <TechReadout pairs={[
                 ['fps', '24'],
@@ -1179,17 +1247,17 @@ export default function DashboardCreatePage() {
         </div>
 
         <div className="flex flex-col gap-5">
-          {/* 预览区:Eyebrow + 比例 chip + 时码 chip — 仪表盘信息密度 */}
+          {/* Preview: eyebrow + aspect chip + timecode — dashboard density */}
           <div className="cinema-card-hi p-3">
             <div className="flex items-center justify-between mb-2">
-              <Eyebrow>Live Preview · 实时预览</Eyebrow>
+              <Eyebrow>{w.previewEyebrow || 'Live Preview'}</Eyebrow>
               <div className="flex items-center gap-1">
                 <AspectChip ratio={aspect} />
                 <TimecodeChip seconds={parseFloat(duration.replace(/[^\d.]/g, ''))} variant="amber" />
               </div>
             </div>
             <div className="relative rounded-[2px] overflow-hidden border border-[var(--cinema-border)] bg-black">
-              {/* v12.46: 双城之战素材循环预览(autoplay/muted/loop;IMG_PREVIEW_DEFAULT 作 poster 兜底) */}
+              {/* v12.46: Arcane-style loop preview (autoplay/muted/loop; IMG_PREVIEW_DEFAULT poster) */}
               <video
                 src="/preview/live-preview.mp4"
                 poster={IMG_PREVIEW_DEFAULT}
@@ -1199,27 +1267,32 @@ export default function DashboardCreatePage() {
                 playsInline
                 className="w-full h-[260px] object-cover opacity-90"
               />
-              {/* LIVE 指示 */}
+              {/* LIVE indicator */}
               <div className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] bg-black/50 backdrop-blur-sm pointer-events-none">
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--cinema-red)] animate-pulse" />
                 <span className="cinema-mono text-[8px] tracking-widest text-white/80">LIVE</span>
               </div>
-              {/* 安全区裁切线 — 影院软件常见 */}
+              {/* Safe-area crop — common in cinema software */}
               <div className="absolute inset-[10%] border border-dashed border-[rgba(245,241,234,0.18)] pointer-events-none" />
             </div>
           </div>
 
-          <FilmStripDivider label="ACT 3 · 灵感库" />
+          <FilmStripDivider label={w.act3 || 'ACT 3 · Inspiration'} />
 
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <Eyebrow>Inspiration · 灵感库</Eyebrow>
-              <span className="cinema-mono text-[10px] opacity-50">{exampleIdeas.length} cues</span>
+              <Eyebrow>{w.inspirationEyebrow || 'Inspiration'}</Eyebrow>
+              <span className="cinema-mono text-[10px] opacity-50">{EXAMPLE_IDEA_DEFS.length} cues</span>
             </div>
-            {exampleIdeas.map((ex, i) => (
+            {EXAMPLE_IDEA_DEFS.map((ex, i) => {
+              const titleKey = `idea${ex.id[0].toUpperCase()}${ex.id.slice(1)}Title`;
+              const contentKey = `idea${ex.id[0].toUpperCase()}${ex.id.slice(1)}Content`;
+              const title = w[titleKey] || ex.id;
+              const content = w[contentKey] || '';
+              return (
               <button
-                key={ex.title}
-                onClick={() => setIdea(ex.content)}
+                key={ex.id}
+                onClick={() => setIdea(content)}
                 className="cinema-card-hi p-3 group flex items-start gap-3 hover:border-[var(--cinema-amber-deep)] transition-colors text-left"
               >
                 <div className="cinema-mono text-[10px] opacity-50 w-6 pt-0.5 tabular-nums">
@@ -1227,22 +1300,23 @@ export default function DashboardCreatePage() {
                 </div>
                 <ex.icon className="w-4 h-4 text-[var(--cinema-amber)] mt-0.5 shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <div className="cinema-subhead text-sm leading-tight">{ex.title}</div>
-                  <div className="text-[11px] opacity-60 line-clamp-2 mt-1 leading-relaxed">{ex.content}</div>
+                  <div className="cinema-subhead text-sm leading-tight">{title}</div>
+                  <div className="text-[11px] opacity-60 line-clamp-2 mt-1 leading-relaxed">{content}</div>
                 </div>
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
 
-      {/* ── 底部 Logic Pro 风状态栏 ── */}
+      {/* ── Bottom Logic Pro-style status bar ── */}
       <div className="sticky bottom-0 mt-8 -mx-[5vw]">
         <StatusBar
           items={[
             { label: 'STATUS', value: isReady ? 'READY' : 'AWAITING IDEA', status: isReady ? 'green' : 'amber' },
             { label: 'CHARS', value: <span className="cinema-mono">{ideaCharCount}</span> },
-            { label: 'TEMPLATE', value: selectedTemplate?.name || '—' },
+            { label: 'TEMPLATE', value: (selectedTemplate ? (locale === 'en' ? selectedTemplate.nameEn : selectedTemplate.name) : '—') },
             { label: 'STYLE', value: style },
             { label: 'SHOT', value: <span className="cinema-mono">{duration}</span> },
             { label: 'ASPECT', value: <span className="cinema-mono">{aspect}</span> },

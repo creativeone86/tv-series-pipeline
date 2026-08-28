@@ -1,22 +1,23 @@
 'use client';
 
 /**
- * Cinema 数据可视化组件 (v2.13.3 / v2.13.4)
+ * Cinema data-viz components (v2.13.3 / v2.13.4)
  *
- * 灵感:Tremor BarList / DonutChart 的信息密度,但用 cinema 调色 + 衬线/等宽混排,
- * 不引第三方依赖(Tremor v3 仅支持 React 18,我们是 19)
+ * Inspired by Tremor BarList / DonutChart density, but cinema palette + serif/mono mix,
+ * no extra deps (Tremor v3 is React 18 only; we are 19)
  *
- * 包含:
- *   <CameoBarList>     — per-shot 横向条状图,颜色按 ≥85 / 70-84 / <70 三档
- *   <CameoDonut>       — 三段式环形,中心显示 AVG
- *   <Sparkline>        — v2.13.4 升级版:渐变面积填充 + 端点高亮 + 自动 trend 配色
- *   <ScoreDonut>       — v2.13.4 项目卡专用单弧 mini donut (28-44px)
+ * Includes:
+ *   <CameoBarList>     — per-shot horizontal bars, colored ≥85 / 70-84 / <70
+ *   <CameoDonut>       — three-segment donut, AVG in the center
+ *   <Sparkline>        — v2.13.4: gradient fill + endpoint dots + auto trend color
+ *   <ScoreDonut>       — v2.13.4 project-card mini donut (28-44px)
  */
 
 import { useMemo, type ReactNode } from 'react';
+import { useLocale } from '@/hooks/use-locale';
 
 // ────────────────────────────────────────────────
-// 共用:0-100 → 三档色
+// Shared: 0-100 → three-tier color
 // ────────────────────────────────────────────────
 function tier(score: number | null | undefined) {
   if (typeof score !== 'number') return 'na' as const;
@@ -32,7 +33,7 @@ const TIER_COLOR = {
 } as const;
 
 // ────────────────────────────────────────────────
-// CameoBarList — 横向条状图
+// CameoBarList — horizontal bars
 // ────────────────────────────────────────────────
 export interface BarListItem {
   shotNumber: number;
@@ -51,8 +52,9 @@ export function CameoBarList({
   onClickShot?: (shotNumber: number) => void;
   maxRows?: number;
 }) {
+  const { t } = useLocale();
   const sorted = useMemo(() => {
-    // 把"最低分"排前面,引导用户先看坏的
+    // Lowest scores first so the user looks at the weak shots first
     return [...items]
       .sort((a, b) => {
         const ax = typeof a.score === 'number' ? a.score : 999;
@@ -71,8 +73,8 @@ export function CameoBarList({
   return (
     <div className="space-y-1">
       {sorted.map((it) => {
-        const t = tier(it.score);
-        const color = TIER_COLOR[t];
+        const scoreTier = tier(it.score);
+        const color = TIER_COLOR[scoreTier];
         const widthPct = it.score == null ? 0 : Math.max(2, Math.min(100, it.score));
         const isLow = typeof it.score === 'number' && it.score < threshold;
         return (
@@ -104,7 +106,7 @@ export function CameoBarList({
               {it.score == null ? '—' : it.score}
             </span>
             {it.retried && (
-              <span className="cinema-mono text-[8.5px] opacity-50 tracking-widest" title="本镜触发过自动重生">
+              <span className="cinema-mono text-[8.5px] opacity-50 tracking-widest" title={t.sharedUi.shotAutoRetried}>
                 RTY
               </span>
             )}
@@ -121,7 +123,7 @@ export function CameoBarList({
 }
 
 // ────────────────────────────────────────────────
-// CameoDonut — 三段式环形
+// CameoDonut — three-segment ring
 // ────────────────────────────────────────────────
 export function CameoDonut({
   pass,
@@ -146,7 +148,7 @@ export function CameoDonut({
   const cy = size / 2;
   const circ = 2 * Math.PI * r;
 
-  // 计算每段的 stroke-dasharray
+  // Compute each segment stroke-dasharray
   const segments: Array<{ value: number; color: string; key: string }> = [];
   if (pass > 0) segments.push({ value: pass, color: TIER_COLOR.pass, key: 'pass' });
   if (warn > 0) segments.push({ value: warn, color: TIER_COLOR.warn, key: 'warn' });
@@ -157,7 +159,7 @@ export function CameoDonut({
   return (
     <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
-        {/* 底环 */}
+        {/* Base ring */}
         <circle
           cx={cx} cy={cy} r={r}
           fill="none"
@@ -183,7 +185,7 @@ export function CameoDonut({
           );
         })}
       </svg>
-      {/* 中心读数 */}
+      {/* Center readout */}
       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
         <span className="cinema-mono text-[20px] font-semibold tabular-nums leading-none">
           {centerLabel}
@@ -199,9 +201,9 @@ export function CameoDonut({
 }
 
 // ────────────────────────────────────────────────
-// Sparkline — 紧凑趋势线 (v2.13.4: 渐变面积 + 端点 + auto-trend 配色)
+// Sparkline — compact trend (v2.13.4: gradient fill + endpoints + auto-trend color)
 //
-// 用于 PolishHistoryPanel 顶部 — 一眼看 AIGC 就绪度是否在变好
+// Used at the top of PolishHistoryPanel — see if AIGC readiness is improving
 // ────────────────────────────────────────────────
 export function Sparkline({
   values,
@@ -215,18 +217,18 @@ export function Sparkline({
   values: number[];
   width?: number;
   height?: number;
-  /** 默认按 trend 自动:首末值上升=green / 持平=amber / 下降=red */
+  /** Auto by trend: first→last up=green / flat=amber / down=red */
   color?: string;
-  /** 是否在线下加渐变面积填充 */
+  /** Whether to fill the area under the line */
   area?: boolean;
-  /** 是否在首末点画小圆点 */
+  /** Whether to draw dots at the first/last points */
   endpoints?: boolean;
-  /** 强制 [min, max] 域 (默认按数据自动); 比如分数总是用 [0, 100] */
+  /** Force [min, max] domain (default auto); e.g. scores always use [0, 100] */
   domain?: [number, number];
 }) {
   if (values.length < 2) return null;
 
-  // auto-trend: 首末比较, 决定线色
+  // auto-trend: compare first vs last to pick line color
   const first = values[0];
   const last = values[values.length - 1];
   const trendColor = color
@@ -243,7 +245,7 @@ export function Sparkline({
 
   const coords = values.map((v, i) => ({
     x: i * step,
-    y: height - ((v - domMin) / range) * (height - 2) - 1, // 1px padding 上下
+    y: height - ((v - domMin) / range) * (height - 2) - 1, // 1px padding top/bottom
   }));
 
   const linePoints = coords.map((c) => `${c.x},${c.y}`).join(' ');
@@ -285,10 +287,10 @@ export function Sparkline({
 }
 
 // ────────────────────────────────────────────────
-// ScoreDonut — 项目卡专用 mini donut (v2.13.4)
+// ScoreDonut — project-card mini donut (v2.13.4)
 //
-// 单弧, 颜色按 tier (≥85 绿 / ≥70 琥珀 / <70 红 / N/A 灰), 中心显示分数。
-// 设计为 28-44px 范围, 替代项目卡上原本的"分数小药丸"。
+// Single arc, color by tier (≥85 green / ≥70 amber / <70 red / N/A grey), score in the center.
+// Sized 28-44px, replacing the old score pill on project cards.
 // ────────────────────────────────────────────────
 export function ScoreDonut({
   score,
@@ -298,13 +300,13 @@ export function ScoreDonut({
   centerLabel,
 }: {
   score: number | null | undefined;
-  /** 直径 px */
+  /** Diameter px */
   size?: number;
-  /** 描边粗细 px */
+  /** Stroke width px */
   thickness?: number;
-  /** 是否在中央渲染分数 */
+  /** Whether to render the score in the center */
   showCenter?: boolean;
-  /** 自定义中心文字 (默认 = score 取整) */
+  /** Custom center text (default = rounded score) */
   centerLabel?: ReactNode;
 }) {
   const t = tier(score);

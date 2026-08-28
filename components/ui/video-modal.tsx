@@ -6,6 +6,8 @@ import { X, WarningCircle as AlertCircle, ArrowsOutSimple as Maximize2, SpeakerH
 import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { useLocale } from '@/hooks/use-locale';
 
+type KitT = ReturnType<typeof useLocale>['t'] & { kitUi: Record<string, string> };
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -29,7 +31,8 @@ function isVideoUrl(url: string): boolean {
 }
 
 export function VideoModal({ open, onOpenChange, src, title }: Props) {
-  const { t } = useLocale();
+  const { t: loc } = useLocale();
+  const t = loc as KitT;
   const [videoError, setVideoError] = useState(false);
   const [mounted, setMounted] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -70,14 +73,14 @@ export function VideoModal({ open, onOpenChange, src, title }: Props) {
     setVideoError(true);
   };
 
-  // v10.3.6 a11y: Escape + 焦点陷阱 + 焦点归还(替代原 document Escape 监听)
+  // v10.3.6 a11y: Escape + focus trap + restore focus (replaces the old document Escape listener)
   const dialogRef = useFocusTrap<HTMLDivElement>(open && mounted, handleClose);
 
   if (!open || !mounted) return null;
 
   const isVideo = isVideoUrl(src);
 
-  // 使用 Portal 直接渲染到 body，彻底避免 React Flow CSS transform 的影响
+  // Portal straight to body so React Flow CSS transforms cannot affect it
   return createPortal(
     <div
       className="fixed inset-0 flex items-center justify-center"
@@ -86,7 +89,7 @@ export function VideoModal({ open, onOpenChange, src, title }: Props) {
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >
-      {/* 背景遮罩 — 点击关闭 */}
+      {/* Backdrop — click to close */}
       <div
         aria-hidden="true"
         className="absolute inset-0 bg-black/90 backdrop-blur-sm"
@@ -94,7 +97,7 @@ export function VideoModal({ open, onOpenChange, src, title }: Props) {
         onClick={handleClose}
       />
 
-      {/* 视频容器 */}
+      {/* Video frame */}
       <div
         ref={dialogRef}
         role="dialog"
@@ -105,7 +108,7 @@ export function VideoModal({ open, onOpenChange, src, title }: Props) {
         style={{ animation: 'zoomIn 0.2s ease' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 顶部操作栏 */}
+        {/* Top chrome */}
         <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-3 bg-gradient-to-b from-black/70 to-transparent">
           {title && (
             <span className="text-xs text-white/80 font-medium px-2">{title}</span>
@@ -132,7 +135,7 @@ export function VideoModal({ open, onOpenChange, src, title }: Props) {
           </div>
         </div>
 
-        {/* 视频/图片内容 */}
+        {/* Video / image body */}
         {isVideo && !videoError ? (
           <video
             ref={videoRef}
@@ -148,37 +151,36 @@ export function VideoModal({ open, onOpenChange, src, title }: Props) {
           <div className="w-full aspect-video bg-black flex flex-col items-center justify-center gap-3 px-8 text-center">
             <AlertCircle className="w-8 h-8 text-yellow-500/60" />
             <p className="text-sm text-gray-300 font-medium">{t.product.videoLoadFail}</p>
-            {/* v2.12 fix: 给具体可操作的指引,不要只甩个失败 */}
+            {/* v2.12 fix: give a concrete next step, not just a failure */}
             <div className="text-xs text-gray-400 leading-relaxed max-w-md">
               {src.startsWith('/api/serve-file?path=') ? (
                 <>
-                  本地合成视频文件已失效。
+                  {t.kitUi.localComposeGone}
                   {src.includes('/tmp/') || src.includes('/var/folders/') ? (
                     <>
                       <br />
                       <span className="text-yellow-300/70">
-                        这是 v2.18.1 之前的老成片 (写在 /tmp 里, 已被系统清理)。
-                        v2.18.1 起新成片写在持久化 data/composed/ 下, 不再消失。
+                        {t.kitUi.oldTmpCompose}
                       </span>
                     </>
                   ) : null}
                   <br />
-                  <span className="text-yellow-300/70">解决方案:回创作工坊重跑该项目, 新成片会自动持久化。</span>
+                  <span className="text-yellow-300/70">{t.kitUi.fixRerunWorkshop}</span>
                 </>
               ) : src.includes('minimax') || src.includes('aliyuncs') ? (
                 <>
-                  上游 CDN URL 已过期(Minimax 视频通常 24h 后失效)。
+                  {t.kitUi.cdnExpired}
                   <br />
-                  <span className="text-yellow-300/70">解决方案:点项目页"重新生成此镜"重跑视频环节。</span>
+                  <span className="text-yellow-300/70">{t.kitUi.fixRegenShot}</span>
                 </>
               ) : !src ? (
                 <>
-                  成片地址为空 — 上游视频 API 全部失败(可能是 quota 不足或网络异常)。
+                  {t.kitUi.emptyComposeUrl}
                   <br />
-                  <span className="text-yellow-300/70">解决方案:去 /dashboard/billing 检查 Minimax / Veo / Kling 余额,补充后重跑。</span>
+                  <span className="text-yellow-300/70">{t.kitUi.fixCheckBilling}</span>
                 </>
               ) : (
-                <>视频源不可访问。可能是 CORS / 文件不存在 / 网络异常。</>
+                <>{t.kitUi.sourceUnreachable}</>
               )}
             </div>
             {src && (
@@ -188,7 +190,7 @@ export function VideoModal({ open, onOpenChange, src, title }: Props) {
                 rel="noopener noreferrer"
                 className="text-xs text-blue-400 hover:text-blue-300 underline"
               >
-                在新窗口中打开视频
+                {t.kitUi.openVideoNewWindow}
               </a>
             )}
           </div>

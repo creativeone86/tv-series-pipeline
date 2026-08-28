@@ -3,36 +3,35 @@
 /**
  * CreationWizard (v2.0 Sprint 0 D7)
  *
- * 5 步项目创建向导，把前面 4 个组件串起来：
- *   Step 1: 选模式（ModeCardGrid）
- *   Step 2: 选风格（StylePicker）
- *   Step 3: 挑资产（AssetGrid, 可选）
- *   Step 4: 写 prompt + 分辨率 / 时长（ResolutionSelector）
- *   Step 5: 预览确认 → 提交
+ * 5-step project create wizard, wiring the four sibling components:
+ *   Step 1: pick mode (ModeCardGrid)
+ *   Step 2: pick style (StylePicker)
+ *   Step 3: pick assets (AssetGrid, optional)
+ *   Step 4: prompt + resolution / duration (ResolutionSelector)
+ *   Step 5: review → submit
  *
- * 最终数据通过 onComplete 吐给父组件（通常是 `/app/create` 页面），
- * 由父组件调用 `POST /api/projects` 创建项目并启动 orchestrator。
+ * Final payload goes to the parent (usually `/app/create`) via onComplete;
+ * the parent POSTs `/api/projects` and starts the orchestrator.
  *
- * 设计要点：
- *  - 受控步骤条 + 左右按钮
- *  - 各步骤校验未通过时禁用"下一步"
- *  - ESC / 关闭 自动保存草稿到 localStorage（key: qfmj-wizard-draft）
+ * Design:
+ *  - Controlled stepper + prev/next
+ *  - Next disabled until the current step validates
+ *  - ESC / close auto-saves the draft to localStorage (key: qfmj-wizard-draft)
  */
 
 import * as React from 'react';
 import { Rocket } from '@phosphor-icons/react';
-import { ModeCardGrid, MODE_PRESETS } from './ModeCard';
+import { ModeCardGrid, MODE_PRESETS, modeCopy } from './ModeCard';
 import { StylePicker } from './StylePicker';
 import { ResolutionSelector } from './ResolutionSelector';
 import { AssetGrid } from '@/components/assets/AssetGrid';
 import type {
   CreationMode,
-  ResolutionTier,
-  AspectRatio,
   ProjectOutputConfig,
 } from '@/types/agents';
 import { applyStyleToPrompt } from '@/lib/style-presets';
 import { cn } from '@/lib/utils';
+import { useLocale } from '@/hooks/use-locale';
 
 // ──────────────────────────────────────────────────────────
 // Types
@@ -50,7 +49,7 @@ export interface WizardDraft {
 
 export type WizardSubmitPayload = Required<Omit<WizardDraft, 'globalAssetIds'>> & {
   globalAssetIds: string[];
-  /** 最终拼接后的 prompt（已注入 style fragment） */
+  /** Final prompt after style fragment injection */
   finalPrompt: string;
 };
 
@@ -102,18 +101,20 @@ function clearDraft() {
 }
 
 // ──────────────────────────────────────────────────────────
-// Step metadata
+// Step keys
 // ──────────────────────────────────────────────────────────
 
-const STEPS = [
-  { key: 'mode', label: '创作模式', desc: '选择你想生成的内容类型' },
-  { key: 'style', label: '视觉风格', desc: '从 60 个预设中挑选' },
-  { key: 'assets', label: '资产复用', desc: '从记忆库选已有角色/场景/道具' },
-  { key: 'details', label: '内容细节', desc: 'Prompt + 分辨率 + 时长' },
-  { key: 'review', label: '确认提交', desc: '预览并启动生成' },
-] as const;
+const STEP_KEYS = ['mode', 'style', 'assets', 'details', 'review'] as const;
 
-type StepKey = (typeof STEPS)[number]['key'];
+type StepKey = (typeof STEP_KEYS)[number];
+
+const STEP_I18N: Record<StepKey, { label: string; desc: string }> = {
+  mode: { label: 'wizardStepMode', desc: 'wizardStepModeDesc' },
+  style: { label: 'wizardStepStyle', desc: 'wizardStepStyleDesc' },
+  assets: { label: 'wizardStepAssets', desc: 'wizardStepAssetsDesc' },
+  details: { label: 'wizardStepDetails', desc: 'wizardStepDetailsDesc' },
+  review: { label: 'wizardStepReview', desc: 'wizardStepReviewDesc' },
+};
 
 // ──────────────────────────────────────────────────────────
 // Validation per step
@@ -126,7 +127,7 @@ export function isStepValid(step: StepKey, draft: WizardDraft): boolean {
     case 'style':
       return !!draft.styleId;
     case 'assets':
-      return true; // 资产是可选项
+      return true; // assets are optional
     case 'details':
       return draft.prompt.trim().length >= 5 && draft.title.trim().length > 0;
     case 'review':
@@ -149,6 +150,9 @@ export function CreationWizard({
   onCancel,
   className,
 }: CreationWizardProps) {
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { workshop: Record<string, string> };
+  const w = t.workshop ?? {};
   const [stepIdx, setStepIdx] = React.useState(0);
   const [draft, setDraft] = React.useState<WizardDraft>(() => ({
     ...DEFAULT_DRAFT,
@@ -157,14 +161,20 @@ export function CreationWizard({
   }));
   const [submitting, setSubmitting] = React.useState(false);
 
-  // 自动保存草稿
+  const steps = STEP_KEYS.map(key => ({
+    key,
+    label: w[STEP_I18N[key].label] || key,
+    desc: w[STEP_I18N[key].desc] || '',
+  }));
+
+  // Auto-save draft
   React.useEffect(() => {
     saveDraft(draft);
   }, [draft]);
 
-  const step = STEPS[stepIdx];
+  const step = steps[stepIdx];
   const canAdvance = isStepValid(step.key, draft);
-  const isLast = stepIdx === STEPS.length - 1;
+  const isLast = stepIdx === steps.length - 1;
 
   const update = <K extends keyof WizardDraft>(key: K, v: WizardDraft[K]) =>
     setDraft(prev => ({ ...prev, [key]: v }));
@@ -200,7 +210,7 @@ export function CreationWizard({
       data-testid="creation-wizard"
     >
       {/* Stepper */}
-      <StepperHeader currentIdx={stepIdx} />
+      <StepperHeader currentIdx={stepIdx} steps={steps} />
 
       {/* Title / sub */}
       <div>
@@ -246,7 +256,7 @@ export function CreationWizard({
               className="text-sm text-neutral-400 hover:text-white"
               data-testid="wizard-cancel"
             >
-              取消
+              {t.common.cancel}
             </button>
           )}
         </div>
@@ -258,13 +268,13 @@ export function CreationWizard({
             className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
             data-testid="wizard-prev"
           >
-            上一步
+            {w.wizardPrev || 'Back'}
           </button>
 
           {!isLast ? (
             <button
               type="button"
-              onClick={() => setStepIdx(i => Math.min(STEPS.length - 1, i + 1))}
+              onClick={() => setStepIdx(i => Math.min(steps.length - 1, i + 1))}
               disabled={!canAdvance}
               className={cn(
                 'rounded-lg bg-gradient-to-r from-[#E8C547] to-[#FF6B35] px-5 py-2 text-sm font-semibold text-white',
@@ -272,7 +282,7 @@ export function CreationWizard({
               )}
               data-testid="wizard-next"
             >
-              下一步
+              {w.wizardNext || 'Next'}
             </button>
           ) : (
             <button
@@ -285,7 +295,9 @@ export function CreationWizard({
               )}
               data-testid="wizard-submit"
             >
-              {submitting ? '提交中...' : <span className="inline-flex items-center gap-1.5"><Rocket size={15} weight="duotone" /> 启动生成</span>}
+              {submitting
+                ? (w.wizardSubmitting || 'Submitting...')
+                : <span className="inline-flex items-center gap-1.5"><Rocket size={15} weight="duotone" /> {w.wizardLaunch || 'Start generate'}</span>}
             </button>
           )}
         </div>
@@ -298,10 +310,16 @@ export function CreationWizard({
 // Stepper
 // ──────────────────────────────────────────────────────────
 
-function StepperHeader({ currentIdx }: { currentIdx: number }) {
+function StepperHeader({
+  currentIdx,
+  steps,
+}: {
+  currentIdx: number;
+  steps: ReadonlyArray<{ key: string; label: string }>;
+}) {
   return (
     <ol className="flex items-center justify-between gap-2" data-testid="wizard-stepper">
-      {STEPS.map((s, i) => {
+      {steps.map((s, i) => {
         const done = i < currentIdx;
         const active = i === currentIdx;
         return (
@@ -329,7 +347,7 @@ function StepperHeader({ currentIdx }: { currentIdx: number }) {
                 {s.label}
               </span>
             </div>
-            {i < STEPS.length - 1 && (
+            {i < steps.length - 1 && (
               <div
                 className={cn(
                   'ml-2 h-px flex-1',
@@ -354,16 +372,20 @@ interface DetailsStepProps {
 }
 
 function DetailsStep({ draft, update }: DetailsStepProps) {
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { workshop: Record<string, string> };
+  const w = t.workshop ?? {};
+
   return (
     <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
       <div className="flex flex-col gap-4">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-white">项目标题</label>
+          <label className="mb-1.5 block text-sm font-medium text-white">{w.wizardTitleLabel || 'Project title'}</label>
           <input
             type="text"
             value={draft.title}
             onChange={e => update('title', e.target.value)}
-            placeholder="例：灵眸·短篇漫剧 第 1 集"
+            placeholder={w.wizardTitlePlaceholder || 'e.g. Bright Eyes · short ep. 1'}
             className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-[#E8C547]/60 focus:outline-none"
             data-testid="wizard-title-input"
             maxLength={60}
@@ -372,24 +394,24 @@ function DetailsStep({ draft, update }: DetailsStepProps) {
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-white">
-            创作 Prompt
+            {w.wizardPromptLabel || 'Creation prompt'}
           </label>
           <textarea
             value={draft.prompt}
             onChange={e => update('prompt', e.target.value)}
-            placeholder="描述你想生成的画面/故事。例：晨雾中的古镇，一位身着汉服的少女抱着古琴漫步石板路..."
+            placeholder={w.wizardPromptPlaceholder || 'Describe the picture or story. e.g. A misty old town at dawn, a girl in hanfu walking the stone path with a qin...'}
             rows={8}
             className="w-full resize-none rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-[#E8C547]/60 focus:outline-none"
             data-testid="wizard-prompt-input"
           />
           <div className="mt-1 text-[11px] text-neutral-500">
-            {draft.prompt.length} 字 · 至少 5 个字符
+            {(w.wizardPromptHint || '{n} chars · at least 5').replace('{n}', String(draft.prompt.length))}
           </div>
         </div>
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-white">
-            单镜头时长（秒）
+            {w.wizardDurationLabel || 'Shot duration (sec)'}
           </label>
           <div className="flex gap-2" data-testid="wizard-duration-row">
             {[4, 5, 8, 10, 15].map(d => (
@@ -423,15 +445,21 @@ function DetailsStep({ draft, update }: DetailsStepProps) {
 }
 
 function ReviewStep({ draft }: { draft: WizardDraft }) {
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { workshop: Record<string, string> };
+  const w = t.workshop ?? {};
   const modePreset = draft.mode ? MODE_PRESETS[draft.mode] : undefined;
+  const modeName = modePreset ? modeCopy(modePreset, t.workshop).name : '';
   const finalPrompt = applyStyleToPrompt(draft.prompt, draft.styleId);
+  const unset = w.wizardUnset || '(not set)';
+  const unfilled = w.wizardUnfilled || '(empty)';
 
   return (
     <div className="grid gap-4 lg:grid-cols-2" data-testid="wizard-review">
       <div className="space-y-3">
-        <ReviewRow label="项目标题" value={draft.title || '(未填写)'} />
+        <ReviewRow label={w.wizardTitleLabel || 'Project title'} value={draft.title || unfilled} />
         <ReviewRow
-          label="创作模式"
+          label={w.wizardStepMode || 'Creation mode'}
           value={
             modePreset ? (
               <span className="flex items-center gap-2">
@@ -441,35 +469,35 @@ function ReviewStep({ draft }: { draft: WizardDraft }) {
                     className="absolute inset-0 w-full h-full object-contain rounded"
                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                 </span>
-                {modePreset.name} · {modePreset.nameEn}
+                {modeName} · {modePreset.nameEn}
               </span>
             ) : (
-              '(未选择)'
+              unset
             )
           }
         />
-        <ReviewRow label="风格预设" value={draft.styleId ?? '(未选择)'} />
+        <ReviewRow label={w.wizardStylePreset || 'Style preset'} value={draft.styleId ?? unset} />
         <ReviewRow
-          label="全局资产"
+          label={w.wizardGlobalAssets || 'Global assets'}
           value={
             draft.globalAssetIds.length > 0
-              ? `已选 ${draft.globalAssetIds.length} 个`
-              : '未选择'
+              ? (w.wizardAssetsPicked || 'Picked {n}').replace('{n}', String(draft.globalAssetIds.length))
+              : (w.wizardNonePicked || 'None')
           }
         />
         <ReviewRow
-          label="分辨率 / 比例"
+          label={w.wizardResAspect || 'Resolution / ratio'}
           value={`${draft.output.resolution.toUpperCase()} · ${draft.output.aspectRatio}`}
         />
-        <ReviewRow label="单镜头时长" value={`${draft.durationSec}s`} />
+        <ReviewRow label={w.wizardDurationShort || 'Shot duration'} value={`${draft.durationSec}s`} />
       </div>
 
       <div className="rounded-lg border border-white/10 bg-white/5 p-4">
         <div className="mb-2 text-xs font-semibold uppercase text-neutral-400">
-          最终 Prompt 预览
+          {w.wizardPromptPreview || 'Final prompt preview'}
         </div>
         <div className="whitespace-pre-wrap break-words text-sm text-neutral-200">
-          {finalPrompt || '(空)'}
+          {finalPrompt || (w.wizardEmpty || '(empty)')}
         </div>
       </div>
     </div>

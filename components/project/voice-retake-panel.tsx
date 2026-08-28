@@ -1,16 +1,19 @@
 'use client';
 
 /**
- * VoiceRetakePanel (v10.6.4) — 配音 retake 工作台(配音口型面板内,音色货架之下)。
+ * VoiceRetakePanel (v10.6.4) — VO retake workbench (inside dubbing/lipsync,
+ * below the voice shelf).
  *
- * 逐对白镜:台词级情绪标签(EMOTION_LABELS)→ 单句重录(不动整集)→
- * A/B 版本对比试听(双 <audio preload> 预载,切换 <1s)→ 采用(该镜 video 置 stale)。
- * 勾选多句可批量重录(PIPELINE_QUEUE=1 时走重录队列)。
+ * Per dialogue shot: line-level emotion (EMOTION_LABELS) → single-line retake
+ * (rest of episode untouched) → A/B compare (dual <audio preload>, switch <1s)
+ * → adopt (marks that shot's video stale). Multi-select batch retake
+ * (PIPELINE_QUEUE=1 uses the retake queue).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Microphone, Play, Pause, CircleNotch, ArrowsClockwise, CheckCircle, CaretDown, CaretRight } from '@phosphor-icons/react';
 import { EMOTION_LABELS } from '@/lib/tts-prosody';
 import { getToken } from '@/lib/auth';
+import { useLocale } from '@/hooks/use-locale';
 
 interface TakeRow { id: string; audioUrl: string | null; emotion: string; durationSec?: number; createdAt: string; adopted: boolean }
 interface ShotState {
@@ -20,11 +23,13 @@ interface ShotState {
 }
 
 function authHeaders(): Record<string, string> {
-  const t = getToken();
-  return { 'Content-Type': 'application/json', ...(t ? { Authorization: `Bearer ${t}` } : {}) };
+  const tok = getToken();
+  return { 'Content-Type': 'application/json', ...(tok ? { Authorization: `Bearer ${tok}` } : {}) };
 }
 
 export function VoiceRetakePanel({ projectId }: { projectId: string }) {
+  const { locale, t: loc } = useLocale();
+  const t = loc as typeof loc & { projectPanels: Record<string, string> };
   const [shots, setShots] = useState<ShotState[]>([]);
   const [open, setOpen] = useState(false);
   const [emotionPick, setEmotionPick] = useState<Record<number, string>>({});
@@ -36,14 +41,14 @@ export function VoiceRetakePanel({ projectId }: { projectId: string }) {
   const [notice, setNotice] = useState('');
   const [batchBusy, setBatchBusy] = useState(false);
   const audioA = useRef<HTMLAudioElement | null>(null);
-  // 逐 take 一个隐藏 <audio preload> 节点 —— 切 take 不改 src,预载不作废,A/B 才真 <1s
+  // One hidden <audio preload> per take — switching take does not change src, so A/B stays <1s
   const takeAudios = useRef<Record<string, HTMLAudioElement | null>>({});
 
   const refresh = useCallback(async () => {
     try {
       const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/voice-retake`);
       if (res.ok) setShots((await res.json()).shots || []);
-    } catch { /* 非关键路径 */ }
+    } catch { /* non-critical */ }
   }, [projectId]);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -56,10 +61,12 @@ export function VoiceRetakePanel({ projectId }: { projectId: string }) {
         body: JSON.stringify({ shotNumber: s.shotNumber, emotion: emotionPick[s.shotNumber] || undefined }),
       });
       const b = await res.json();
-      setNotice(b.ok ? `镜 ${s.shotNumber} 重录完成(${b.emotion})— 展开做 A/B 对比` : (b.error || '重录失败'));
+      setNotice(b.ok
+        ? t.projectPanels.retakeDone.replace('{n}', String(s.shotNumber)).replace('{emotion}', String(b.emotion))
+        : (b.error || t.projectPanels.retakeFailed));
       if (b.ok) { setExpanded(s.shotNumber); setPickedTake(b.takeId); setAbSide('B'); }
       await refresh();
-    } catch { setNotice('重录失败'); }
+    } catch { setNotice(t.projectPanels.retakeFailed); }
     finally { setBusyShot(null); }
   };
 
@@ -72,10 +79,12 @@ export function VoiceRetakePanel({ projectId }: { projectId: string }) {
         body: JSON.stringify({ shots: Array.from(checked).map((n) => ({ shotNumber: n, emotion: emotionPick[n] || undefined })) }),
       });
       const b = await res.json();
-      setNotice(b.queued ? `已入重录队列(${b.total} 句,任务 ${b.jobId})— 完成后刷新可见` : `批量完成:${b.done?.ok ?? 0}/${b.done?.total ?? checked.size} 句`);
+      setNotice(b.queued
+        ? t.projectPanels.batchQueued.replace('{n}', String(b.total)).replace('{id}', String(b.jobId))
+        : t.projectPanels.batchDone.replace('{ok}', String(b.done?.ok ?? 0)).replace('{total}', String(b.done?.total ?? checked.size)));
       setChecked(new Set());
       await refresh();
-    } catch { setNotice('批量重录失败'); }
+    } catch { setNotice(t.projectPanels.batchFailed); }
     finally { setBatchBusy(false); }
   };
 
@@ -86,19 +95,21 @@ export function VoiceRetakePanel({ projectId }: { projectId: string }) {
         method: 'PUT', headers: authHeaders(), body: JSON.stringify({ takeId }),
       });
       const b = await res.json();
-      setNotice(b.ok ? `已采用 — 镜 ${b.shotNumber} 口型/成片已标待重渲(${b.staleMarked} 项)` : (b.error || '采用失败'));
+      setNotice(b.ok
+        ? t.projectPanels.adoptedNotice.replace('{n}', String(b.shotNumber)).replace('{stale}', String(b.staleMarked))
+        : (b.error || t.projectPanels.adoptFailed));
       await refresh();
-    } catch { setNotice('采用失败'); }
+    } catch { setNotice(t.projectPanels.adoptFailed); }
   };
 
-  // A/B 切换:全部节点已 preload,只做 pause/play —— <1s
+  // A/B switch: all nodes already preload; only pause/play — <1s
   const playSide = (side: 'A' | 'B', takeId?: string | null) => {
     setAbSide(side);
     const b = takeId ? takeAudios.current[takeId] : null;
     const on = side === 'A' ? audioA.current : b;
     audioA.current?.pause();
     for (const el of Object.values(takeAudios.current)) el?.pause();
-    if (on) { on.currentTime = 0; on.play().catch(() => { /* 自动播放被拦 */ }); }
+    if (on) { on.currentTime = 0; on.play().catch(() => { /* autoplay blocked */ }); }
   };
 
   const stopAll = () => {
@@ -108,12 +119,18 @@ export function VoiceRetakePanel({ projectId }: { projectId: string }) {
 
   if (!shots.length) return null;
   const takeCount = shots.reduce((n, s) => n + s.takes.length, 0);
+  const defaultEmotion = EMOTION_LABELS[0];
+  const emotionText = (raw: string) => {
+    const row = EMOTION_LABELS.find((l) => l === raw) as (typeof EMOTION_LABELS[number] & { nameEn?: string; en?: string }) | undefined;
+    if (!row) return raw;
+    return locale === 'en' ? ((row as { nameEn?: string; en?: string }).nameEn || (row as { en?: string }).en || raw) : raw;
+  };
 
   return (
     <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 mb-3" data-testid="voice-retake">
       <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-1.5 text-[11px] text-white/70">
         {open ? <CaretDown className="w-3 h-3" /> : <CaretRight className="w-3 h-3" />}
-        <Microphone className="w-3.5 h-3.5" /> 配音 retake · {shots.length} 句对白{takeCount ? `(${takeCount} 个重录版)` : ''}(单句换情绪重录 / A·B 对比 / 不动整集)
+        <Microphone className="w-3.5 h-3.5" /> {t.projectPanels.retakeTitle.replace('{n}', String(shots.length))}{takeCount ? t.projectPanels.retakeTitleTakes.replace('{n}', String(takeCount)) : ''}{t.projectPanels.retakeTitleHint}
       </button>
 
       {open && (
@@ -122,69 +139,69 @@ export function VoiceRetakePanel({ projectId }: { projectId: string }) {
 
           {shots.map((s) => {
             const isExpanded = expanded === s.shotNumber;
-            const take = s.takes.find((t) => t.id === pickedTake) || s.takes[0] || null;
+            const take = s.takes.find((tk) => tk.id === pickedTake) || s.takes[0] || null;
             return (
               <div key={s.shotNumber} className="rounded-md border border-white/10 bg-black/20 px-2.5 py-1.5">
                 <div className="flex items-center gap-2 flex-wrap">
                   <input
                     type="checkbox" checked={checked.has(s.shotNumber)}
                     onChange={(e) => setChecked((prev) => { const n = new Set(prev); e.target.checked ? n.add(s.shotNumber) : n.delete(s.shotNumber); return n; })}
-                    aria-label={`选中镜 ${s.shotNumber}`} className="accent-[#E8C547]"
+                    aria-label={t.projectPanels.selectShotAria.replace('{n}', String(s.shotNumber))} className="accent-[#E8C547]"
                   />
-                  <span className="text-[10px] text-white/50 w-9 shrink-0">镜 {s.shotNumber}</span>
+                  <span className="text-[10px] text-white/50 w-9 shrink-0">{t.projectPanels.shotN.replace('{n}', String(s.shotNumber))}</span>
                   <span className="text-[11px] text-white/75 flex-1 min-w-0 truncate" title={s.text}>{s.speaker ? `${s.speaker}:` : ''}{s.text}</span>
                   <select
-                    value={emotionPick[s.shotNumber] ?? (s.activeEmotion || s.scriptEmotion || '中性')}
+                    value={emotionPick[s.shotNumber] ?? (s.activeEmotion || s.scriptEmotion || defaultEmotion)}
                     onChange={(e) => setEmotionPick((m) => ({ ...m, [s.shotNumber]: e.target.value }))}
-                    aria-label={`镜 ${s.shotNumber} 情绪标签`}
+                    aria-label={t.projectPanels.emotionAria.replace('{n}', String(s.shotNumber))}
                     className="bg-white/[0.04] border border-white/10 rounded px-1 py-0.5 text-[10px] text-white/80 outline-none shrink-0"
                   >
-                    {EMOTION_LABELS.map((l) => (<option key={l} value={l} className="bg-[#1a1a24]">{l}</option>))}
+                    {EMOTION_LABELS.map((l) => (<option key={l} value={l} className="bg-[#1a1a24]">{emotionText(l)}</option>))}
                   </select>
-                  <button onClick={() => retakeOne(s)} disabled={busyShot != null} title="按所选情绪单句重录"
+                  <button onClick={() => retakeOne(s)} disabled={busyShot != null} title={t.projectPanels.retakeOneHint}
                     className="cinema-btn !px-1.5 !py-0.5 !text-[10px] inline-flex items-center gap-1 disabled:opacity-50 shrink-0">
-                    {busyShot === s.shotNumber ? <CircleNotch className="w-3 h-3 animate-spin" /> : <ArrowsClockwise className="w-3 h-3" />}重录
+                    {busyShot === s.shotNumber ? <CircleNotch className="w-3 h-3 animate-spin" /> : <ArrowsClockwise className="w-3 h-3" />}{t.projectPanels.retake}
                   </button>
                   <button onClick={() => { stopAll(); setAbSide('B'); setExpanded(isExpanded ? null : s.shotNumber); setPickedTake(null); }}
                     className="text-[10px] text-white/45 hover:text-white shrink-0">
-                    {s.takes.length} 版{isExpanded ? ' ▲' : ' ▼'}
+                    {t.projectPanels.versions.replace('{n}', String(s.takes.length))}{isExpanded ? ' ▲' : ' ▼'}
                   </button>
                 </div>
 
                 {isExpanded && (
                   <div className="mt-2 pl-6 space-y-1.5">
-                    {/* A/B 对比:当前版 vs 选中 take(双 audio 预载,切换即播) */}
+                    {/* A/B: current vs selected take (dual audio preload, switch plays immediately) */}
                     <div className="flex items-center gap-2 text-[10.5px]">
-                      <span className="text-white/45">A/B 试听:</span>
+                      <span className="text-white/45">{t.projectPanels.abListen}</span>
                       <button onClick={() => playSide('A')} disabled={!s.activeUrl}
                         className={`px-2 py-0.5 rounded border text-[10px] inline-flex items-center gap-1 disabled:opacity-40 ${abSide === 'A' ? 'border-[#E8C547]/60 text-[#E8C547]' : 'border-white/15 text-white/60'}`}>
-                        {abSide === 'A' ? <Pause className="w-2.5 h-2.5" /> : <Play className="w-2.5 h-2.5" />}A · 当前版{s.activeEmotion ? `(${s.activeEmotion})` : ''}
+                        {abSide === 'A' ? <Pause className="w-2.5 h-2.5" /> : <Play className="w-2.5 h-2.5" />}{s.activeEmotion ? t.projectPanels.sideAEmotion.replace('{emotion}', emotionText(s.activeEmotion)) : t.projectPanels.sideA}
                       </button>
                       <button onClick={() => playSide('B', take?.id)} disabled={!take?.audioUrl}
                         className={`px-2 py-0.5 rounded border text-[10px] inline-flex items-center gap-1 disabled:opacity-40 ${abSide === 'B' ? 'border-[#E8C547]/60 text-[#E8C547]' : 'border-white/15 text-white/60'}`}>
-                        {abSide === 'B' ? <Pause className="w-2.5 h-2.5" /> : <Play className="w-2.5 h-2.5" />}B · 重录版{take ? `(${take.emotion})` : ''}
+                        {abSide === 'B' ? <Pause className="w-2.5 h-2.5" /> : <Play className="w-2.5 h-2.5" />}{take ? t.projectPanels.sideBEmotion.replace('{emotion}', emotionText(take.emotion)) : t.projectPanels.sideB}
                       </button>
                       {s.activeUrl && <audio ref={audioA} src={s.activeUrl} preload="auto" />}
-                      {s.takes.map((t) => t.audioUrl && (
-                        <audio key={t.id} ref={(el) => { takeAudios.current[t.id] = el; }} src={t.audioUrl} preload="auto" />
+                      {s.takes.map((tk) => tk.audioUrl && (
+                        <audio key={tk.id} ref={(el) => { takeAudios.current[tk.id] = el; }} src={tk.audioUrl} preload="auto" />
                       ))}
-                      {!s.activeUrl && <span className="text-white/35">(该镜还没有整集配音版,可直接采用重录版)</span>}
+                      {!s.activeUrl && <span className="text-white/35">{t.projectPanels.noFullDub}</span>}
                     </div>
 
                     {s.takes.length === 0 ? (
-                      <p className="text-[10px] text-white/35">还没有重录版 —— 选个情绪点「重录」试试。</p>
-                    ) : s.takes.map((t) => (
-                      <div key={t.id} className="flex items-center gap-2 text-[10.5px] text-white/60">
-                        <button onClick={() => { setPickedTake(t.id); playSide('B', t.id); }}
-                          className={`px-1.5 py-0.5 rounded border text-[10px] ${pickedTake === t.id || (!pickedTake && t === s.takes[0]) ? 'border-[#E8C547]/50 text-[#E8C547]' : 'border-white/15'}`}>
-                          {t.emotion}{t.durationSec ? ` · ${t.durationSec}s` : ''}
+                      <p className="text-[10px] text-white/35">{t.projectPanels.noRetakes}</p>
+                    ) : s.takes.map((tk) => (
+                      <div key={tk.id} className="flex items-center gap-2 text-[10.5px] text-white/60">
+                        <button onClick={() => { setPickedTake(tk.id); playSide('B', tk.id); }}
+                          className={`px-1.5 py-0.5 rounded border text-[10px] ${pickedTake === tk.id || (!pickedTake && tk === s.takes[0]) ? 'border-[#E8C547]/50 text-[#E8C547]' : 'border-white/15'}`}>
+                          {emotionText(tk.emotion)}{tk.durationSec ? ` · ${tk.durationSec}s` : ''}
                         </button>
-                        {t.adopted ? (
-                          <span className="inline-flex items-center gap-1 text-emerald-300"><CheckCircle className="w-3 h-3" />已采用</span>
+                        {tk.adopted ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-300"><CheckCircle className="w-3 h-3" />{t.projectPanels.adoptedBadge}</span>
                         ) : (
-                          <button onClick={() => adopt(t.id)} className="text-white/50 hover:text-white border border-white/15 rounded px-1.5 py-0.5 text-[10px]">采用此版本</button>
+                          <button onClick={() => adopt(tk.id)} className="text-white/50 hover:text-white border border-white/15 rounded px-1.5 py-0.5 text-[10px]">{t.projectPanels.adoptThis}</button>
                         )}
-                        <span className="text-white/25 text-[9px]">{new Date(t.createdAt).toLocaleTimeString()}</span>
+                        <span className="text-white/25 text-[9px]">{new Date(tk.createdAt).toLocaleTimeString()}</span>
                       </div>
                     ))}
                   </div>
@@ -197,9 +214,9 @@ export function VoiceRetakePanel({ projectId }: { projectId: string }) {
             <button onClick={retakeBatch} disabled={batchBusy || checked.size === 0}
               className="cinema-btn cinema-btn-primary !px-2.5 !py-1 !text-[10px] inline-flex items-center gap-1 disabled:opacity-50">
               {batchBusy ? <CircleNotch className="w-3 h-3 animate-spin" /> : <Microphone className="w-3 h-3" />}
-              批量重录所选({checked.size} 句)
+              {t.projectPanels.batchRetake.replace('{n}', String(checked.size))}
             </button>
-            <span className="text-[10px] text-white/35">采用新配音后,该镜口型/成片会标待重渲 —— 其余镜零接触。</span>
+            <span className="text-[10px] text-white/35">{t.projectPanels.adoptHint}</span>
           </div>
         </div>
       )}

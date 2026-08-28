@@ -153,6 +153,6 @@ describe('AssetGrid', () => {
     render(<AssetGrid fetcher={makeFetcher()} />);
     await waitFor(() => screen.getByTestId('asset-card-a1'));
     // a1 referencedByProjects 长度 = 2
-    expect(screen.getByText('用过 2')).toBeInTheDocument();
+    expect(screen.getByText('Used 2')).toBeInTheDocument();
   });
 });

@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * 系列剧面板(阶段二十六 · v12.18.0)—— 看整季各集状态 + 一键批量生成。
- * 各集 draft→active→completed;有「生成中」时每 5s 轮询刷新。
+ * Series panel (phase 26 · v12.18.0) — season episode status + one-click batch generate.
+ * Each episode draft→active→completed; poll every 5s while any episode is generating.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
@@ -36,7 +36,7 @@ export default function SeriesPanel() {
   };
 
   const [episodes, setEpisodes] = useState<Episode[]>([]);
-  // v12.155:逐集体检(后台拉,徽章渐进);全季补渲(逐集调 failed-videos,串行防抢引擎额度)
+  // v12.155: per-episode health (fetched in background, badges fill in); season fix (per-episode failed-videos, serial to avoid stealing engine quota)
   const [healthMap, setHealthMap] = useState<Record<string, any> | null>(null);
   const [seasonFixBusy, setSeasonFixBusy] = useState(false);
   const [seasonFixMsg, setSeasonFixMsg] = useState('');
@@ -48,7 +48,7 @@ export default function SeriesPanel() {
         for (const e of d.episodes) map[e.projectId] = e;
         setHealthMap(map);
       }
-    } catch { /* 徽章缺席不阻塞 */ }
+    } catch { /* missing badges must not block */ }
   }, [seriesId]);
   useEffect(() => { void loadSeriesHealth(); }, [loadSeriesHealth]);
   const seasonFixAll = async () => {
@@ -63,7 +63,7 @@ export default function SeriesPanel() {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ projectId: h.projectId, stage: 'failed-videos' }),
         }).then((r) => r.body?.getReader && new Response(r.body).text());
-      } catch { /* 单集失败继续下一集 */ }
+      } catch { /* one episode failed — continue to next */ }
       done++;
     }
     setSeasonFixMsg(t.seriesDetail.seasonFixDoneMsg.replace('{n}', String(done)));
@@ -74,7 +74,7 @@ export default function SeriesPanel() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string>('');
-  // v12.25.0 季级产物
+  // v12.25.0 season-level artifacts
   const [seasonCover, setSeasonCover] = useState<string | null>(null);
   const [seasonVideo, setSeasonVideo] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -94,14 +94,14 @@ export default function SeriesPanel() {
         setSeasonCover(body.seasonCover ?? null);
         setSeasonVideo(body.seasonVideo ?? null);
       } else if (!res.ok) {
-        setMsg(body?.error || t.seriesDetail.loadFailStatus.replace('{status}', String(res.status))); // v12.26.0:加载失败不再静默
+        setMsg(body?.error || t.seriesDetail.loadFailStatus.replace('{status}', String(res.status))); // v12.26.0: load failure is no longer silent
       }
     } catch { setMsg(t.seriesDetail.loadFailNetwork); } finally { setLoading(false); }
   }, [seriesId, authHeaders, t]);
 
   useEffect(() => { load(); }, [load]);
 
-  // 有「生成中」就轮询。v12.23.0:依赖布尔 hasActive(非 episodes 引用),避免每次 load 后重建 interval。
+  // Poll while any episode is generating. v12.23.0: depend on boolean hasActive (not the episodes ref) so the interval is not rebuilt after every load.
   const hasActive = episodes.some((e) => e.status === 'active');
   useEffect(() => {
     if (!hasActive) return;
@@ -114,12 +114,12 @@ export default function SeriesPanel() {
     setBusy(true); setMsg('');
     try {
       const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/generate`, {
-        // v12.165:整季统一制作语言(系统默认;'auto' 则按各集创意自动检测)
+        // v12.165: season-wide production language (system default; 'auto' detects per-episode idea)
         method: 'POST', headers: authHeaders(), body: JSON.stringify({ force, language: getSystemLanguage() }),
       });
       const body = await res.json();
-      if (!res.ok) { setMsg(body?.error || `失败 ${res.status}`); return; }
-      // v12.23.0:队列模式无 concurrency 字段,按 mode 分支文案(不再显示「并发 undefined」)
+      if (!res.ok) { setMsg(body?.error || t.seriesDetail.resumeFailStatus.replace('{status}', String(res.status))); return; }
+      // v12.23.0: queue mode has no concurrency field — branch copy by mode (do not show "concurrency undefined")
       setMsg(body.started > 0
         ? (body.mode === 'queue'
             ? t.seriesDetail.batchQueuedMsg.replace('{n}', String(body.started))
@@ -130,16 +130,16 @@ export default function SeriesPanel() {
     finally { setBusy(false); }
   };
 
-  // v12.25.0:导出整季合集
+  // v12.25.0: export full-season compilation
   const exportSeason = async () => {
     if (exporting) return;
     setExporting(true); setMsg(t.seriesDetail.exportingSeasonMsg);
     try {
       let res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/export`, { method: 'POST', headers: authHeaders(), body: '{}' });
       let body = await res.json();
-      // v12.158:体检闸门 409 → 列出问题集,confirm 后带 ignoreHealth 重试
+      // v12.158: health-gate 409 → list problem episodes, confirm, then retry with ignoreHealth
       if (res.status === 409 && body?.error === 'health_gate') {
-        const detail = (body.details || []).map((d: any) => t.seriesDetail.healthGateEpisodeDetail.replace('{ep}', String(d.episode)).replace('{shots}', String(d.animaticShots?.length || 0))).join('、');
+        const detail = (body.details || []).map((d: any) => t.seriesDetail.healthGateEpisodeDetail.replace('{ep}', String(d.episode)).replace('{shots}', String(d.animaticShots?.length || 0))).join(', ');
         if (!window.confirm(`${body.message}\n\n${t.seriesDetail.healthGateIssuePrefix}${detail}\n\n${t.seriesDetail.healthGateConfirmHint}`)) { setMsg(t.seriesDetail.exportCanceledMsg); return; }
         res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/export`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ ignoreHealth: true }) });
         body = await res.json();
@@ -150,7 +150,7 @@ export default function SeriesPanel() {
     finally { setExporting(false); }
   };
 
-  // v12.25.0:生成季封面
+  // v12.25.0: generate season cover
   const genCover = async () => {
     if (coverBusy) return;
     setCoverBusy(true); setMsg(t.seriesDetail.coverGeneratingMsg);
@@ -163,7 +163,7 @@ export default function SeriesPanel() {
     finally { setCoverBusy(false); }
   };
 
-  // v12.182:断点续跑 —— 卡死 active 集重置 draft
+  // v12.182: resume from breakpoint — reset stuck active episodes to draft
   const resumeStuck = async () => {
     try {
       const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/resume`, { method: 'POST', headers: authHeaders(), body: '{}' });
@@ -172,7 +172,7 @@ export default function SeriesPanel() {
       await load();
     } catch { setMsg(t.seriesDetail.resumeFailedMsg); }
   };
-  const pending = episodes.filter((e) => e.status === 'draft' || e.status === 'failed').length; // 待生成 + 失败可重试
+  const pending = episodes.filter((e) => e.status === 'draft' || e.status === 'failed').length; // pending + failed (retryable)
   const generating = episodes.filter((e) => e.status === 'active').length;
   const done = episodes.filter((e) => e.status === 'completed').length;
   const failed = episodes.filter((e) => e.status === 'failed').length;
@@ -217,7 +217,7 @@ export default function SeriesPanel() {
 
       {msg && <div className="mb-4 text-[13px] text-cyan-200/90 bg-cyan-500/10 border border-cyan-500/20 rounded-lg px-3 py-2">{msg}</div>}
 
-      {/* v12.25.0 季级产物:封面 + 整季合集 */}
+      {/* v12.25.0 season artifacts: cover + full-season compilation */}
       <div className="flex items-start gap-4 mb-6 bg-white/5 border border-white/10 rounded-xl p-4">
         <div className="w-20 shrink-0 rounded-lg overflow-hidden bg-black/30 aspect-[3/4] grid place-items-center">
           {seasonCover ? <img src={seasonCover} alt={t.seriesDetail.seasonCoverAlt} className="w-full h-full object-cover" /> : <ImageIcon className="w-6 h-6 text-gray-600" />}
@@ -247,7 +247,7 @@ export default function SeriesPanel() {
         </div>
       </div>
 
-      {/* v12.155:系列质量中枢 —— 逐集体检徽章 + 全季一键补渲降级镜 */}
+      {/* v12.155: series quality hub — per-episode health badges + one-click season fix for downgraded shots */}
       {healthMap && Object.values(healthMap).some((h: any) => h.animaticShots?.length > 0) && (
         <div className="mb-3 flex items-center gap-3 flex-wrap">
           <button
@@ -261,7 +261,7 @@ export default function SeriesPanel() {
           {seasonFixMsg && <span className="text-[10px] text-gray-400 font-mono">{seasonFixMsg}</span>}
         </div>
       )}
-      {/* v12.182:断点续跑 —— 有生成中的集时提供「恢复卡死集」(重启后 active 永卡的救生索) */}
+      {/* v12.182: resume from breakpoint — when episodes are generating, offer "resume stuck" (lifeline if active stays stuck after restart) */}
       {episodes.some((e) => e.status === 'active') && (
         <div className="mb-3">
           <button type="button" onClick={() => void resumeStuck()} className="text-[11px] px-3 py-1.5 rounded-lg border border-white/15 text-gray-300 hover:bg-white/5">
@@ -282,7 +282,7 @@ export default function SeriesPanel() {
                 <span className="text-cyan-400 font-bold text-sm w-12 shrink-0">{t.seriesDetail.episodeLabel.replace('{n}', String(ep.episode_number ?? '?'))}</span>
                 <span className="flex-1 text-sm text-white truncate">{ep.title}</span>
                 {ep.aspect && <span className="text-[10px] text-gray-500 font-mono">{ep.aspect}</span>}
-                {/* v12.155:该集体检徽章(🟢🟡🔴;降级镜数一眼可见) */}
+                {/* v12.155: this episode's health badge (green/yellow/red; downgraded shot count at a glance) */}
                 {healthMap?.[ep.id] && (
                   <span
                     className="text-[11px]"

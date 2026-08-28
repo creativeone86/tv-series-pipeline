@@ -1,13 +1,17 @@
 'use client';
 
 /**
- * v9.6.8 — 「存为模板」(阶段十六 T2)。把当前项目沉淀成可复用模板上架市场。
- * POST /api/projects/[id]/save-template(读画风/锁定角色/分镜/质量信号 → extractTemplate → 落库)。
+ * v9.6.8 — "Save as template" (phase 16 T2). Turns the current project into a
+ * reusable market listing.
+ * POST /api/projects/[id]/save-template (look/locked cast/boards/quality → extractTemplate → DB).
  */
 import { useState } from 'react';
 import { Stack, CircleNotch } from '@phosphor-icons/react';
+import { useLocale } from '@/hooks/use-locale';
 
 export function SaveTemplateButton({ projectId }: { projectId: string }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectMisc: Record<string, string> };
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState(false);
@@ -21,9 +25,9 @@ export function SaveTemplateButton({ projectId }: { projectId: string }) {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`);
-      setMsg(`已上架模板「${body.template?.title}」(质量 ${body.template?.quality})— 去「模板市场」可一键复用`);
+      setMsg(t.projectMisc.templateListed.replace('{title}', body.template?.title).replace('{quality}', String(body.template?.quality)));
     } catch (e) {
-      setErr(true); setMsg(e instanceof Error ? e.message : '保存失败');
+      setErr(true); setMsg(e instanceof Error ? e.message : t.projectMisc.saveFailed);
     } finally { setSaving(false); }
   };
 
@@ -32,7 +36,7 @@ export function SaveTemplateButton({ projectId }: { projectId: string }) {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm text-white/70 min-w-0">
           <Stack className="w-4 h-4 shrink-0" />
-          <span className="truncate">存为模板 · 把这个项目的画风 / 多参 / 节奏沉淀成可复用模板</span>
+          <span className="truncate">{t.projectMisc.saveTemplateDesc}</span>
         </div>
         <button
           onClick={save}
@@ -40,7 +44,7 @@ export function SaveTemplateButton({ projectId }: { projectId: string }) {
           className="cinema-btn cinema-btn-primary !px-3 !py-1.5 !text-[11px] inline-flex items-center gap-1.5 shrink-0 disabled:opacity-50"
         >
           {saving ? <CircleNotch className="w-3.5 h-3.5 animate-spin" /> : <Stack className="w-3.5 h-3.5" />}
-          {saving ? '保存中…' : '存为模板'}
+          {saving ? t.common.saving : t.projectMisc.saveAsTemplate}
         </button>
       </div>
       {msg && <div className={`text-[11px] mt-2 ${err ? 'text-rose-400' : 'text-emerald-400'}`}>{msg}</div>}

@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * DramaPackageButton — 出海打包入口组件(v12.188.1;v12.217 接 i18n 六语,清 v12.210 欠账)
- * 调用 GET /api/series/[id]/drama-package,展示各集视频 URL/封面/定价建议,支持下载 JSON。
- * 文案走 t.seriesDetail.dramaPackage*(zhCN/en/zhTW/ja/ko/ru 全量)。
+ * DramaPackageButton — overseas package entry (v12.188.1; v12.217 six-locale i18n).
+ * GET /api/series/[id]/drama-package, shows episode URLs / cover / pricing, JSON download.
+ * Copy via t.seriesDetail.dramaPackage* (zhCN/en/zhTW/ja/ko/ru).
  */
 
 import { useState } from 'react';
@@ -28,7 +28,7 @@ export function DramaPackageButton({ seriesId }: Props) {
   const [data, setData] = useState<DramaPackageResult | null>(null);
   const [errMsg, setErrMsg] = useState('');
   const [open, setOpen] = useState(false);
-  // v12.222 合规:出海打包前必须确认 AI 声明(未勾选禁止拉取/导出),请求随带 aiAck=1。
+  // v12.222 compliance: must ack AI declaration before pack/export; request sends aiAck=1.
   const [aiAck, setAiAck] = useState(false);
 
   const pricingMap = (data?.pricing ?? []).reduce<Record<number, DramaPricing>>((acc, p) => {
@@ -67,13 +67,13 @@ export function DramaPackageButton({ seriesId }: Props) {
 
   return (
     <>
-      {/* v12.222 合规:AI 声明勾选(未勾选禁止打包/导出) */}
+      {/* v12.222 compliance: AI declaration checkbox (required before pack/export) */}
       <label className="flex items-start gap-1.5 text-[11px] text-gray-400 cursor-pointer leading-snug mb-1.5 max-w-md">
         <input type="checkbox" checked={aiAck} onChange={(e) => setAiAck(e.target.checked)} className="mt-0.5 accent-amber-400" />
         <span>{t.seriesDetail.dramaPackageAiDeclaration}</span>
       </label>
 
-      {/* 入口按钮 */}
+      {/* Entry button */}
       <button
         onClick={() => { if (state === 'done' && data) { setOpen(true); } else { void fetch_(); } }}
         disabled={state === 'loading' || (!aiAck && !(state === 'done' && !!data))}
@@ -86,15 +86,15 @@ export function DramaPackageButton({ seriesId }: Props) {
         {state === 'loading' ? t.seriesDetail.dramaPackageFetching : t.seriesDetail.dramaPackageBtn}
       </button>
 
-      {/* 错误内联提示 */}
+      {/* Inline error */}
       {state === 'error' && errMsg && (
         <span className="text-[11px] text-red-300">{t.seriesDetail.dramaPackageErrPrefix}{errMsg}</span>
       )}
 
-      {/* 结果面板(内联展开) */}
+      {/* Result panel (inline) */}
       {open && data && (
         <div className="w-full mt-3 rounded-xl border border-white/10 bg-white/5 p-4 space-y-4 text-[13px]">
-          {/* 标题栏 */}
+          {/* Title bar */}
           <div className="flex items-center justify-between">
             <span className="font-semibold text-white text-sm">{t.seriesDetail.dramaPackageTitle}</span>
             <div className="flex items-center gap-2">
@@ -110,7 +110,7 @@ export function DramaPackageButton({ seriesId }: Props) {
             </div>
           </div>
 
-          {/* 系列封面 + 基本信息 */}
+          {/* Series cover + basics */}
           <div className="flex items-start gap-3">
             {data.series.coverUrl && (
               <div className="w-14 shrink-0 rounded-lg overflow-hidden bg-black/30 aspect-[3/4]">
@@ -126,7 +126,7 @@ export function DramaPackageButton({ seriesId }: Props) {
             </div>
           </div>
 
-          {/* 各集列表 */}
+          {/* Episode list */}
           <div className="space-y-1.5">
             {data.episodes.map((ep) => {
               const price = pricingMap[ep.episodeNumber];
@@ -153,7 +153,7 @@ export function DramaPackageButton({ seriesId }: Props) {
             })}
           </div>
 
-          {/* 上传步骤 */}
+          {/* Upload steps */}
           {data.uploadGuide.length > 0 && (
             <div className="bg-black/20 rounded-lg px-3 py-2.5 space-y-1">
               <div className="text-[11px] font-semibold text-gray-400 mb-1">{t.seriesDetail.dramaPackageGuideTitle}</div>

@@ -3,16 +3,16 @@
 /**
  * components/dashboard/api-quota-banner (v2.17 P0.3)
  *
- * 顶部黄/红 banner — 当任意外部 API 配额耗尽 / 上游饱和 / 鉴权失败时, 让用户在
- * 点 "开始创作" 前就看到 "Minimax 视频已暂时不可用, 会自动降级到 Veo" 的提示。
+ * Top yellow/red banner — when any external API is out of quota / saturated / auth-failed,
+ * show a hint before the user hits "Start creating" (e.g. Minimax video is down, fallback to Veo).
  *
- * 数据源: GET /api/api-status (公开, 1 小时窗口活跃告警)
- * 轮询间隔: 60s — 不打扰但够新
+ * Source: GET /api/api-status (public, 1h active-alert window)
+ * Poll: 60s — fresh enough without being noisy
  *
- * 行为:
- *   - 无活跃告警 → 不渲染
- *   - 有告警 → 渲染 banner, 列出每个 provider 的简短状态
- *   - 用户点 X → 本会话内不再显示 (sessionStorage)
+ * Behavior:
+ *   - no active alerts → render nothing
+ *   - alerts → banner listing each provider's short status
+ *   - user clicks X → hide for this session (sessionStorage)
  */
 
 import { useEffect, useState, useCallback } from 'react';
@@ -51,7 +51,7 @@ export function ApiQuotaBanner() {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [dismissed, setDismissed] = useState(false);
 
-  // 会话级别 dismiss
+  // Session-level dismiss
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (sessionStorage.getItem(DISMISS_KEY) === '1') {
@@ -68,7 +68,7 @@ export function ApiQuotaBanner() {
         setAlerts(body.alerts);
       }
     } catch {
-      /* 静默 — banner 失败不能影响主页 */
+      /* Silent — banner failure must not break the home page */
     }
   }, []);
 
@@ -87,7 +87,7 @@ export function ApiQuotaBanner() {
 
   if (dismissed || alerts.length === 0) return null;
 
-  // 找最严重的色调
+  // Pick the most severe tone
   const hasRed = alerts.some((a) => ALERT_LABEL[a.alertType]?.tone === 'red');
   const bg = hasRed
     ? 'bg-rose-500/15 border-rose-500/40 text-rose-100'

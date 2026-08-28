@@ -1,20 +1,21 @@
 'use client';
 
 /**
- * /dashboard/u2v · Sprint C.1 — 单图 → 视频独立工具页
+ * /dashboard/u2v · Sprint C.1 — image → video standalone tool
  *
- * 不进项目主管线,纯独立工具:
- *   1. 用户贴 image URL 或上传文件
- *   2. 写一句描述 (希望画面如何动)
- *   3. 选时长 (5s / 6s)
- *   4. 点生成 → 等 1-3 分钟 → 内嵌 video player + 下载按钮
+ * Not on the main project pipeline; a standalone tool:
+ *   1. User pastes an image URL or uploads a file
+ *   2. Writes a short motion description
+ *   3. Picks duration (5s / 6s)
+ *   4. Generate → wait 1–3 min → inline video player + download
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { useFileDrop } from '@/components/ui/DropZone';
+import { useLocale } from '@/hooks/use-locale';
 
-// v12.339:这页的上传限制只此一处 —— hook 的落地校验与 uploadFile 的兜底校验共用,
-// 两处各写一套数字就是漂移的开始。
+// v12.339: upload limits live here only — the hook's on-disk check and
+// uploadFile's fallback share this constant. Two copies would drift.
 const U2V_ACCEPT = { 'image/*': ['.png', '.jpg', '.jpeg', '.webp'] };
 const U2V_MAX = 10 * 1024 * 1024;
 import { Upload, Link as LinkIcon, Play, Download, CircleNotch as Loader2, Sparkle as Sparkles, Warning as AlertTriangle, ArrowCounterClockwise as RotateCcw, FilmSlate } from '@phosphor-icons/react';
@@ -22,15 +23,17 @@ import { useToast } from '@/components/ui/toast-provider';
 import { CameraLanguagePicker } from '@/components/create/camera-language-picker';
 import { CircularProgress } from '@/components/ui/circular-progress';
 
-// v5.0.2: 各时长档的预计耗时 (秒) — 给进度环做时间估算 (无真实进度事件时的兜底)
+type DashT = ReturnType<typeof useLocale>['t'] & { dashPages: Record<string, string> };
+
+// v5.0.2: expected seconds per duration — progress-ring estimate (fallback when no real events)
 const EXPECTED_SEC: Record<number, number> = { 5: 120, 6: 120, 10: 150, 15: 180 };
 function fmtMMSS(s: number): string {
   const m = Math.floor(s / 60); const ss = Math.floor(s % 60);
   return `${m}:${ss.toString().padStart(2, '0')}`;
 }
 
-// v2.14 P0.4: 长镜头档位 — 5/6s 走 Minimax I2V-01, 10s 走 Kling Master, 15s 走 Vidu Q3 Pro.
-// 客户端只看到统一选项, 后端 /api/u2v 根据 duration 自动选模型 (见 P0.4 路由).
+// v2.14 P0.4: long-shot tiers — 5/6s Minimax I2V-01, 10s Kling Master, 15s Vidu Q3 Pro.
+// Client sees one option list; /api/u2v picks the model from duration (see P0.4 route).
 type DurationOption = 5 | 6 | 10 | 15;
 const DURATION_OPTIONS: Array<{ value: DurationOption; label: string; engineHint: string }> = [
   { value: 5,  label: '5s',  engineHint: 'Minimax I2V-01' },
@@ -40,25 +43,27 @@ const DURATION_OPTIONS: Array<{ value: DurationOption; label: string; engineHint
 ];
 
 export default function U2VPage() {
+  const { t: loc } = useLocale();
+  const t = loc as DashT;
   const fileRef = useRef<HTMLInputElement | null>(null);
   const tailFileRef = useRef<HTMLInputElement | null>(null);
   const [imageUrl, setImageUrl] = useState('');
-  // v12.339:这两个上传区**本来就长得像拖放区**("点击上传"),却只支持点击。
-  // 复用 useFileDrop 的行为(校验 + 拖放),外观一字不改 —— 通用组件那套灰色样式
-  // 塞进影院主题里会突兀,所以只借行为不借皮肤。
+  // v12.339: these dropzones already look like drop targets ("click to upload")
+  // but only handled click. Reuse useFileDrop behavior (validate + drop), keep
+  // this page's look — the generic grey skin would clash with the cinema theme.
   const [imagePreview, setImagePreview] = useState('');
   const [urlDraft, setUrlDraft] = useState('');
   const [showUrlInput, setShowUrlInput] = useState(false);
-  // v2.14 P0.3: 首尾帧融合 — 当 tailImageUrl 非空时, 路由切到 /api/u2v-flf
+  // v2.14 P0.3: first/last-frame fusion — when tailImageUrl is set, route to /api/u2v-flf
   const [tailImageUrl, setTailImageUrl] = useState('');
   const [tailImagePreview, setTailImagePreview] = useState('');
   const [prompt, setPrompt] = useState('');
   const [duration, setDuration] = useState<DurationOption>(5);
-  // v2.14 P0.2: 镜头语言预设 id (来自 CAMERA_LANGUAGE_PRESETS)
+  // v2.14 P0.2: camera-language preset id (from CAMERA_LANGUAGE_PRESETS)
   const [cameraPreset, setCameraPreset] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [resultUrl, setResultUrl] = useState('');
-  // v5.0.2: 进度环 + 错误状态
+  // v5.0.2: progress ring + error state
   const [progress, setProgress] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
@@ -66,11 +71,11 @@ export default function U2VPage() {
   const { showToast } = useToast();
   const isFlfMode = !!tailImageUrl;
 
-  // 清理计时器
+  // Clear timer on unmount
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
 
-  // v12.252:支持 ?image=<url> 预填(漫转分格台「→ 单图变视频」交接用)。
-  // 用 window.location 读,避免 useSearchParams 触发的 Suspense 边界要求;仅接受同站 serve-file / data / http(s)。
+  // v12.252: support ?image=<url> prefill (comic-panel desk → I2V handoff).
+  // Read window.location to avoid useSearchParams Suspense; only same-origin serve-file / data / http(s).
   useEffect(() => {
     try {
       const q = new URLSearchParams(window.location.search).get('image');
@@ -81,7 +86,7 @@ export default function U2VPage() {
     } catch { /* noop */ }
   }, []);
 
-  /** 启动时间估算进度: 渐近逼近 95%, 不会卡死在固定值. 真结果到达后由调用方拉到 100. */
+  /** Start estimated progress: asymptote toward 95%; caller snaps to 100 on real result. */
   const startProgressTimer = (durationSel: number) => {
     const expected = EXPECTED_SEC[durationSel] || 120;
     const t0 = Date.now();
@@ -90,7 +95,7 @@ export default function U2VPage() {
     timerRef.current = setInterval(() => {
       const sec = (Date.now() - t0) / 1000;
       setElapsed(sec);
-      // 渐近曲线: 95*(1-e^(-t/(0.4*expected))) — 永远向 95 爬, 不停顿
+      // Asymptote: 95*(1-e^(-t/(0.4*expected))) — always climbing toward 95, never stalls
       const pct = 95 * (1 - Math.exp(-sec / (0.4 * expected)));
       setProgress(Math.max(2, pct));
     }, 250);
@@ -98,16 +103,16 @@ export default function U2VPage() {
   const stopProgressTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
 
   /**
-   * 上传图片到 /api/upload/character-face, 拿到 URL 后塞回对应槽位 (first / tail).
-   * v2.14 P0.3: 加 slot 参数, 区分主图(单图视频或首帧)和尾帧。
+   * Upload to /api/upload/character-face, then write the URL into first / tail.
+   * v2.14 P0.3: slot distinguishes main (I2V or first frame) vs tail frame.
    */
   const uploadFile = async (file: File, slot: 'first' | 'tail' = 'first') => {
     if (!file.type.startsWith('image/')) {
-      showToast({ title: '只能上传图片', type: 'error' });
+      showToast({ title: t.dashPages.imagesOnly, type: 'error' });
       return;
     }
     if (file.size > U2V_MAX) {
-      showToast({ title: `图片太大(上限 ${U2V_MAX / 1048576}MB)`, type: 'error' });
+      showToast({ title: t.dashPages.imageTooLargeMb.replace('{n}', String(U2V_MAX / 1048576)), type: 'error' });
       return;
     }
     const form = new FormData();
@@ -115,7 +120,7 @@ export default function U2VPage() {
     const res = await fetch('/api/upload/character-face', { method: 'POST', body: form });
     const body = await res.json();
     if (!res.ok) {
-      showToast({ title: body.error || '上传失败', type: 'error' });
+      showToast({ title: body.error || t.product.dropFailed, type: 'error' });
       return;
     }
     if (slot === 'first') {
@@ -127,7 +132,7 @@ export default function U2VPage() {
     }
   };
 
-  // 首/尾帧各一份拖放行为;外观沿用本页原样,只是多了「拖进来也行」。
+  // First / tail each get drop behavior; look stays as-is, drop is extra.
   const firstDrop = useFileDrop({
     onFiles: (fs) => { if (fs[0]) return uploadFile(fs[0], 'first'); },
     accept: U2V_ACCEPT, maxSize: U2V_MAX,
@@ -143,7 +148,7 @@ export default function U2VPage() {
     const trimmed = urlDraft.trim();
     if (!trimmed) return;
     if (!/^https?:\/\//i.test(trimmed)) {
-      showToast({ title: 'URL 必须以 http(s):// 开头', type: 'error' });
+      showToast({ title: t.dashPages.urlMustHttp, type: 'error' });
       return;
     }
     const res = await fetch('/api/upload/character-face', {
@@ -153,7 +158,7 @@ export default function U2VPage() {
     });
     const body = await res.json();
     if (!res.ok) {
-      showToast({ title: body.error || 'URL 抓取失败', type: 'error' });
+      showToast({ title: body.error || t.dashPages.urlFetchFailed, type: 'error' });
       return;
     }
     setImageUrl(body.url);
@@ -164,7 +169,7 @@ export default function U2VPage() {
 
   const generate = async () => {
     if (!imageUrl || !prompt.trim()) {
-      showToast({ title: '需要先上传图片 + 写一句描述', type: 'error' });
+      showToast({ title: t.dashPages.needImageAndPrompt, type: 'error' });
       return;
     }
     setGenerating(true);
@@ -172,7 +177,7 @@ export default function U2VPage() {
     setErrorMsg('');
     setProgress(2);
     setElapsed(0);
-    // v4.1.4: 单图 (非 FLF) 走 SSE 真实进度流; FLF 仍走同步 (尚未流式化)
+    // v4.1.4: single-image (non-FLF) uses SSE progress; FLF is still sync (not streamed yet)
     if (!isFlfMode) {
       await generateViaSSE();
       return;
@@ -192,22 +197,22 @@ export default function U2VPage() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const msg = body.error || `生成失败 (HTTP ${res.status})`;
+        const msg = body.error || t.dashPages.generateFailedHttp.replace('{status}', String(res.status));
         setErrorMsg(msg); showToast({ title: msg, type: 'error' });
         return;
       }
       stopProgressTimer(); setProgress(100); setResultUrl(body.videoUrl);
-      showToast({ title: `生成成功!${body.model ? ' · ' + body.model : ''}`, type: 'success' });
+      showToast({ title: `${t.dashPages.generateOk}${body.model ? ' · ' + body.model : ''}`, type: 'success' });
     } catch (e) {
       const aborted = e instanceof DOMException && e.name === 'AbortError';
-      const msg = aborted ? '生成超时 (超过 6 分钟无响应)。' : (e instanceof Error ? e.message : '网络错误,生成失败');
+      const msg = aborted ? t.dashPages.generateTimeout : (e instanceof Error ? e.message : t.dashPages.generateNetwork);
       setErrorMsg(msg); showToast({ title: msg, type: 'error' });
     } finally {
       clearTimeout(hardTimeout); stopProgressTimer(); setGenerating(false);
     }
   };
 
-  /** v4.1.4: SSE 真实进度流 — 边生成边收 progress/done/error 帧, 实时驱动进度环. */
+  /** v4.1.4: SSE progress stream — drive the ring from progress/done/error frames. */
   const generateViaSSE = async () => {
     const t0 = Date.now();
     const ctrl = new AbortController();
@@ -241,16 +246,16 @@ export default function U2VPage() {
           } else if (ev.event === 'done') {
             setProgress(100);
             setResultUrl(ev.data.videoUrl);
-            showToast({ title: `生成成功!${ev.data.model ? ' · ' + ev.data.model : ''}`, type: 'success' });
+            showToast({ title: `${t.dashPages.generateOk}${ev.data.model ? ' · ' + ev.data.model : ''}`, type: 'success' });
             done = true;
           } else if (ev.event === 'error') {
-            throw new Error(ev.data?.error || '生成失败');
+            throw new Error(ev.data?.error || t.dashPages.generateFailed);
           }
         }
       }
     } catch (e) {
       const aborted = e instanceof DOMException && e.name === 'AbortError';
-      const msg = aborted ? '生成超时 (超过 6 分钟无响应)。' : (e instanceof Error ? e.message : '网络错误,生成失败');
+      const msg = aborted ? t.dashPages.generateTimeout : (e instanceof Error ? e.message : t.dashPages.generateNetwork);
       setErrorMsg(msg);
       showToast({ title: msg, type: 'error' });
     } finally {
@@ -264,18 +269,18 @@ export default function U2VPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Sparkles className="w-6 h-6 text-[#E8C547]" />
-          单图变视频(I2V)
+          {t.dashPages.u2vTitle}
         </h1>
         <p className="text-sm text-[var(--soft)] mt-1">
-          上传一张图,写一句描述 — AI 给你 5-15s 视频(Minimax / Kling / Vidu 按时长自动选)。独立工具,不进项目管线。
+          {t.dashPages.u2vSubtitle}
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* 输入区 */}
+        {/* Input */}
         <div className="bg-[rgba(255,255,255,0.06)] border border-[var(--border)] rounded-2xl p-5 space-y-4">
           <div>
-            <label className="text-xs text-[var(--soft)] uppercase tracking-wider">输入图片</label>
+            <label className="text-xs text-[var(--soft)] uppercase tracking-wider">{t.dashPages.inputImage}</label>
             <div
               {...firstDrop.dropProps}
               onClick={() => !imagePreview && fileRef.current?.click()}
@@ -288,7 +293,7 @@ export default function U2VPage() {
               ) : (
                 <div className="text-center text-[var(--soft)]">
                   <Upload className="w-7 h-7 mx-auto mb-1 opacity-50" />
-                  <div className="text-xs">{firstDrop.isDragging ? '放开即上传' : '点击 / 拖入图片 或 用 URL'}</div>
+                  <div className="text-xs">{firstDrop.isDragging ? t.dashPages.dropToUpload : t.dashPages.clickOrDropOrUrl}</div>
                 </div>
               )}
             </div>
@@ -309,14 +314,14 @@ export default function U2VPage() {
                 className="flex-1 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs inline-flex items-center justify-center gap-1.5"
               >
                 <Upload className="w-3.5 h-3.5" />
-                上传文件
+                {t.dashPages.uploadFile}
               </button>
               <button
                 onClick={() => setShowUrlInput(v => !v)}
                 className="flex-1 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs inline-flex items-center justify-center gap-1.5"
               >
                 <LinkIcon className="w-3.5 h-3.5" />
-                用 URL
+                {t.dashPages.useUrl}
               </button>
             </div>
             {showUrlInput && (
@@ -334,23 +339,23 @@ export default function U2VPage() {
                   disabled={!urlDraft.trim()}
                   className="px-3 py-1 text-xs rounded bg-[#E8C547]/15 text-[#E8C547] hover:bg-[#E8C547]/25 disabled:opacity-40"
                 >
-                  抓取
+                  {t.dashPages.fetchUrl}
                 </button>
               </div>
             )}
           </div>
 
-          {/* v2.14 P0.3: 尾帧上传槽位 — 可选, 上传后路由切到 /api/u2v-flf 首尾帧融合 */}
+          {/* v2.14 P0.3: optional tail-frame slot — set → route /api/u2v-flf */}
           {imageUrl && (
             <div>
               <label className="text-xs text-[var(--soft)] uppercase tracking-wider flex items-center justify-between">
-                <span>尾帧 (可选 · 启用首尾帧融合)</span>
+                <span>{t.dashPages.tailFrameOptional}</span>
                 {isFlfMode && (
                   <button
                     onClick={() => { setTailImageUrl(''); setTailImagePreview(''); }}
                     className="text-[10px] text-[#E8C547] hover:underline"
                   >
-                    清空
+                    {t.dashPages.clear}
                   </button>
                 )}
               </label>
@@ -366,7 +371,7 @@ export default function U2VPage() {
                 ) : (
                   <div className="text-center text-[var(--soft)]">
                     <Upload className="w-5 h-5 mx-auto mb-1 opacity-40" />
-                    <div className="text-[11px]">{tailDrop.isDragging ? '放开即上传尾帧' : '点击 / 拖入尾帧 · Kling 自动补中间运动'}</div>
+                    <div className="text-[11px]">{tailDrop.isDragging ? t.dashPages.dropTail : t.dashPages.clickOrDropTail}</div>
                   </div>
                 )}
               </div>
@@ -383,18 +388,18 @@ export default function U2VPage() {
               />
               {isFlfMode && (
                 <div className="mt-1 text-[10px] text-[#E8C547]/80">
-                  ✦ 模式: 首尾帧融合 · 引擎: Kling Master (失败回退 Minimax 单图)
+                  {t.dashPages.flfModeHint}
                 </div>
               )}
             </div>
           )}
 
           <div>
-            <label className="text-xs text-[var(--soft)] uppercase tracking-wider">描述如何动</label>
+            <label className="text-xs text-[var(--soft)] uppercase tracking-wider">{t.dashPages.describeMotion}</label>
             <textarea
               value={prompt}
               onChange={e => setPrompt(e.target.value)}
-              placeholder="例如:人物缓缓抬头,风吹动头发,背景虚化"
+              placeholder={t.dashPages.motionPlaceholder}
               maxLength={500}
               rows={3}
               className="mt-2 w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg focus:outline-none focus:border-[#E8C547]/50 text-sm resize-none"
@@ -402,18 +407,18 @@ export default function U2VPage() {
             <div className="text-[10px] text-[var(--soft)] mt-1 text-right">{prompt.length} / 500</div>
           </div>
 
-          {/* v2.14 P0.2: 镜头语言预设 — chip 单选, 不强制 */}
+          {/* v2.14 P0.2: camera-language chips — optional single-select */}
           <CameraLanguagePicker value={cameraPreset} onChange={setCameraPreset} disabled={generating} />
 
           <div>
-            <label className="text-xs text-[var(--soft)] uppercase tracking-wider">时长</label>
+            <label className="text-xs text-[var(--soft)] uppercase tracking-wider">{t.dashPages.duration}</label>
             <div className="mt-2 flex gap-2">
               {DURATION_OPTIONS.map(opt => (
                 <button
                   key={opt.value}
                   onClick={() => setDuration(opt.value)}
                   disabled={generating}
-                  title={`${opt.label} · 后端走 ${opt.engineHint}`}
+                  title={t.dashPages.durationEngineHint.replace('{label}', opt.label).replace('{engine}', opt.engineHint)}
                   className={`flex-1 px-3 py-1.5 rounded-lg text-sm transition ${
                     duration === opt.value
                       ? 'bg-[#E8C547] text-black font-semibold'
@@ -437,51 +442,51 @@ export default function U2VPage() {
             {generating ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                生成中 {Math.round(progress)}% · {fmtMMSS(elapsed)}
+                {t.dashPages.generatingPct.replace('{pct}', String(Math.round(progress))).replace('{time}', fmtMMSS(elapsed))}
               </>
             ) : (
               <>
                 <Play className="w-4 h-4" />
-                生成视频
+                {t.dashPages.generateVideo}
               </>
             )}
           </button>
         </div>
 
-        {/* 结果区 */}
+        {/* Result */}
         <div className="bg-[rgba(255,255,255,0.06)] border border-[var(--border)] rounded-2xl p-5">
-          <label className="text-xs text-[var(--soft)] uppercase tracking-wider">结果预览</label>
+          <label className="text-xs text-[var(--soft)] uppercase tracking-wider">{t.dashPages.resultPreview}</label>
           <div className="mt-2 aspect-video rounded-xl overflow-hidden bg-black/40 flex items-center justify-center">
             {resultUrl ? (
               <video src={resultUrl} controls autoPlay loop className="w-full h-full object-contain" />
             ) : generating ? (
-              // v5.0.2: 环形进度条 — 时间估算, 渐近 95%, 出片瞬间到 100%
+              // v5.0.2: ring — time estimate, asymptote 95%, snap to 100% on result
               <div className="flex flex-col items-center justify-center gap-3">
                 <CircularProgress
                   value={progress}
-                  sublabel={`已等待 ${fmtMMSS(elapsed)}`}
+                  sublabel={t.dashPages.waited.replace('{time}', fmtMMSS(elapsed))}
                 />
                 <div className="text-center text-[var(--soft)] text-xs">
-                  {DURATION_OPTIONS.find(o => o.value === duration)?.engineHint} 正在生成 — 通常 1-3 分钟
-                  <div className="text-[10px] opacity-50 mt-0.5">进度为时间估算,出片瞬间跳到 100%</div>
+                  {t.dashPages.engineGenerating.replace('{engine}', DURATION_OPTIONS.find(o => o.value === duration)?.engineHint || '')}
+                  <div className="text-[10px] opacity-50 mt-0.5">{t.dashPages.progressEstimateHint}</div>
                 </div>
               </div>
             ) : errorMsg ? (
-              // v5.0.2: 失败不再静默转圈, 面板内明示 + 重试
+              // v5.0.2: fail visibly in-panel + retry (no silent spinner)
               <div className="text-center px-6">
                 <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-rose-400" />
-                <div className="text-sm text-rose-300 mb-1">生成失败</div>
+                <div className="text-sm text-rose-300 mb-1">{t.dashPages.generateFailed}</div>
                 <div className="text-[11px] text-white/50 mb-3">{errorMsg}</div>
                 <button
                   onClick={generate}
                   className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-xs inline-flex items-center gap-1.5"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" /> 重试
+                  <RotateCcw className="w-3.5 h-3.5" /> {t.errors.retry}
                 </button>
               </div>
             ) : (
               <div className="text-center text-[var(--soft)] text-sm opacity-60">
-                结果将出现在这里
+                {t.dashPages.resultsHere}
               </div>
             )}
           </div>
@@ -495,16 +500,16 @@ export default function U2VPage() {
                 className="flex-1 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-sm inline-flex items-center justify-center gap-1.5"
               >
                 <Download className="w-3.5 h-3.5" />
-                下载 MP4
+                {t.dashPages.downloadMp4}
               </a>
-              {/* v12.255:一键把这段成片送进 MV 卡点台当真片段(免手动复制链接) */}
+              {/* v12.255: one-click send this clip into MV beats as a real clip */}
               <a
                 href={`/dashboard/mv?clip=${encodeURIComponent(resultUrl)}`}
                 className="flex-1 px-4 py-2 rounded-xl bg-[#E8C547]/15 text-[#E8C547] hover:bg-[#E8C547]/25 text-sm inline-flex items-center justify-center gap-1.5"
-                title="把这段视频作为真片段加入 MV 卡点台"
+                title={t.dashPages.addToMvTitle}
               >
                 <FilmSlate className="w-3.5 h-3.5" weight="bold" />
-                加入 MV 片段
+                {t.dashPages.addToMv}
               </a>
             </div>
           )}

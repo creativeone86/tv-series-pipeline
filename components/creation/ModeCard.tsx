@@ -3,19 +3,19 @@
 /**
  * ModeCard (v2.0 Sprint 0 D5)
  *
- * 5 种创作模式的卡片选择器。对齐 OiiOii 的创作入口设计，但保留
- * 我方原创模式（本期决议：暂时不砍任何模式）。
+ * Card picker for 5 creation modes. Aligns with OiiOii's create entry,
+ * but keeps our original modes (this cycle: do not drop any).
  *
  * 5 modes:
- *   1. episodic      连续剧集  —— 多集连续叙事，角色/风格强一致
- *   2. mv            MV / 歌词  —— 音乐驱动，节拍对齐
- *   3. quick         速创 60s  —— 一键出片，适合抖音短视频
- *   4. comic-to-video 漫画转动画 —— 上传分镜/漫画直接转视频
- *   5. ip-derivative IP 衍生    —— 基于已有角色/IP 二创
+ *   1. episodic       Episodic series — multi-episode narrative, tight cast/look
+ *   2. mv             MV / lyrics — music-driven, beat-aligned
+ *   3. quick          Quick 60s — one-tap film, short-video style
+ *   4. comic-to-video Comic → video — upload boards/comic, animate
+ *   5. ip-derivative  IP derivative — remix existing characters/IP
  *
- * 每卡片包含：图标、中英文名、特色说明、预计用时、按钮。
+ * Each card: icon, localized name, English subtitle, features, ETA.
  *
- * 使用：
+ * Usage:
  *   <ModeCardGrid value={mode} onChange={setMode} />
  *   <ModeCard preset={MODE_PRESETS.mv} selected onSelect={...} />
  */
@@ -23,9 +23,10 @@
 import * as React from 'react';
 import type { CreationMode } from '@/types/agents';
 import { cn } from '@/lib/utils';
+import { useLocale } from '@/hooks/use-locale';
 
 // ──────────────────────────────────────────────────────────
-// 预设配置
+// Preset config (ids / icons / colors only — copy via t.workshop)
 // ──────────────────────────────────────────────────────────
 
 export interface ModePreset {
@@ -44,59 +45,81 @@ export const MODE_PRESETS: Record<CreationMode, ModePreset> = {
   episodic: {
     mode: 'episodic',
     icon: '🎬',
-    name: '连续剧集',
+    name: 'Episodic Series',
     nameEn: 'Episodic Series',
-    desc: '多集连续叙事，角色与世界观强一致',
-    features: ['跨集角色一致', '世界观锁定', '3-20 集批量'],
-    estMinutes: '每集 12-20 分钟',
+    desc: 'Multi-episode narrative with locked cast and world',
+    features: ['Cross-episode cast lock', 'World lock', '3–20 episode batch'],
+    estMinutes: '12–20 min per episode',
     gradient: 'from-purple-500/20 to-indigo-500/20',
-    recommendedFor: '番剧 / 连载短剧',
+    recommendedFor: 'Series / serialized shorts',
   },
   mv: {
     mode: 'mv',
     icon: '🎵',
-    name: 'MV 音乐视频',
+    name: 'Music Video',
     nameEn: 'Music Video',
-    desc: '音乐节拍驱动，歌词与画面精准对齐',
-    features: ['歌词分段上屏', '节拍同步切镜', '情绪匹配配色'],
-    estMinutes: '3-5 分钟出片',
+    desc: 'Beat-driven picture, lyrics locked to the cut',
+    features: ['Lyric cards on screen', 'Beat-synced cuts', 'Mood-matched palette'],
+    estMinutes: '3–5 min to film',
     gradient: 'from-pink-500/20 to-rose-500/20',
-    recommendedFor: '原创 MV / 二创饭制',
+    recommendedFor: 'Original MV / fan edits',
   },
   quick: {
     mode: 'quick',
     icon: '⚡',
-    name: '速创 60s',
+    name: 'Quick 60s',
     nameEn: 'Quick 60s',
-    desc: '一句话直出 60 秒短视频，抖音快手风格',
-    features: ['一键生成', '自动封面', '竖屏 9:16'],
-    estMinutes: '3-8 分钟出片',
+    desc: 'One line in, 60-second short out',
+    features: ['One-tap generate', 'Auto cover', 'Vertical 9:16'],
+    estMinutes: '3–8 min to film',
     gradient: 'from-orange-500/20 to-amber-500/20',
-    recommendedFor: '日更短视频 / 热点跟拍',
+    recommendedFor: 'Daily shorts / trend follow',
   },
   'comic-to-video': {
     mode: 'comic-to-video',
     icon: '📖',
-    name: '漫画转动画',
+    name: 'Comic → Video',
     nameEn: 'Comic → Video',
-    desc: '上传静态漫画/分镜，转换为动态视频',
-    features: ['OCR 识别气泡', '镜头运动生成', '配音自动匹配'],
-    estMinutes: '10-25 分钟',
+    desc: 'Upload still comic/boards, convert to motion video',
+    features: ['OCR speech bubbles', 'Camera-move generate', 'Auto VO match'],
+    estMinutes: '10–25 min',
     gradient: 'from-teal-500/20 to-cyan-500/20',
-    recommendedFor: '漫画动态化 / 绘本改编',
+    recommendedFor: 'Comic motion / picture-book adapt',
   },
   'ip-derivative': {
     mode: 'ip-derivative',
     icon: '✨',
-    name: 'IP 衍生创作',
+    name: 'IP Derivative',
     nameEn: 'IP Derivative',
-    desc: '基于已有角色/IP 进行二次创作',
-    features: ['角色记忆复用', '风格锁定', '多场景批产'],
-    estMinutes: '8-15 分钟',
+    desc: 'Second-create from an existing character or IP',
+    features: ['Cast memory reuse', 'Style lock', 'Multi-scene batch'],
+    estMinutes: '8–15 min',
     gradient: 'from-violet-500/20 to-fuchsia-500/20',
-    recommendedFor: '粉丝二创 / IP 拓展',
+    recommendedFor: 'Fan works / IP expand',
   },
 };
+
+const MODE_I18N: Record<CreationMode, {
+  name: string; desc: string; f1: string; f2: string; f3: string; est: string; rec: string;
+}> = {
+  episodic: { name: 'modeEpisodic', desc: 'modeEpisodicDesc', f1: 'modeEpisodicF1', f2: 'modeEpisodicF2', f3: 'modeEpisodicF3', est: 'modeEpisodicEst', rec: 'modeEpisodicFor' },
+  mv: { name: 'modeMv', desc: 'modeMvDesc', f1: 'modeMvF1', f2: 'modeMvF2', f3: 'modeMvF3', est: 'modeMvEst', rec: 'modeMvFor' },
+  quick: { name: 'modeQuick', desc: 'modeQuickDesc', f1: 'modeQuickF1', f2: 'modeQuickF2', f3: 'modeQuickF3', est: 'modeQuickEst', rec: 'modeQuickFor' },
+  'comic-to-video': { name: 'modeComic', desc: 'modeComicDesc', f1: 'modeComicF1', f2: 'modeComicF2', f3: 'modeComicF3', est: 'modeComicEst', rec: 'modeComicFor' },
+  'ip-derivative': { name: 'modeIp', desc: 'modeIpDesc', f1: 'modeIpF1', f2: 'modeIpF2', f3: 'modeIpF3', est: 'modeIpEst', rec: 'modeIpFor' },
+};
+
+export function modeCopy(preset: ModePreset, workshop: Record<string, string> | undefined) {
+  const keys = MODE_I18N[preset.mode];
+  const w = workshop ?? {};
+  return {
+    name: w[keys.name] || preset.nameEn,
+    desc: w[keys.desc] || preset.desc,
+    features: [w[keys.f1] || preset.features[0], w[keys.f2] || preset.features[1], w[keys.f3] || preset.features[2]].filter(Boolean),
+    estMinutes: w[keys.est] || preset.estMinutes,
+    recommendedFor: w[keys.rec] || preset.recommendedFor,
+  };
+}
 
 export const ALL_MODES: CreationMode[] = [
   'episodic',
@@ -118,6 +141,10 @@ export interface ModeCardProps {
 }
 
 export function ModeCard({ preset, selected, onSelect, className }: ModeCardProps) {
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { workshop: Record<string, string> };
+  const copy = modeCopy(preset, t.workshop);
+
   return (
     <button
       type="button"
@@ -135,7 +162,7 @@ export function ModeCard({ preset, selected, onSelect, className }: ModeCardProp
       data-selected={selected ? 'true' : 'false'}
       aria-pressed={selected}
     >
-      {/* 选中勾 */}
+      {/* Selected check */}
       {selected && (
         <div className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full bg-[#E8C547] text-black">
           <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
@@ -148,7 +175,7 @@ export function ModeCard({ preset, selected, onSelect, className }: ModeCardProp
         </div>
       )}
 
-      {/* 图标 + 标题 — v8.3 P6.3: AI 金色 emblem 盖在 emoji 之上, 无图 onError 露出 emoji */}
+      {/* Icon + title — v8.3 P6.3: gold emblem over emoji; onError falls back to emoji */}
       <div className="mb-3 flex items-center gap-3">
         <div className="relative w-12 h-12 grid place-items-center text-4xl shrink-0">
           <span aria-hidden>{preset.icon}</span>
@@ -157,17 +184,17 @@ export function ModeCard({ preset, selected, onSelect, className }: ModeCardProp
             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
         </div>
         <div>
-          <div className="text-lg font-bold text-white">{preset.name}</div>
+          <div className="text-lg font-bold text-white">{copy.name}</div>
           <div className="text-[11px] text-neutral-300 opacity-80">{preset.nameEn}</div>
         </div>
       </div>
 
-      {/* 描述 */}
-      <p className="mb-3 text-xs text-neutral-200/90 line-clamp-2">{preset.desc}</p>
+      {/* Description */}
+      <p className="mb-3 text-xs text-neutral-200/90 line-clamp-2">{copy.desc}</p>
 
-      {/* 特性列表 */}
+      {/* Feature list */}
       <ul className="mb-3 space-y-1">
-        {preset.features.map(f => (
+        {copy.features.map(f => (
           <li key={f} className="flex items-center gap-1.5 text-[11px] text-neutral-200/80">
             <span className="text-[#E8C547]">◆</span>
             {f}
@@ -175,11 +202,11 @@ export function ModeCard({ preset, selected, onSelect, className }: ModeCardProp
         ))}
       </ul>
 
-      {/* 底部元信息 */}
+      {/* Footer meta */}
       <div className="mt-auto flex items-center justify-between border-t border-white/10 pt-2 text-[10px]">
-        <span className="text-neutral-300">⏱ {preset.estMinutes}</span>
-        {preset.recommendedFor && (
-          <span className="text-neutral-400">{preset.recommendedFor}</span>
+        <span className="text-neutral-300">⏱ {copy.estMinutes}</span>
+        {copy.recommendedFor && (
+          <span className="text-neutral-400">{copy.recommendedFor}</span>
         )}
       </div>
     </button>

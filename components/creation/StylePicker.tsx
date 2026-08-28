@@ -3,14 +3,14 @@
 /**
  * StylePicker (v2.0 Sprint 0 D5)
  *
- * 60 个风格预设的网格挑选器。
- *  - 顶部分类 tab：全部 / 写实 / 动画 / 艺术 / 复古 / 实验
- *  - 默认按 popularity 降序展示
- *  - 支持"热门"快捷筛选（popularity >= 85）
- *  - 卡片悬浮显示中英文名 + 推荐引擎徽标
- *  - 缩略图加载失败自动降级为渐变占位（防止未生成图导致布局炸裂）
+ * Grid picker for 60 style presets.
+ *  - Category tabs: all / realistic / anime / artistic / retro / experimental
+ *  - Default sort: popularity desc
+ *  - "Popular" shortcut (popularity >= 85)
+ *  - Hover shows localized + English names and engine badge
+ *  - Thumbnail load failure falls back to a gradient (keeps layout)
  *
- * 使用：
+ * Usage:
  *   <StylePicker value={styleId} onChange={setStyleId} />
  */
 
@@ -22,34 +22,35 @@ import {
 } from '@/lib/style-presets';
 import type { StylePreset, StyleCategory } from '@/types/agents';
 import { cn } from '@/lib/utils';
+import { useLocale } from '@/hooks/use-locale';
 
 type TabKey = 'all' | 'popular' | StyleCategory;
 
-const TABS: Array<{ key: TabKey; label: string }> = [
-  { key: 'all', label: '全部' },
-  { key: 'popular', label: '热门' },
-  { key: 'realistic', label: '写实' },
-  { key: 'anime', label: '动画' },
-  { key: 'artistic', label: '艺术' },
-  { key: 'retro', label: '复古' },
-  { key: 'experimental', label: '实验' },
+const TAB_KEYS: Array<{ key: TabKey; labelKey: string }> = [
+  { key: 'all', labelKey: 'styleTabAll' },
+  { key: 'popular', labelKey: 'styleTabPopular' },
+  { key: 'realistic', labelKey: 'styleTabRealistic' },
+  { key: 'anime', labelKey: 'styleTabAnime' },
+  { key: 'artistic', labelKey: 'styleTabArtistic' },
+  { key: 'retro', labelKey: 'styleTabRetro' },
+  { key: 'experimental', labelKey: 'styleTabExperimental' },
 ];
 
-const ENGINE_BADGE: Record<string, { label: string; className: string }> = {
-  seedance2: { label: '即梦 2.0', className: 'bg-purple-500/30 text-purple-200' },
-  kling3: { label: 'Kling 3', className: 'bg-blue-500/30 text-blue-200' },
-  viduq3: { label: 'Vidu Q3', className: 'bg-pink-500/30 text-pink-200' },
-  veo31lite: { label: 'Veo 3.1', className: 'bg-green-500/30 text-green-200' },
+const ENGINE_BADGE: Record<string, { labelKey?: string; fallback: string; className: string }> = {
+  seedance2: { labelKey: 'engineSeedance', fallback: 'Jimeng 2.0', className: 'bg-purple-500/30 text-purple-200' },
+  kling3: { fallback: 'Kling 3', className: 'bg-blue-500/30 text-blue-200' },
+  viduq3: { fallback: 'Vidu Q3', className: 'bg-pink-500/30 text-pink-200' },
+  veo31lite: { fallback: 'Veo 3.1', className: 'bg-green-500/30 text-green-200' },
 };
 
 export interface StylePickerProps {
   value?: string;
   onChange?: (styleId: string, preset: StylePreset) => void;
-  /** 初始化展示的分类（默认 all） */
+  /** Initial category tab (default all) */
   defaultTab?: TabKey;
-  /** 每行卡片数（响应式，这里给 lg 断点的列数） */
+  /** Cards per row (lg breakpoint) */
   columns?: 3 | 4 | 5 | 6;
-  /** 是否允许清空选择 */
+  /** Allow clearing the selection */
   clearable?: boolean;
   className?: string;
 }
@@ -62,6 +63,9 @@ export function StylePicker({
   clearable = false,
   className,
 }: StylePickerProps) {
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { workshop: Record<string, string> };
+  const w = t.workshop ?? {};
   const [tab, setTab] = React.useState<TabKey>(defaultTab);
   const [query, setQuery] = React.useState('');
 
@@ -96,20 +100,20 @@ export function StylePicker({
       {/* Header: tabs + search */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap gap-2">
-          {TABS.map(t => (
+          {TAB_KEYS.map(item => (
             <button
-              key={t.key}
+              key={item.key}
               type="button"
-              onClick={() => setTab(t.key)}
+              onClick={() => setTab(item.key)}
               className={cn(
                 'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
-                tab === t.key
+                tab === item.key
                   ? 'border-[#E8C547]/60 bg-[#E8C547]/20 text-[#E8C547]'
                   : 'border-white/10 bg-white/5 text-neutral-300 hover:bg-white/10',
               )}
-              data-testid={`style-tab-${t.key}`}
+              data-testid={`style-tab-${item.key}`}
             >
-              {t.label}
+              {item.key === 'all' ? (w[item.labelKey] || t.dashProjects.filterAll) : (w[item.labelKey] || item.key)}
             </button>
           ))}
         </div>
@@ -117,7 +121,7 @@ export function StylePicker({
           type="search"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="搜索风格..."
+          placeholder={w.styleSearch || 'Search styles...'}
           className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-[#E8C547]/60 focus:outline-none md:w-56"
           data-testid="style-search"
         />
@@ -126,7 +130,7 @@ export function StylePicker({
       {/* Grid */}
       {filtered.length === 0 ? (
         <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-white/10 text-sm text-neutral-400">
-          没有找到匹配的风格
+          {w.styleEmpty || 'No matching styles'}
         </div>
       ) : (
         <div className={cn('grid gap-3', gridCols)} data-testid="style-grid">
@@ -153,7 +157,7 @@ export function StylePicker({
           onClick={() => onChange?.('', STYLE_PRESETS.find(p => p.id === value)!)}
           className="self-end text-xs text-neutral-400 underline hover:text-white"
         >
-          清空选择
+          {w.styleClear || 'Clear selection'}
         </button>
       )}
     </div>
@@ -161,7 +165,7 @@ export function StylePicker({
 }
 
 // ──────────────────────────────────────────────────────────
-// StyleCard 子组件
+// StyleCard
 // ──────────────────────────────────────────────────────────
 
 interface StyleCardProps {
@@ -171,10 +175,14 @@ interface StyleCardProps {
 }
 
 function StyleCard({ preset, selected, onSelect }: StyleCardProps) {
+  const { t: tRaw, locale } = useLocale();
+  const t = tRaw as typeof tRaw & { workshop: Record<string, string> };
+  const w = t.workshop ?? {};
   const [imgError, setImgError] = React.useState(false);
   const engineInfo = preset.recommendedEngine
     ? ENGINE_BADGE[preset.recommendedEngine]
     : undefined;
+  const displayName = locale === 'en' ? preset.nameEn : preset.name;
 
   return (
     <button
@@ -190,14 +198,14 @@ function StyleCard({ preset, selected, onSelect }: StyleCardProps) {
       data-testid={`style-card-${preset.id}`}
       data-selected={selected}
       aria-pressed={selected}
-      aria-label={`选择风格 ${preset.name}`}
+      aria-label={(w.selectStyle || 'Select style {name}').replace('{name}', displayName)}
     >
-      {/* 缩略图 or 渐变占位 */}
+      {/* Thumbnail or gradient fallback */}
       {!imgError ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={preset.thumbnail}
-          alt={preset.name}
+          alt={displayName}
           loading="lazy"
           onError={() => setImgError(true)}
           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
@@ -211,22 +219,22 @@ function StyleCard({ preset, selected, onSelect }: StyleCardProps) {
         </div>
       )}
 
-      {/* 底部遮罩 + 文字 */}
+      {/* Bottom fade + text */}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-3">
-        <div className="text-sm font-semibold text-white">{preset.name}</div>
+        <div className="text-sm font-semibold text-white">{displayName}</div>
         <div className="mt-0.5 text-[11px] text-neutral-300 opacity-80">
           {preset.nameEn}
         </div>
       </div>
 
-      {/* 热度标签 */}
+      {/* Popularity badge */}
       {preset.popularity >= 90 && (
         <span className="absolute left-2 top-2 rounded bg-orange-500/80 px-1.5 py-0.5 text-[10px] font-bold text-white shadow">
-          热门
+          {w.styleTabPopular || 'Popular'}
         </span>
       )}
 
-      {/* 引擎徽标 */}
+      {/* Engine badge */}
       {engineInfo && (
         <span
           className={cn(
@@ -234,11 +242,11 @@ function StyleCard({ preset, selected, onSelect }: StyleCardProps) {
             engineInfo.className,
           )}
         >
-          {engineInfo.label}
+          {(engineInfo.labelKey && w[engineInfo.labelKey]) || engineInfo.fallback}
         </span>
       )}
 
-      {/* 选中 √ */}
+      {/* Selected check */}
       {selected && (
         <div className="absolute right-2 bottom-16 flex h-6 w-6 items-center justify-center rounded-full bg-[#E8C547] text-black shadow-lg">
           <svg

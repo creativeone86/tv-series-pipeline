@@ -1,15 +1,17 @@
 /**
  * /template/[token]/opengraph-image · v2.19 P0.3
  *
- * 动态 OG 图: 1200×630, 模板 icon + name + description + tags.
- * Twitter / 微信 / LinkedIn / Slack 抓取时显示这张图。
+ * Dynamic OG image: 1200×630, template icon + name + description + tags.
+ * Shown when Twitter / WeChat / LinkedIn / Slack scrape the URL.
  *
- * 用 next/og 的 ImageResponse — Edge-style rendering (但因 lib/template-share 依赖
- * better-sqlite3, 必须留 nodejs runtime).
+ * Uses next/og ImageResponse — Edge-style rendering (but lib/template-share depends
+ * on better-sqlite3, so this must stay on the nodejs runtime).
  */
 
 import { ImageResponse } from 'next/og';
+import { cookies } from 'next/headers';
 import { getTemplateAssetForToken } from '@/lib/template-share';
+import { getTranslations, normalizeLocale } from '@/lib/i18n';
 
 export const runtime = 'nodejs';
 export const size = { width: 1200, height: 630 };
@@ -23,20 +25,27 @@ export default async function OgImage({
 }) {
   const { token } = await params;
   const found = await getTemplateAssetForToken(token);
+  const jar = await cookies();
+  const locale = normalizeLocale(jar.get('qfmj-locale')?.value);
+  const tRaw = getTranslations(locale);
+  const t = tRaw as typeof tRaw & { publicUi: Record<string, string> };
+  const ui = t.publicUi;
 
-  // 默认值 (token 不存在 / 已过期 仍要返回一张合理的图, 不要 500)
+  // Defaults (missing / expired token still returns a sane image — never 500)
   let icon = '📄';
-  let name = '模板分享';
-  let description = '这个分享链接不存在或已过期';
+  let name = ui.templateShare;
+  let description = ui.shareLinkExpired;
   let tags: string[] = [];
 
   if (found) {
     const meta = (found.asset.metadata || {}) as {
       icon?: string;
       tags?: string[];
+      nameEn?: string;
     };
     icon = meta.icon || '📄';
-    name = found.asset.name || '未命名模板';
+    const rawName = found.asset.name || ui.untitledTemplate;
+    name = locale === 'en' ? (meta.nameEn || rawName) : rawName;
     description = (found.asset.description || '').slice(0, 120);
     tags = Array.isArray(meta.tags) ? meta.tags.slice(0, 4) : [];
   }
@@ -134,7 +143,7 @@ export default async function OgImage({
               letterSpacing: '0.12em',
             }}
           >
-            点击克隆这个模板到你的库 →
+            {ui.cloneHintOg}
           </div>
         )}
       </div>

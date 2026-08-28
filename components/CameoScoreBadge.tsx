@@ -3,18 +3,19 @@
 /**
  * CameoScoreBadge (v2.11 #2)
  *
- * 展示 /api/cameo/preview 返回的评分 —— 一个卡片化的"图片适配度报告"。
+ * Card-style "photo fit report" from /api/cameo/preview.
  *
- * 设计:
- *   - 顶部大数字 + verdict 徽章(excellent/good/fair/poor 配色)
- *   - 4 个维度 mini-bar (清晰度/光线/角度/尺寸)
- *   - 警告红条 / 建议灰条
- *   - loading / error 两态
+ * Design:
+ *   - large score + verdict badge (excellent/good/fair/poor colors)
+ *   - 4 dimension mini-bars (clarity / lighting / angle / size)
+ *   - red warning rows / grey suggestion rows
+ *   - loading / error states
  *
- * 复用点:CameoPanel(项目详情) + CreatePage(创作中上传)都可挂载。
+ * Reused by CameoPanel (project detail) and CreatePage (upload during create).
  */
 
 import { CircleNotch as Loader2, Warning as AlertTriangle, Lightbulb, Sparkle as Sparkles } from '@phosphor-icons/react';
+import { useLocale } from '@/hooks/use-locale';
 
 export interface CameoScoreBadgeData {
   score: number;
@@ -34,65 +35,72 @@ interface Props {
   loading?: boolean;
   error?: string | null;
   data?: CameoScoreBadgeData | null;
-  /** 紧凑模式,减掉 summary,用在窄栏 */
+  /** Compact mode: drop summary, for narrow columns */
   compact?: boolean;
 }
 
-const VERDICT_META: Record<
+const VERDICT_STYLE: Record<
   CameoScoreBadgeData['verdict'],
-  { label: string; color: string; bg: string }
+  { color: string; bg: string }
 > = {
-  excellent: { label: '非常适合', color: 'text-emerald-300', bg: 'bg-emerald-500/15 border-emerald-500/30' },
-  good:      { label: '适合',     color: 'text-[#E8C547]',   bg: 'bg-[#E8C547]/15 border-[#E8C547]/30' },
-  fair:      { label: '勉强可用', color: 'text-orange-300',  bg: 'bg-orange-500/15 border-orange-500/30' },
-  poor:      { label: '不建议',   color: 'text-red-300',     bg: 'bg-red-500/15 border-red-500/30' },
+  excellent: { color: 'text-emerald-300', bg: 'bg-emerald-500/15 border-emerald-500/30' },
+  good:      { color: 'text-[#E8C547]',   bg: 'bg-[#E8C547]/15 border-[#E8C547]/30' },
+  fair:      { color: 'text-orange-300',  bg: 'bg-orange-500/15 border-orange-500/30' },
+  poor:      { color: 'text-red-300',     bg: 'bg-red-500/15 border-red-500/30' },
 };
 
 export function CameoScoreBadge({ loading, error, data, compact = false }: Props) {
+  const { t } = useLocale();
   if (loading) {
     return (
       <div className="mt-3 p-3 bg-white/5 border border-white/10 rounded-xl flex items-center gap-2 text-xs text-gray-400">
         <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        正在分析这张脸的适配度…
+        {t.sharedUi.cameoAnalyzing}
       </div>
     );
   }
   if (error) {
     return (
       <div className="mt-3 p-3 bg-white/5 border border-white/10 rounded-xl text-xs text-gray-500">
-        评分暂不可用({error}),不影响锁脸。
+        {t.sharedUi.cameoScoreUnavailable.replace('{error}', error)}
       </div>
     );
   }
   if (!data) return null;
 
-  const v = VERDICT_META[data.verdict];
+  const v = VERDICT_STYLE[data.verdict];
+  const verdictLabel = {
+    excellent: t.sharedUi.verdictExcellent,
+    good: t.sharedUi.verdictGood,
+    fair: t.sharedUi.verdictFair,
+    poor: t.sharedUi.verdictPoor,
+  }[data.verdict];
 
   return (
     <div className={`mt-3 p-3 rounded-xl border ${v.bg} space-y-2`}>
-      {/* 顶部:大分数 + verdict */}
+      {/* Header: large score + verdict */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Sparkles className={`w-4 h-4 ${v.color}`} />
-          <span className="text-xs text-gray-300">Cameo 适配度</span>
+          <span className="text-xs text-gray-300">{t.sharedUi.cameoFit}</span>
         </div>
         <div className="flex items-center gap-2">
           <span className={`text-xl font-bold ${v.color} leading-none`}>{data.score}</span>
           <span className={`text-[10px] px-2 py-0.5 rounded-full border ${v.bg} ${v.color}`}>
-            {v.label}
+            {verdictLabel}
           </span>
         </div>
       </div>
 
-      {/* 四维 mini-bar */}
+      {/* Four dimension mini-bars */}
       <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-        <DimBar label="清晰度" value={data.dimensions.clarity} />
-        <DimBar label="光线"   value={data.dimensions.lighting} />
-        <DimBar label="角度"   value={data.dimensions.angle} />
-        <DimBar label="尺寸"   value={data.dimensions.size} />
+        <DimBar label={t.sharedUi.dimClarity} value={data.dimensions.clarity} />
+        <DimBar label={t.sharedUi.dimLighting} value={data.dimensions.lighting} />
+        <DimBar label={t.sharedUi.dimAngle} value={data.dimensions.angle} />
+        <DimBar label={t.sharedUi.dimSize} value={data.dimensions.size} />
       </div>
 
-      {/* 警告(红) */}
+      {/* Warnings (red) */}
       {data.warnings.length > 0 && (
         <ul className="space-y-1">
           {data.warnings.map((w, i) => (
@@ -104,7 +112,7 @@ export function CameoScoreBadge({ loading, error, data, compact = false }: Props
         </ul>
       )}
 
-      {/* 建议(灰) */}
+      {/* Suggestions (grey) */}
       {data.suggestions.length > 0 && (
         <ul className="space-y-1">
           {data.suggestions.map((s, i) => (
@@ -116,7 +124,7 @@ export function CameoScoreBadge({ loading, error, data, compact = false }: Props
         </ul>
       )}
 
-      {/* summary(可选) */}
+      {/* summary (optional) */}
       {!compact && data.summary && (
         <p className="text-[11px] text-gray-500 italic border-t border-white/5 pt-2">
           {data.summary}

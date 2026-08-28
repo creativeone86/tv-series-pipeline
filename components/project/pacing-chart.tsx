@@ -1,16 +1,17 @@
 'use client';
 
 /**
- * v2.21 P1.4 + v2.24 A/C — 节奏分析图 (PacingChart).
+ * v2.21 P1.4 + v2.24 A/C — Pacing analysis chart (PacingChart).
  *
- * 展示:
- *   - PacingAuditReport (P1.1) — 冲突分 / 反转 / cliffhanger
- *   - StyleAudit 历史趋势 (v2.24 A) — 每镜画风评分 + 重生标记
- *   - DialogueCoverageReport (v2.24 C) — 缺反打 / 缺特写 列表
+ * Shows:
+ *   - PacingAuditReport (P1.1) — conflict score / reversals / cliffhanger
+ *   - StyleAudit history (v2.24 A) — per-shot look score + retry marks
+ *   - DialogueCoverageReport (v2.24 C) — missing reverse / missing CU list
  */
 
 import { ChartBar as BarChart3, ArrowRight, Warning as AlertTriangle, CheckCircle as CheckCircle2, TrendUp as TrendingUp, TrendDown as TrendingDown, Minus, Lightbulb, Palette, ChatCircle as MessageCircle, ArrowsClockwise as RefreshCw } from '@phosphor-icons/react';
 import { EmptyState } from '@/components/cinema/primitives';
+import { useLocale } from '@/hooks/use-locale';
 
 type Polarity = -1 | 0 | 1;
 
@@ -34,7 +35,7 @@ interface BgmSyncMetric {
   windowS: number;
 }
 
-// v10.6.2 — 钩子审计三指标(开场 3 秒 / 集尾悬念 / BGM 卡点)
+// v10.6.2 — hook-audit trio (opening 3s / episode cliff / BGM hits)
 interface HookAuditShape {
   openingHook: HookMetric;
   cliffhanger: HookMetric;
@@ -53,14 +54,15 @@ interface PacingReport {
   suggestions: string[];
   hooks?: HookAuditShape;
   /**
-   * v12.279:节奏审计 v2 诊断。
-   * 病根:v12.275 做了 v2(曲线形状/拖沓段/开场密度/时长节奏),v12.278 让它落库并导进 NLE,
-   * **唯独本组件的本地接口没有 `v2` 字段** —— 算了、存了、导出去了,自家 UI 却一直不显示。
+   * v12.279: pacing audit v2 diagnostics.
+   * Root cause: v12.275 added v2 (curve shape / draggy stretches / opening density / duration rhythm),
+   * v12.278 persisted it and exported to NLE, but this component's local interface had no `v2` field —
+   * computed, stored, exported, and the UI never showed it.
    */
   v2?: PacingV2Shape;
 }
 
-/** v12.279:与 lib/pacing-audit-v2 的产出对齐(只取渲染需要的字段)。 */
+/** v12.279: aligned with lib/pacing-audit-v2 output (render fields only). */
 export interface PacingV2Shape {
   shape?: { shape: string; slope: number; peakIndex: number; peakProminence: number; warning: string | null };
   dragSegments?: Array<{ fromShot: number; toShot: number; length: number; avgScore: number }>;
@@ -90,9 +92,9 @@ export interface DialogueCoverageReportShape {
 
 export interface PacingChartProps {
   report: PacingReport | null | undefined;
-  /** v2.24 A — 每镜 style audit 分数, 给 "画风一致性" sub-section 用 */
+  /** v2.24 A — per-shot style audit scores for the look-consistency sub-section */
   styleAuditShots?: StyleAuditShot[];
-  /** v2.24 C — 对话覆盖度报告 */
+  /** v2.24 C — dialogue coverage report */
   dialogueCoverage?: DialogueCoverageReportShape | null;
 }
 
@@ -109,10 +111,12 @@ function PolarityIcon({ p }: { p: Polarity }) {
 }
 
 export function PacingChart({ report, styleAuditShots, dialogueCoverage }: PacingChartProps) {
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { projectView: Record<string, string> };
   if (!report) {
     return (
       <div className="cinema-card-hi">
-        <EmptyState icon={TrendingUp} title="暂无节奏数据" hint="等编剧完成本项目后这里会显示节奏分析" />
+        <EmptyState icon={TrendingUp} title={t.projectView.emptyPacing} hint={t.projectView.emptyPacingHint} />
       </div>
     );
   }
@@ -120,21 +124,21 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
   const { shots, averageConflictScore, reversalCount, passed, dramaMode, warnings, suggestions } = report;
   const v2 = report.v2;
 
-  // 反转对 — 把相邻不同极性的 shot 标出来
+  // Reversal pairs — mark adjacent shots with opposite polarity
   const reversalEdges = new Set<number>();
   let lastNonZero: { idx: number; polarity: Polarity } | null = null;
   for (let i = 0; i < shots.length; i++) {
     const p = shots[i].polarity;
     if (p === 0) continue;
     if (lastNonZero && p !== lastNonZero.polarity) {
-      reversalEdges.add(lastNonZero.idx); // 标在前一镜的右边
+      reversalEdges.add(lastNonZero.idx); // mark on the right of the previous shot
     }
     lastNonZero = { idx: i, polarity: p };
   }
 
   return (
     <div className="space-y-4">
-      {/* KPI 卡 */}
+      {/* KPI cards */}
       <div className="grid grid-cols-3 gap-3">
         <div className="cinema-card-hi p-3">
           <div className="cinema-eyebrow mb-1">AVG CONFLICT</div>
@@ -145,7 +149,7 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
             <span className="cinema-mono text-[10px] opacity-50">/10</span>
           </div>
           <div className="cinema-mono text-[9px] opacity-40 mt-0.5">
-            {dramaMode ? '短剧 ≥3.5 合格' : '普通 ≥2.5 合格'}
+            {dramaMode ? t.projectView.dramaConflictPass : t.projectView.stdConflictPass}
           </div>
         </div>
 
@@ -153,10 +157,10 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
           <div className="cinema-eyebrow mb-1">REVERSALS</div>
           <div className="flex items-baseline gap-1">
             <span className="cinema-headline text-2xl">{reversalCount}</span>
-            <span className="cinema-mono text-[10px] opacity-50">次</span>
+            <span className="cinema-mono text-[10px] opacity-50">{t.projectView.timesUnit}</span>
           </div>
           <div className="cinema-mono text-[9px] opacity-40 mt-0.5">
-            {dramaMode ? '短剧 ≥2 合格' : '普通 ≥1 合格'}
+            {dramaMode ? t.projectView.dramaReversalPass : t.projectView.stdReversalPass}
           </div>
         </div>
 
@@ -166,33 +170,33 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
             {passed ? (
               <>
                 <CheckCircle2 className="w-5 h-5" style={{ color: 'var(--cinema-green)' }} />
-                <span className="cinema-headline text-base" style={{ color: 'var(--cinema-green)' }}>通过</span>
+                <span className="cinema-headline text-base" style={{ color: 'var(--cinema-green)' }}>{t.visionAudit.passLabel}</span>
               </>
             ) : (
               <>
                 <AlertTriangle className="w-5 h-5" style={{ color: 'var(--cinema-amber)' }} />
-                <span className="cinema-headline text-base" style={{ color: 'var(--cinema-amber)' }}>待改</span>
+                <span className="cinema-headline text-base" style={{ color: 'var(--cinema-amber)' }}>{t.projectView.needsFix}</span>
               </>
             )}
           </div>
           <div className="cinema-mono text-[9px] opacity-40 mt-0.5">
-            {dramaMode ? '短剧模式' : '普通模式'}
+            {dramaMode ? t.projectView.dramaMode : t.projectView.stdMode}
           </div>
         </div>
       </div>
 
-      {/* v10.6.2 — 钩子审计三指标 */}
+      {/* v10.6.2 — hook-audit trio */}
       {report.hooks && (
         <div className="cinema-card-hi p-4" data-testid="hook-audit">
           <div className="flex items-center justify-between mb-3">
-            <div className="cinema-eyebrow">钩子审计</div>
+            <div className="cinema-eyebrow">{t.projectView.hookAudit}</div>
             <div className="cinema-mono text-[10px] opacity-50">
-              {report.hooks.llmAssisted ? '启发式 + LLM 复核' : '确定性启发式'}
+              {report.hooks.llmAssisted ? t.projectView.heuristicLlm : t.projectView.heuristicOnly}
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <div className="cinema-mono text-[10px] opacity-60 mb-1">开场 3 秒钩子</div>
+              <div className="cinema-mono text-[10px] opacity-60 mb-1">{t.projectView.openingHook}</div>
               <div className="flex items-baseline gap-1">
                 <span className="cinema-headline text-xl" style={{ color: scoreColor(report.hooks.openingHook.score) }}>
                   {report.hooks.openingHook.score}
@@ -201,7 +205,7 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
               </div>
             </div>
             <div>
-              <div className="cinema-mono text-[10px] opacity-60 mb-1">集尾悬念</div>
+              <div className="cinema-mono text-[10px] opacity-60 mb-1">{t.projectView.episodeCliff}</div>
               <div className="flex items-baseline gap-1">
                 <span className="cinema-headline text-xl" style={{ color: scoreColor(report.hooks.cliffhanger.score) }}>
                   {report.hooks.cliffhanger.score}
@@ -210,41 +214,41 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
               </div>
             </div>
             <div>
-              <div className="cinema-mono text-[10px] opacity-60 mb-1">BGM 卡点对齐</div>
+              <div className="cinema-mono text-[10px] opacity-60 mb-1">{t.projectView.bgmSync}</div>
               {report.hooks.bgmSync.available && report.hooks.bgmSync.rate !== null ? (
                 <div className="flex items-baseline gap-1">
                   <span className="cinema-headline text-xl" style={{ color: scoreColor(report.hooks.bgmSync.rate * 10) }}>
                     {Math.round(report.hooks.bgmSync.rate * 100)}%
                   </span>
                   <span className="cinema-mono text-[10px] opacity-50">
-                    {report.hooks.bgmSync.alignedCuts}/{report.hooks.bgmSync.totalCuts} 切点
+                    {t.projectView.cutsCount.replace('{aligned}', String(report.hooks.bgmSync.alignedCuts)).replace('{total}', String(report.hooks.bgmSync.totalCuts))}
                   </span>
                 </div>
               ) : (
-                <div className="cinema-mono text-[11px] opacity-50">未生成 BGM,暂不可测</div>
+                <div className="cinema-mono text-[11px] opacity-50">{t.projectView.noBgm}</div>
               )}
             </div>
           </div>
           <ul className="mt-3 space-y-0.5">
-            {[...report.hooks.openingHook.reasons.map((r) => `开场:${r}`),
-              ...report.hooks.cliffhanger.reasons.map((r) => `集尾:${r}`)].map((r, i) => (
+            {[...report.hooks.openingHook.reasons.map((r) => t.projectView.openingPrefix.replace('{reason}', r)),
+              ...report.hooks.cliffhanger.reasons.map((r) => t.projectView.cliffPrefix.replace('{reason}', r))].map((r, i) => (
               <li key={i} className="cinema-mono text-[10px] opacity-50">· {r}</li>
             ))}
           </ul>
         </div>
       )}
 
-      {/* 每镜柱状条 + 反转箭头 */}
+      {/* Per-shot bars + reversal arrows */}
       <div className="cinema-card-hi p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="cinema-eyebrow">PER-SHOT CONFLICT</div>
           <div className="cinema-mono text-[10px] opacity-50">
-            {shots.length} 镜
+            {t.projectView.shotsCount.replace('{n}', String(shots.length))}
           </div>
         </div>
         {shots.length === 0 ? (
           <div className="cinema-mono text-[11px] opacity-50 py-4 text-center">
-            无镜头数据
+            {t.projectView.noShotData}
           </div>
         ) : (
           <div className="flex items-end gap-1 min-h-[140px]">
@@ -254,19 +258,19 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
               const isReversal = reversalEdges.has(i);
               return (
                 <div key={s.shotNumber} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-                  {/* 反转箭头 — 标在该镜柱顶之上 */}
+                  {/* Reversal arrow — above this shot's bar */}
                   <div className="h-4 flex items-center justify-center">
                     {isReversal && (
                       <ArrowRight
                         className="w-3 h-3"
                         style={{ color: 'var(--cinema-amber)' }}
-                        aria-label="情绪反转"
+                        aria-label={t.projectView.emotionReversalAria}
                       />
                     )}
                   </div>
-                  {/* 极性 icon */}
+                  {/* Polarity icon */}
                   <PolarityIcon p={s.polarity} />
-                  {/* 柱条 */}
+                  {/* Bar */}
                   <div
                     className="w-full rounded-t flex items-end justify-center relative group"
                     style={{
@@ -281,7 +285,7 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
                       {s.conflictScore}
                     </span>
                   </div>
-                  {/* 镜号 */}
+                  {/* Shot number */}
                   <div className="cinema-mono text-[10px] opacity-60">{s.shotNumber}</div>
                 </div>
               );
@@ -290,27 +294,27 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
         )}
         <div className="flex items-center gap-3 mt-3 cinema-mono text-[9px] opacity-50">
           <span className="inline-flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm" style={{ background: 'var(--cinema-green)' }} /> 强 ≥7
+            <span className="w-2 h-2 rounded-sm" style={{ background: 'var(--cinema-green)' }} /> {t.projectView.strong7}
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm" style={{ background: 'var(--cinema-amber)' }} /> 中 4-6
+            <span className="w-2 h-2 rounded-sm" style={{ background: 'var(--cinema-amber)' }} /> {t.projectView.mid46}
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm" style={{ background: 'var(--cinema-red)' }} /> 弱 &lt;4
+            <span className="w-2 h-2 rounded-sm" style={{ background: 'var(--cinema-red)' }} /> {t.projectView.weak4}
           </span>
           <span className="ml-auto inline-flex items-center gap-1">
-            <ArrowRight className="w-2.5 h-2.5" style={{ color: 'var(--cinema-amber)' }} /> 情绪反转点
+            <ArrowRight className="w-2.5 h-2.5" style={{ color: 'var(--cinema-amber)' }} /> {t.projectView.reversalPoint}
           </span>
         </div>
       </div>
 
-      {/* v2.24 A: 画风一致性 sub-section (StyleAudit 每镜评分) */}
+      {/* v2.24 A: look-consistency sub-section (StyleAudit per-shot scores) */}
       {styleAuditShots && styleAuditShots.length > 0 && (
         <div className="cinema-card-hi p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="cinema-eyebrow flex items-center gap-1.5">
               <Palette className="w-3 h-3" />
-              STYLE BIBLE 一致性 (每镜 vision 审计)
+              {t.projectView.styleBible}
             </div>
             {(() => {
               const scored = styleAuditShots.filter((s) => s.styleAuditScore != null);
@@ -319,7 +323,7 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
               const retried = styleAuditShots.filter((s) => s.styleAuditRetried).length;
               return (
                 <span className="cinema-mono text-[10px] opacity-60">
-                  平均 {avg.toFixed(0)}/100 · {retried} 镜重生
+                  {t.projectView.styleAvg.replace('{avg}', avg.toFixed(0)).replace('{n}', String(retried))}
                 </span>
               );
             })()}
@@ -343,7 +347,7 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
                     <span
                       className="absolute -top-3 cinema-mono text-[10px]"
                       style={{ color: 'var(--cinema-amber)' }}
-                      title={`已重生 (vision 修偏: ${s.styleAuditReason || ''})`}
+                      title={t.projectView.retriedTitle.replace('{reason}', s.styleAuditReason || '')}
                     >
                       <RefreshCw className="w-2.5 h-2.5" />
                     </span>
@@ -367,26 +371,26 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
           </div>
           <div className="flex items-center gap-3 mt-3 cinema-mono text-[9px] opacity-50">
             <span className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-sm" style={{ background: 'var(--cinema-green)' }} /> 强 ≥85
+              <span className="w-2 h-2 rounded-sm" style={{ background: 'var(--cinema-green)' }} /> {t.projectView.styleStrong}
             </span>
             <span className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-sm" style={{ background: 'var(--cinema-amber)' }} /> 中 70-84
+              <span className="w-2 h-2 rounded-sm" style={{ background: 'var(--cinema-amber)' }} /> {t.projectView.styleMid}
             </span>
             <span className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-sm" style={{ background: 'var(--cinema-red)' }} /> 弱 &lt;70 (已触发重生)
+              <span className="w-2 h-2 rounded-sm" style={{ background: 'var(--cinema-red)' }} /> {t.projectView.styleWeak}
             </span>
             <span className="ml-auto inline-flex items-center gap-1"><RefreshCw className="w-2.5 h-2.5" />vision auto-regen</span>
           </div>
         </div>
       )}
 
-      {/* v2.24 C: 对话覆盖度 sub-section */}
+      {/* v2.24 C: dialogue-coverage sub-section */}
       {dialogueCoverage && dialogueCoverage.multiCharSceneCount > 0 && (
         <div className="cinema-card-hi p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="cinema-eyebrow flex items-center gap-1.5">
               <MessageCircle className="w-3 h-3" />
-              对话覆盖度 (正反打 / 反应特写)
+              {t.projectView.dialogueCoverage}
             </div>
             <span
               className={`cinema-mono text-[11px] font-bold ${
@@ -399,17 +403,17 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
             </span>
           </div>
           <div className="cinema-mono text-[10px] opacity-60 mb-2">
-            {dialogueCoverage.sceneCount} 个对话场景 · {dialogueCoverage.multiCharSceneCount} 个多角色对话
+            {t.projectView.dialogueScenes.replace('{scenes}', String(dialogueCoverage.sceneCount)).replace('{multi}', String(dialogueCoverage.multiCharSceneCount))}
           </div>
           {dialogueCoverage.needsReverseShot.length > 0 && (
             <div className="mt-2">
               <div className="cinema-mono text-[10px] opacity-80 mb-1 flex items-center gap-1">
-                <MessageCircle className="w-3 h-3" />缺正反打 ({dialogueCoverage.needsReverseShot.length} 处)
+                <MessageCircle className="w-3 h-3" />{t.projectView.missingReverse.replace('{n}', String(dialogueCoverage.needsReverseShot.length))}
               </div>
               <ul className="space-y-0.5">
                 {dialogueCoverage.needsReverseShot.slice(0, 5).map((s, i) => (
                   <li key={i} className="cinema-mono text-[10px] opacity-70">
-                    · Shot 群 #{s.startIndex + 1}: {s.characters.join(' / ')} — 仅 1 镜, 缺反应切镜
+                    {t.projectView.reverseHint.replace('{n}', String(s.startIndex + 1)).replace('{chars}', s.characters.join(' / '))}
                   </li>
                 ))}
               </ul>
@@ -418,12 +422,12 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
           {dialogueCoverage.needsCloseUp.length > 0 && (
             <div className="mt-2">
               <div className="cinema-mono text-[10px] opacity-80 mb-1">
-                📷 缺反应特写 ({dialogueCoverage.needsCloseUp.length} 处)
+                {t.projectView.missingCU.replace('{n}', String(dialogueCoverage.needsCloseUp.length))}
               </div>
               <ul className="space-y-0.5">
                 {dialogueCoverage.needsCloseUp.slice(0, 5).map((s, i) => (
                   <li key={i} className="cinema-mono text-[10px] opacity-70">
-                    · Shot 群 #{s.startIndex + 1}: {s.characters.join(' / ')} — 全 wide shot, 缺 CU/MCU
+                    {t.projectView.cuHint.replace('{n}', String(s.startIndex + 1)).replace('{chars}', s.characters.join(' / '))}
                   </li>
                 ))}
               </ul>
@@ -431,7 +435,7 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
           )}
           {dialogueCoverage.rewriteHints.length > 0 && (
             <div className="mt-3 pt-2 border-t border-white/5">
-              <div className="cinema-mono text-[10px] opacity-60 mb-1">改写建议</div>
+              <div className="cinema-mono text-[10px] opacity-60 mb-1">{t.projectView.rewriteHints}</div>
               <ul className="space-y-0.5">
                 {dialogueCoverage.rewriteHints.slice(0, 3).map((h, i) => (
                   <li key={i} className="cinema-mono text-[10px] opacity-70">→ {h}</li>
@@ -442,18 +446,18 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
         </div>
       )}
 
-      {/* v12.279 节奏审计 v2 诊断 —— 排在 warnings 之前:它指到具体镜号,比一串泛化告警更该先看到 */}
+      {/* v12.279 pacing audit v2 — before warnings: it names shot numbers, more actionable than generic alerts */}
       {v2 && (
         <div className="cinema-card-hi p-4 space-y-3">
           <div className="cinema-eyebrow flex items-center gap-1.5">
             <BarChart3 className="w-3 h-3" />
-            节奏诊断 v2
+            {t.projectView.pacingDiagV2}
           </div>
 
-          {/* 曲线形状 */}
+          {/* Curve shape */}
           {v2.shape && (
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="cinema-mono text-[10px] opacity-60">曲线</span>
+              <span className="cinema-mono text-[10px] opacity-60">{t.projectView.curve}</span>
               <span
                 className={`cinema-mono text-[11px] px-1.5 py-0.5 rounded ${
                   v2.shape.shape === 'escalating'
@@ -461,51 +465,51 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
                     : 'bg-[var(--cinema-amber)]/20 text-[var(--cinema-amber)]'
                 }`}
               >
-                {v2.shape.shape === 'escalating' ? '层层递进' : v2.shape.shape === 'front-loaded' ? '高开低走' : v2.shape.shape === 'no-climax' ? '无明显高潮' : '平铺'}
+                {v2.shape.shape === 'escalating' ? t.projectView.shapeEscalating : v2.shape.shape === 'front-loaded' ? t.projectView.shapeFrontLoaded : v2.shape.shape === 'no-climax' ? t.projectView.shapeNoClimax : t.projectView.shapeFlat}
               </span>
               <span className="cinema-mono text-[10px] opacity-60">
-                斜率 {v2.shape.slope.toFixed(2)} · 高潮在第 {v2.shape.peakIndex} 镜
+                {t.projectView.slopePeak.replace('{slope}', v2.shape.slope.toFixed(2)).replace('{n}', String(v2.shape.peakIndex))}
               </span>
             </div>
           )}
 
-          {/* 拖沓段 —— 最该被看到的:直接点名镜号区间 */}
+          {/* Draggy stretches — name the shot ranges first */}
           {v2.dragSegments && v2.dragSegments.length > 0 && (
             <div>
-              <div className="cinema-mono text-[10px] opacity-60 mb-1">拖沓段(观众最易划走)</div>
+              <div className="cinema-mono text-[10px] opacity-60 mb-1">{t.projectView.dragSegments}</div>
               <div className="flex flex-wrap gap-1.5">
                 {v2.dragSegments.map((d, i) => (
                   <span key={i} className="cinema-mono text-[11px] px-1.5 py-0.5 rounded bg-[var(--cinema-amber)]/20 text-[var(--cinema-amber)]">
-                    S{d.fromShot}–{d.toShot}(均分 {d.avgScore.toFixed(1)})
+                    {t.projectView.dragRange.replace('{from}', String(d.fromShot)).replace('{to}', String(d.toShot)).replace('{avg}', d.avgScore.toFixed(1))}
                   </span>
                 ))}
               </div>
             </div>
           )}
 
-          {/* 开场密度 —— 完播率由这里决定 */}
+          {/* Opening density — completion rate is decided here */}
           {v2.opening && (
             <div className="cinema-mono text-[11px]">
-              <span className="opacity-60">开场 </span>
+              <span className="opacity-60">{t.projectView.opening} </span>
               <span className={v2.opening.passed ? 'opacity-80' : 'text-[var(--cinema-amber)]'}>
-                前 {v2.opening.sampled} 镜均分 {v2.opening.avgScore.toFixed(1)}
-                {v2.opening.passed ? ' ✓' : ' — 完播率主要由开场决定'}
+                {t.projectView.openingStats.replace('{n}', String(v2.opening.sampled)).replace('{avg}', v2.opening.avgScore.toFixed(1))}
+                {v2.opening.passed ? ' ✓' : t.projectView.openingFailNote}
               </span>
             </div>
           )}
 
-          {/* 时长节奏 */}
+          {/* Duration rhythm */}
           {v2.durationRhythm && v2.durationRhythm.sampled >= 3 && (
             <div className="cinema-mono text-[11px]">
-              <span className="opacity-60">时长节奏 </span>
+              <span className="opacity-60">{t.projectView.durationRhythm} </span>
               <span className={v2.durationRhythm.warning ? 'text-[var(--cinema-amber)]' : 'opacity-80'}>
-                变异系数 {v2.durationRhythm.cv.toFixed(2)}
+                {t.projectView.cvLabel.replace('{cv}', v2.durationRhythm.cv.toFixed(2))}
                 {v2.durationRhythm.warning ? ` — ${v2.durationRhythm.warning.replace(/^[^—]*—\s*/, '')}` : ' ✓'}
               </span>
             </div>
           )}
 
-          {/* 可执行建议 —— 每条都指到镜号 */}
+          {/* Actionable tips — each names a shot */}
           {v2.actionable && v2.actionable.length > 0 && (
             <ul className="space-y-1 pt-1 border-t border-white/10">
               {v2.actionable.map((a, i) => (

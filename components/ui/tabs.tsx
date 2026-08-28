@@ -3,16 +3,16 @@
 /**
  * components/ui/tabs (v2.13.5 · shadcn-style on Radix)
  *
- * 比项目里散落的"自定义 className 切换 active"实现稳:
- *   - 真正的 ARIA Tab 角色 / 键盘导航 (Arrow / Home / End)
- *   - 主题用 cinema 调色 (amber 高亮 + filmstrip 下划线)
- *   - asChild 通过 Radix Slot 透传, 给 Tab 加自定义元素
+ * More solid than ad-hoc "toggle active via className" tabs around the repo:
+ *   - real ARIA Tab roles / keyboard nav (Arrow / Home / End)
+ *   - cinema palette (amber active + filmstrip underline)
+ *   - asChild via Radix Slot so a Tab can wrap a custom element
  *
- * 用法:
+ * Usage:
  *   <Tabs defaultValue="script">
  *     <TabsList>
- *       <TabsTrigger value="script">剧本</TabsTrigger>
- *       <TabsTrigger value="storyboard">分镜</TabsTrigger>
+ *       <TabsTrigger value="script">Script</TabsTrigger>
+ *       <TabsTrigger value="storyboard">Boards</TabsTrigger>
  *     </TabsList>
  *     <TabsContent value="script">...</TabsContent>
  *     <TabsContent value="storyboard">...</TabsContent>
@@ -32,7 +32,7 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      // 影院 filmstrip 风:底部双线, 内 padding 留呼吸
+      // Cinema filmstrip: double rule at the base, inner padding for air
       'inline-flex items-center gap-1 rounded-md p-1',
       'border border-[var(--cinema-border)] bg-[var(--cinema-surface-2)]',
       'text-[var(--cinema-text-2)]',
@@ -50,7 +50,7 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      // 默认: 等宽 small caps; active: amber 底色 + 黑字
+      // Default: even small-caps; active: amber fill + black type
       'cinema-mono inline-flex items-center justify-center whitespace-nowrap rounded-sm',
       'px-3 py-1.5 text-[11px] font-semibold tracking-widest uppercase transition-all',
       'ring-offset-[var(--cinema-bg)] focus-visible:outline-none focus-visible:ring-2',

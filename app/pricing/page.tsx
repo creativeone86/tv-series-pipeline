@@ -14,7 +14,8 @@ function TierIcon({ id, color }: { id: string; color: string }) {
 }
 
 function TierCard({ tier }: { tier: PricingTier }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
+  const tierName = locale === 'en' ? (tier.nameEn || tier.name) : tier.name;
   const isFree = tier.price === 0;
   const isEnterprise = tier.price === -1;
   const isRecommended = !!tier.recommended;
@@ -44,7 +45,7 @@ function TierCard({ tier }: { tier: PricingTier }) {
         >
           <TierIcon id={tier.id} color={tier.color} />
         </div>
-        <h3 className="text-lg font-bold text-white">{tier.name}</h3>
+        <h3 className="text-lg font-bold text-white">{tierName}</h3>
         <p className="text-xs text-[var(--muted)] mt-0.5">{tier.nameEn}</p>
       </div>
 
@@ -66,7 +67,7 @@ function TierCard({ tier }: { tier: PricingTier }) {
             </span>
             {!isFree && (
               <span className="text-sm text-[var(--muted)] mb-1.5">
-                /{tier.priceUnit.replace('元/', '')}
+                {t.billing.perMonth}
               </span>
             )}
           </div>
@@ -124,7 +125,7 @@ function TierCard({ tier }: { tier: PricingTier }) {
               : 'bg-[var(--surface-strong)] hover:bg-white/10 text-white border border-[var(--border)] hover:border-[var(--border-hover)]'
           }`}
         >
-          {t.billing.upgradeTo} {tier.name}
+          {t.billing.upgradeTo} {tierName}
           <ArrowRight className="w-4 h-4" />
         </Link>
       )}
@@ -143,7 +144,7 @@ export default function PricingPage() {
             <div className="w-7 h-7 rounded-md grid place-items-center bg-gradient-to-br from-[#E8C547] to-[#D4A830]">
               <PenTool className="w-3.5 h-3.5 text-[#0C0C0C]" />
             </div>
-            <span className="text-[15px] font-bold text-white">青枫漫剧</span>
+            <span className="text-[15px] font-bold text-white">{t.auth.brand}</span>
           </Link>
           <Link
             href="/dashboard"

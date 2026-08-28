@@ -1,16 +1,17 @@
 'use client';
 
 /**
- * /dashboard/jobs (v10.4.2) — 流水线任务队列(进度 / 死信可见,失败任务一键重投)。
+ * /dashboard/jobs (v10.4.2) — pipeline job queue (progress / dead-letter visible; one-click requeue on failure).
  *
- * 队列模式(PIPELINE_QUEUE=1)下 create-stream 改投递执行;本页轮询任务表:
- *   queued/running 看进度阶段,failed 显示 last_error + 「重投」按钮 ——
- *   重投保留 attempts → worker 走断点续跑(已有产物阶段跳过,不重复生成/计费)。
+ * In queue mode (PIPELINE_QUEUE=1) create-stream enqueues; this page polls the job table:
+ *   queued/running show the stage, failed shows last_error + a "Requeue" button —
+ *   requeue keeps attempts → worker resumes from the breakpoint (skips stages that already have artifacts; no double generate/bill).
  */
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowsClockwise as RefreshCw, Queue as QueueIcon, CircleNotch as Loader2 } from '@phosphor-icons/react';
 import { getToken } from '@/lib/auth';
+import { useLocale } from '@/hooks/use-locale';
 
 interface JobItem {
   id: string;
@@ -25,25 +26,25 @@ interface JobItem {
   ideaPreview: string;
 }
 
-const STATE_META: Record<JobItem['state'], { label: string; cls: string }> = {
-  queued: { label: '排队中', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/30' },
-  running: { label: '执行中', cls: 'bg-sky-500/15 text-sky-300 border-sky-500/30' },
-  done: { label: '已完成', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
-  failed: { label: '失败(死信)', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/30' },
-};
-
-const STEP_LABEL: Record<string, string> = {
-  director: '导演分析', styleBible: '画风锚点', writer: '剧本', design: '角色/场景',
-  storyboardPlan: '分镜规划', storyboardRender: '分镜渲染', video: '镜头视频',
-  editor: '剪辑合成', review: '制片审核', finalize: '收尾',
-};
-
 function authHeaders(): Record<string, string> {
-  const t = getToken();
-  return t ? { Authorization: `Bearer ${t}` } : {};
+  const tok = getToken();
+  return tok ? { Authorization: `Bearer ${tok}` } : {};
 }
 
 export default function JobsPage() {
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { dashMore: Record<string, string> };
+  const stateMeta: Record<JobItem['state'], { label: string; cls: string }> = {
+    queued: { label: t.dashMore.queued, cls: 'bg-amber-500/15 text-amber-300 border-amber-500/30' },
+    running: { label: t.dashMore.running, cls: 'bg-sky-500/15 text-sky-300 border-sky-500/30' },
+    done: { label: t.dashProjects.statusCompleted, cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
+    failed: { label: t.dashMore.failedDead, cls: 'bg-rose-500/15 text-rose-300 border-rose-500/30' },
+  };
+  const stepLabel: Record<string, string> = {
+    director: t.dashMore.stepDirector, styleBible: t.dashMore.stepStyleBible, writer: t.dashMore.stepWriter, design: t.dashMore.stepDesign,
+    storyboardPlan: t.product.phaseStoryboardPlans, storyboardRender: t.product.phaseStoryboards, video: t.dashMore.stepVideo,
+    editor: t.product.phaseEdit, review: t.product.phaseReview, finalize: t.dashMore.stepFinalize,
+  };
   const [jobs, setJobs] = useState<JobItem[]>([]);
   const [workerActive, setWorkerActive] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -56,15 +57,15 @@ export default function JobsPage() {
       const data = await res.json();
       setJobs(data.jobs || []);
       setWorkerActive(!!data.workerActive);
-    } catch { /* 网络抖动忽略,下个轮询周期再试 */ } finally {
+    } catch { /* ignore network jitter; next poll retries */ } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     refresh();
-    const t = setInterval(refresh, 5000);
-    return () => clearInterval(t);
+    const timer = setInterval(refresh, 5000);
+    return () => clearInterval(timer);
   }, [refresh]);
 
   const retry = async (id: string) => {
@@ -81,46 +82,46 @@ export default function JobsPage() {
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-1.5">
         <h1 className="text-xl font-bold text-white flex items-center gap-2">
-          <QueueIcon className="w-5 h-5 text-[#E8C547]" /> 任务队列
+          <QueueIcon className="w-5 h-5 text-[#E8C547]" /> {t.sidebar.jobs}
         </h1>
         <button
           onClick={refresh}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-white/70 border border-[var(--border)] hover:border-[var(--border-hover)] hover:text-white transition-colors"
         >
-          <RefreshCw className="w-3.5 h-3.5" /> 刷新
+          <RefreshCw className="w-3.5 h-3.5" /> {t.usagePage.refreshTitle}
         </button>
       </div>
       <p className="text-sm text-[var(--muted)] mb-4">
-        流水线进度与死信可见;失败任务可一键重投 —— 续跑只补缺失阶段,不重复生成已出产物。
+        {t.dashMore.jobsSubtitle}
       </p>
 
       {!workerActive && (
         <div className="mb-4 px-4 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-200 text-sm">
-          当前未启用队列模式(<code className="text-amber-100">PIPELINE_QUEUE=1</code>)— 创作走请求内联执行;重投的任务会入队等待队列模式开启。
+          {t.dashMore.queueOffLead}<code className="text-amber-100">PIPELINE_QUEUE=1</code>{t.dashMore.queueOffTail}
         </div>
       )}
 
       {loading ? (
         <div className="flex items-center gap-2 text-white/60 text-sm py-12 justify-center">
-          <Loader2 className="w-4 h-4 animate-spin" /> 加载中…
+          <Loader2 className="w-4 h-4 animate-spin" /> {t.common.loading}
         </div>
       ) : jobs.length === 0 ? (
         <div className="text-white/60 text-sm py-16 text-center border border-dashed border-[var(--border)] rounded-2xl">
-          暂无任务记录。队列模式下在创作工坊 ROLL 即产生任务。
+          {t.dashMore.noJobs}
         </div>
       ) : (
         <div className="space-y-2.5">
           {jobs.map((j) => {
-            const meta = STATE_META[j.state];
+            const meta = stateMeta[j.state];
             return (
               <div key={j.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${meta.cls}`}>{meta.label}</span>
                   <span className="text-[11px] text-white/60 font-mono">{j.id}</span>
                   {j.step && (
-                    <span className="text-[11px] text-white/70">阶段:{STEP_LABEL[j.step] || j.step}</span>
+                    <span className="text-[11px] text-white/70">{t.dashMore.stagePrefix}{stepLabel[j.step] || j.step}</span>
                   )}
-                  <span className="text-[11px] text-white/60">尝试 {j.attempts} 次</span>
+                  <span className="text-[11px] text-white/60">{t.dashMore.attemptsN.replace('{n}', String(j.attempts))}</span>
                   <span className="text-[11px] text-white/60 ml-auto">{new Date(j.updatedAt || j.createdAt).toLocaleString()}</span>
                 </div>
                 {j.ideaPreview && (
@@ -131,12 +132,12 @@ export default function JobsPage() {
                     href={`/projects/${encodeURIComponent(j.projectId)}`}
                     className="text-[11px] text-[#E8C547] hover:underline"
                   >
-                    查看项目 →
+                    {t.dashMore.viewProject}
                   </Link>
                   {j.state === 'failed' && (
                     <>
                       <span className="text-[11px] text-rose-300/90 truncate max-w-[50%]" title={j.lastError}>
-                        {j.lastError || '未知错误'}
+                        {j.lastError || t.dashMore.unknownError}
                       </span>
                       <button
                         onClick={() => retry(j.id)}
@@ -144,7 +145,7 @@ export default function JobsPage() {
                         className="ml-auto inline-flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-semibold bg-[#E8C547] text-[#0C0C0C] hover:bg-[#D4A830] disabled:opacity-50 transition-colors"
                       >
                         {retrying === j.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                        重投(断点续跑)
+                        {t.dashMore.retryResume}
                       </button>
                     </>
                   )}

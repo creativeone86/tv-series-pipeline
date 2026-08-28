@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * ContinueCard (v10.5.4) — dashboard「继续创作」卡(留存面)。
- * 取项目列表 → pickContinueProject 挑最该继续的一部 → 按状态给下一步建议。
- * 空项目态整卡不渲染(验收条款);加载失败静默(留存增强非关键路径)。
+ * ContinueCard (v10.5.4) — dashboard "continue creating" card (retention).
+ * Loads projects → pickContinueProject picks the best one → next-step hint by status.
+ * Empty library: render nothing (acceptance). Load failure is silent (non-critical path).
  */
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -24,7 +24,7 @@ export function ContinueCard() {
         if (alive && Array.isArray(d)) {
           setProject(pickContinueProject(d as ProjectLike[]) as typeof project);
         }
-      } catch { /* 留存增强非关键路径,失败静默 */ }
+      } catch { /* retention enhancement; fail silently */ }
     })();
     return () => { alive = false; };
   }, []);

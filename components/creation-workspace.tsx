@@ -21,7 +21,7 @@ interface Props {
 
 export function CreationWorkspace({ project }: Props) {
   const { t } = useLocale();
-  // 移动端默认收起 chat 面板
+  // Collapse chat on mobile by default
   const [chatOpen, setChatOpen] = useState(() => {
     if (typeof window === 'undefined') return true;
     return window.matchMedia('(min-width: 768px)').matches;
@@ -31,7 +31,7 @@ export function CreationWorkspace({ project }: Props) {
   const [selectedVideoTitle, setSelectedVideoTitle] = useState('');
   const [videoModalOpen, setVideoModalOpen] = useState(false);
   const { setCurrentProject, setNodes, setEdges, assets, isProducing } = useProjectWorkspaceStore();
-  const { user } = useAuth();   // v12.302:分享按钮要判断是否项目所有者
+  const { user } = useAuth();   // v12.302: share button checks project owner
 
   useEffect(() => {
     setCurrentProject(project);
@@ -51,7 +51,7 @@ export function CreationWorkspace({ project }: Props) {
 
   const mascotMood = isProducing ? 'working' : 'completed';
 
-  // 时间线镜头数据
+  // Timeline shot data
   const timelineShots = useMemo(() => {
     const videoAssets = assets.filter(a => a.type === 'video' && a.mediaUrls?.[0]);
     const storyboardAssets = assets.filter(a => a.type === 'storyboard');
@@ -79,7 +79,7 @@ export function CreationWorkspace({ project }: Props) {
   return (
     <div className="flex flex-col h-[calc(100vh-64px)]">
       <WorkspaceHotkeys />
-      {/* 顶部工具栏 */}
+      {/* Top toolbar */}
       <div className="shrink-0 flex items-center justify-between px-5 py-2.5 border-b border-white/[0.04] bg-[#0A0A0B]/80 backdrop-blur-2xl">
         <div className="flex items-center gap-3">
           <button
@@ -97,10 +97,10 @@ export function CreationWorkspace({ project }: Props) {
         <div className="flex items-center gap-1.5">
           <Mascot mood={mascotMood} />
           {/*
-            v12.302:此前这里是一个**没有 onClick 的死按钮** —— 有 hover 高亮、点了毫无反应,
-            用户会以为分享坏了或项目不可分享。而仓里**早就有**完整可用的
-            `InviteProjectButton`(建邀请 token、出链接、管协作者角色),
-            只是项目详情页在用、创作工坊这条主路径没接。接现成的,不新造一套。
+            v12.302: this used to be a dead button with no onClick — hover highlight,
+            tap did nothing, so share looked broken. InviteProjectButton already exists
+            (invite token, link, collaborator roles) on the project page; wire it here
+            instead of building a second share path.
           */}
           <InviteProjectButton
             projectId={project.id}
@@ -112,10 +112,10 @@ export function CreationWorkspace({ project }: Props) {
         </div>
       </div>
 
-      {/* 总体进度条 — 替代每节点独立条,展示阶段+整体 */}
+      {/* Overall progress — stage + total, instead of per-node bars */}
       <OverallProgressBar />
 
-      {/* 主内容区 */}
+      {/* Main */}
       <div className="flex-1 flex overflow-hidden">
         {chatOpen && (
           <div className="w-full md:w-[340px] shrink-0 border-r border-white/[0.04] overflow-hidden bg-[#0C0C0C]/50 absolute md:relative inset-y-0 left-0 z-30 md:z-0">
@@ -129,7 +129,7 @@ export function CreationWorkspace({ project }: Props) {
             </ReactFlowProvider>
           </div>
 
-          {/* ═══ 时间线面板 ═══ */}
+          {/* Timeline panel */}
           {timelineShots.length > 0 && (
             <div className={`shrink-0 border-t border-white/[0.04] bg-[#0C0C0C]/95 backdrop-blur-xl transition-all duration-300 ${timelineOpen ? 'max-h-[130px]' : 'max-h-[34px]'} overflow-hidden`}>
               {/* Timeline header */}

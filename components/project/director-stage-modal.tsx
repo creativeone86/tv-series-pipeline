@@ -1,17 +1,20 @@
 'use client';
 
 /**
- * components/project/director-stage-modal (v12.318) — 导演台。
+ * components/project/director-stage-modal (v12.318) — director stage.
  *
- * 左:俯视图,拖人、拖机位、转朝向。右:相机视角实时预览 + 构图体检 + 会进提示词的那句话。
+ * Left: top view — drag actors, drag camera, rotate yaw. Right: live camera
+ * preview + composition audit + the sentence that goes into the prompt.
  *
- * ── 为什么预览在客户端画,而不是每拖一下问服务器 ──────────────────
- * `lib/stage-blocking` 是零依赖纯几何,浏览器里能直接跑 —— 拖动要跟手就不能有往返。
- * 关键是**用的是同一个 `projectScene`**:预览、体检、提示词描述、服务端渲的 PNG 草图,
- * 四处同源。若前端另画一套「差不多」的预览,用户看到的构图就会和最终出片对不上,
- * 那正是本仓栽过五次的「同一语义两套口径」。
+ * Why the preview is drawn on the client, not requested per drag
+ * `lib/stage-blocking` is zero-dep geometry and can run in the browser —
+ * dragging has to stay in-hand, so no round-trip. The key is using the same
+ * `projectScene`: preview, audit, prompt description, and the server-rendered
+ * PNG sketch all share one source. A second “close enough” preview would drift
+ * from the final frame — the same dual-semantics failure this repo has hit before.
  *
- * 服务端只在两件事上出手:落库(POST /stage)与渲 PNG 草图(shot-sketch mode:'stage')。
+ * Server only writes the stage (POST /stage) and renders the PNG sketch
+ * (shot-sketch mode:'stage').
  */
 
 import { useMemo, useRef, useState } from 'react';
@@ -22,10 +25,11 @@ import {
   type StageScene, type StageActor,
 } from '@/lib/stage-blocking';
 import type { LensId } from '@/lib/cinematography';
+import { useLocale } from '@/hooks/use-locale';
 
 const LENSES: LensId[] = ['18', '24', '35', '50', '85', '100'];
 
-/** 俯视图世界范围(米):左右 ±6,纵深 -2 ~ 12 */
+/** Top-view world extents (meters): x ±6, depth -2 ~ 12 */
 const WX = 6, ZMIN = -2, ZMAX = 12;
 const PW = 340, PH = 300;
 
@@ -43,17 +47,19 @@ export function DirectorStageModal({
   shotNumber: number;
   shotTitle?: string;
   initialScene?: StageScene | null;
-  /** 该镜出场角色 —— 直接用剧本里的名字建人,不让用户再敲一遍 */
+  /** Characters in this shot — seed actors from script names, no re-typing */
   characterNames?: string[];
   onClose: () => void;
   onSaved?: (scene: StageScene) => void;
 }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectPanels: Record<string, string> };
   const [scene, setScene] = useState<StageScene>(() =>
     initialScene?.camera
       ? initialScene
       : {
           camera: { x: 0, z: 0, yawDeg: 0, lens: '35', heightM: 1.6 },
-          actors: (characterNames?.length ? characterNames : ['角色 A']).slice(0, 6).map((n, i) => ({
+          actors: (characterNames?.length ? characterNames : [t.projectPanels.actorFallback]).slice(0, 6).map((n, i) => ({
             id: `a${i}`, name: n, x: (i - ((characterNames?.length || 1) - 1) / 2) * 1.4, z: 5,
           })),
         },
@@ -78,16 +84,16 @@ export function DirectorStageModal({
   }
 
   function onPointerMove(e: React.PointerEvent) {
-    const t = dragRef.current;
-    if (!t || !svgRef.current) return;
+    const tgt = dragRef.current;
+    if (!tgt || !svgRef.current) return;
     const r = svgRef.current.getBoundingClientRect();
     const x = px2wx(((e.clientX - r.left) / r.width) * PW);
     const z = py2wz(((e.clientY - r.top) / r.height) * PH);
     const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
     const nx = Number(clamp(x, -WX, WX).toFixed(2));
     const nz = Number(clamp(z, ZMIN, ZMAX).toFixed(2));
-    if (t.kind === 'camera') patchCamera({ x: nx, z: nz });
-    else patchActor(t.id, { x: nx, z: nz });
+    if (tgt.kind === 'camera') patchCamera({ x: nx, z: nz });
+    else patchActor(tgt.id, { x: nx, z: nz });
   }
 
   async function save() {
@@ -99,22 +105,22 @@ export function DirectorStageModal({
       });
       const b = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(b?.message || b?.error || `HTTP ${r.status}`);
-      setMsg('已保存 —— 该镜后续出片会带上这份站位');
+      setMsg(t.projectPanels.stageSaved);
       onSaved?.(scene);
     } catch (e) {
-      setMsg(`保存失败:${e instanceof Error ? e.message : String(e)}`);
+      setMsg(t.projectPanels.saveFailedWith.replace('{msg}', e instanceof Error ? e.message : String(e)));
     } finally { setSaving(false); }
   }
 
   async function renderSketch() {
     setSketching(true); setMsg('');
     try {
-      // 先存再渲 —— 服务端按**库里的**舞台渲图,不存就渲的是上一次的位置
+      // Save first — server renders from the **stored** stage, not unsaved positions
       const s = await fetch(`/api/projects/${projectId}/stage`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shotNumber, actors: scene.actors, camera: scene.camera }),
       });
-      if (!s.ok) throw new Error(`保存舞台失败 HTTP ${s.status}`);
+      if (!s.ok) throw new Error(t.projectPanels.saveStageFailed.replace('{status}', String(s.status)));
       const r = await fetch(`/api/projects/${projectId}/shot-sketch`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shotNumber, mode: 'stage' }),
@@ -122,9 +128,9 @@ export function DirectorStageModal({
       const b = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(b?.error || `HTTP ${r.status}`);
       setSketchUrl(b.sketchUrl);
-      setMsg('草图已生成 —— 重生该镜分镜图时开启草图锁即用它锁构图');
+      setMsg(t.projectPanels.sketchDone);
     } catch (e) {
-      setMsg(`渲草图失败:${e instanceof Error ? e.message : String(e)}`);
+      setMsg(t.projectPanels.sketchFailedWith.replace('{msg}', e instanceof Error ? e.message : String(e)));
     } finally { setSketching(false); }
   }
 
@@ -135,20 +141,24 @@ export function DirectorStageModal({
     return `${camPx + Math.sin(a) * 400},${camPy - Math.cos(a) * 400}`;
   };
 
+  const title = shotTitle
+    ? t.projectPanels.stageTitleNamed.replace('{n}', String(shotNumber)).replace('{title}', shotTitle)
+    : t.projectPanels.stageTitle.replace('{n}', String(shotNumber));
+
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-5xl">
         <DialogHeader>
-          <DialogTitle>{`导演台 · 第 ${shotNumber} 镜${shotTitle ? ` — ${shotTitle}` : ''}`}</DialogTitle>
-          <button onClick={onClose} aria-label="关闭" className="absolute right-3 top-3 opacity-70 hover:opacity-100">
+          <DialogTitle>{title}</DialogTitle>
+          <button onClick={onClose} aria-label={t.product.close} className="absolute right-3 top-3 opacity-70 hover:opacity-100">
             <X size={16} />
           </button>
         </DialogHeader>
 
         <div className="grid gap-4 md:grid-cols-2">
-          {/* ── 俯视图:拖人、拖机位 ── */}
+          {/* Top view: drag actors, drag camera */}
           <div>
-            <p className="text-[11px] opacity-70 mb-1">俯视图 · 拖动人物或机位摆位</p>
+            <p className="text-[11px] opacity-70 mb-1">{t.projectPanels.topViewHint}</p>
             <svg
               ref={svgRef} viewBox={`0 0 ${PW} ${PH}`} className="w-full rounded-md border border-[var(--cinema-border)] touch-none"
               onPointerMove={onPointerMove}
@@ -156,7 +166,7 @@ export function DirectorStageModal({
               onPointerLeave={() => { dragRef.current = null; }}
             >
               <rect width={PW} height={PH} fill="rgba(127,127,127,0.06)" />
-              {/* 视野扇形 —— 一眼看出谁在画面里 */}
+              {/* FOV wedge — who is in frame at a glance */}
               <polygon points={`${camPx},${camPy} ${frustum(-1)} ${frustum(1)}`} fill="rgba(245,180,60,0.14)" />
               {scene.actors.map((a) => {
                 const p = projected.find((q) => q.id === a.id);
@@ -170,36 +180,36 @@ export function DirectorStageModal({
               })}
               <g onPointerDown={(e) => { e.preventDefault(); dragRef.current = { kind: 'camera' }; }} style={{ cursor: 'grab' }}>
                 <circle cx={camPx} cy={camPy} r={8} fill="rgba(80,160,255,0.9)" />
-                <text x={camPx} y={camPy + 20} textAnchor="middle" fontSize={9} fill="currentColor">机位</text>
+                <text x={camPx} y={camPy + 20} textAnchor="middle" fontSize={9} fill="currentColor">{t.projectPanels.cameraMark}</text>
               </g>
             </svg>
 
             <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-              <label className="flex items-center gap-1">朝向
+              <label className="flex items-center gap-1">{t.projectPanels.yaw}
                 <input type="range" min={-180} max={180} value={scene.camera.yawDeg}
                   onChange={(e) => patchCamera({ yawDeg: Number(e.target.value) })} className="flex-1" />
                 <span className="cinema-mono w-9 text-right">{scene.camera.yawDeg}°</span>
               </label>
-              <label className="flex items-center gap-1">机高
+              <label className="flex items-center gap-1">{t.projectPanels.camHeight}
                 <input type="range" min={0.2} max={4} step={0.1} value={scene.camera.heightM ?? 1.6}
                   onChange={(e) => patchCamera({ heightM: Number(e.target.value) })} className="flex-1" />
                 <span className="cinema-mono w-11 text-right">{(scene.camera.heightM ?? 1.6).toFixed(1)}m</span>
               </label>
-              <label className="col-span-2 flex items-center gap-1">焦距
+              <label className="col-span-2 flex items-center gap-1">{t.projectPanels.focal}
                 {LENSES.map((l) => (
                   <button key={l} onClick={() => patchCamera({ lens: l })}
                     className={`px-1.5 py-0.5 rounded border text-[10px] ${scene.camera.lens === l ? 'border-[var(--cinema-amber)]' : 'border-[var(--cinema-border)] opacity-60'}`}>
                     {l}mm
                   </button>
                 ))}
-                <span className="cinema-mono opacity-60 ml-auto">{fov.toFixed(0)}° 视角</span>
+                <span className="cinema-mono opacity-60 ml-auto">{t.projectPanels.fov.replace('{n}', fov.toFixed(0))}</span>
               </label>
             </div>
           </div>
 
-          {/* ── 相机视角预览 + 体检 ── */}
+          {/* Camera-view preview + audit */}
           <div>
-            <p className="text-[11px] opacity-70 mb-1">相机视角 · 与最终草图同一套几何</p>
+            <p className="text-[11px] opacity-70 mb-1">{t.projectPanels.cameraViewHint}</p>
             <svg viewBox="0 0 320 180" className="w-full rounded-md border border-[var(--cinema-border)] bg-white">
               <line x1={320 / 3} y1={0} x2={320 / 3} y2={180} stroke="#ddd" />
               <line x1={(2 * 320) / 3} y1={0} x2={(2 * 320) / 3} y2={180} stroke="#ddd" />
@@ -223,7 +233,7 @@ export function DirectorStageModal({
 
             <div className="mt-2 space-y-1 text-[11px]">
               {issues.length === 0 ? (
-                <p className="opacity-60">构图无告警</p>
+                <p className="opacity-60">{t.projectPanels.noCompositionWarn}</p>
               ) : issues.map((i, k) => (
                 <p key={k} className="flex items-start gap-1 text-[var(--cinema-amber)]">
                   <Warning size={12} className="mt-0.5 shrink-0" />{i.message}
@@ -232,7 +242,7 @@ export function DirectorStageModal({
               {description && <p className="opacity-75 leading-snug">{description}</p>}
               {directive && (
                 <details className="opacity-60">
-                  <summary className="cursor-pointer">会进提示词的那句(英文)</summary>
+                  <summary className="cursor-pointer">{t.projectPanels.promptLineSummary}</summary>
                   <code className="block mt-1 text-[10px] break-all">{directive}</code>
                 </details>
               )}
@@ -242,18 +252,18 @@ export function DirectorStageModal({
 
         {sketchUrl && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={sketchUrl} alt={`第 ${shotNumber} 镜布局草图`} className="mt-2 w-full rounded-md border border-[var(--cinema-border)]" />
+          <img src={sketchUrl} alt={t.projectPanels.sketchAlt.replace('{n}', String(shotNumber))} className="mt-2 w-full rounded-md border border-[var(--cinema-border)]" />
         )}
 
         <div className="mt-3 flex items-center gap-2">
           <button onClick={save} disabled={saving}
             className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-[var(--cinema-border)] hover:border-[var(--cinema-amber)] text-[12px] disabled:opacity-50">
-            {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} 保存站位
+            {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} {t.projectPanels.saveBlocking}
           </button>
           <button onClick={renderSketch} disabled={sketching}
             className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-[var(--cinema-border)] hover:border-[var(--cinema-amber)] text-[12px] disabled:opacity-50"
-            title="按当前舞台渲一张布局草图(不调引擎、不花钱)">
-            {sketching ? <Loader2 size={13} className="animate-spin" /> : <ImageIcon size={13} />} 渲布局草图
+            title={t.projectPanels.renderSketchHint}>
+            {sketching ? <Loader2 size={13} className="animate-spin" /> : <ImageIcon size={13} />} {t.projectPanels.renderSketch}
           </button>
           {msg && <span className="text-[11px] opacity-75">{msg}</span>}
         </div>

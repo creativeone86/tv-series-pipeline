@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * v6.4 — 导演台 (Director Console). v12.44 仪表盘化:顶部 KPI 概览(完成度/分镜/视频/成片)
- * + 下一步建议徽章 + cinema-meter 进度 + 创作主流程 4 环节(剧本→资产→分镜→成片)流水线
- * (状态/进编辑/重跑下游影响)。纯逻辑在 lib/pipeline-stages;全量 cinema 设计系统。
+ * v6.4 — Director Console. v12.44 dashboard: top KPI (progress / boards / clips / film)
+ * + next-step badge + cinema-meter + 4-stage pipeline (script → assets → boards → film)
+ * (status / edit / rerun downstream). Logic in lib/pipeline-stages; full cinema system.
  */
 
 import { useState } from 'react';
@@ -14,19 +14,38 @@ import {
 } from '@phosphor-icons/react';
 import {
   derivePipelineStages, downstreamStages, pipelineProgress,
-  PIPELINE_STAGES, type StageAsset, type StageId, type StageStatus,
+  type StageAsset, type StageId, type StageStatus,
 } from '@/lib/pipeline-stages';
 import { healthTone } from '@/lib/quality-report';
+import { useLocale } from '@/hooks/use-locale';
+import type { Translations } from '@/lib/i18n';
 
 const STAGE_ICON: Record<StageId, typeof FileText> = {
   script: FileText, assets: Users, storyboard: Clapperboard, final: Film,
 };
-const STATUS_META: Record<StageStatus, { label: string; chip: string }> = {
-  empty: { label: '未生成', chip: 'cinema-chip' },
-  ready: { label: '就绪', chip: 'cinema-chip cinema-chip-green' },
-  stale: { label: '待更新', chip: 'cinema-chip cinema-chip-amber' },
+const STATUS_CHIP: Record<StageStatus, string> = {
+  empty: 'cinema-chip',
+  ready: 'cinema-chip cinema-chip-green',
+  stale: 'cinema-chip cinema-chip-amber',
 };
-const stageLabel = (id: StageId) => PIPELINE_STAGES.find((s) => s.id === id)?.label ?? id;
+
+function stageLabel(id: StageId, t: Translations): string {
+  return {
+    script: t.product.tabScript,
+    assets: t.sharedUi.stageAssets,
+    storyboard: t.product.storyboard,
+    final: t.sharedUi.stageFinal,
+  }[id] ?? id;
+}
+
+function stageDesc(id: StageId, t: Translations): string {
+  return {
+    script: t.sharedUi.stageScriptDesc,
+    assets: t.sharedUi.stageAssetsDesc,
+    storyboard: t.sharedUi.stageBoardDesc,
+    final: t.sharedUi.stageFinalDesc,
+  }[id] ?? '';
+}
 
 export function DirectorConsole({
   assets,
@@ -36,20 +55,21 @@ export function DirectorConsole({
 }: {
   assets: StageAsset[];
   onEditStage: (tab: string) => void;
-  /** v6.4.1: 提供后「重跑」按钮真调 /api/projects/[id]/rerun */
+  /** v6.4.1: when set, Rerun hits /api/projects/[id]/rerun */
   projectId?: string;
-  /** v6.4.1: 重跑落库后回调 (刷新项目数据) */
+  /** v6.4.1: callback after a rerun is persisted (refresh project data) */
   onReran?: () => void;
 }) {
+  const { t } = useLocale();
   const stages = derivePipelineStages(assets);
   const prog = pipelineProgress(stages);
   const [impact, setImpact] = useState<StageId | null>(null);
   const [rerunning, setRerunning] = useState<StageId | null>(null);
   const [rerunMsg, setRerunMsg] = useState('');
-  // v12.100:一键广告包装车间(hook 弹药→变体+双卡→文案→并包)
+  // v12.100: one-click ad workshop (hook ammo → variants + dual card → copy → pack)
   const [workshopBusy, setWorkshopBusy] = useState(false);
   const [workshopMsg, setWorkshopMsg] = useState('');
-  // v12.116:包装结果结构化面板(变体可点/健康分/文案标题),不再只有一行文本
+  // v12.116: structured workshop result (clickable variants / health / title), not just one line
   const [workshopResult, setWorkshopResult] = useState<{
     finalVideoUrl?: string | null;
     variants: Array<{ variant: number; hookTitle?: string; url: string | null; chosen?: boolean }>;
@@ -57,26 +77,26 @@ export function DirectorConsole({
     healthScore?: number | null;
   } | null>(null);
 
-  // v12.44: 从 assets 按类型派生 KPI 概览
-  const cnt = (t: string) => (assets as Array<{ type?: string }>).filter((a) => a?.type === t).length;
+  // v12.44: derive KPI overview from assets by type
+  const cnt = (typ: string) => (assets as Array<{ type?: string }>).filter((a) => a?.type === typ).length;
   const kpis: Array<{ label: string; value: string; sub: string; color?: string; tip?: string }> = [
-    { label: 'PROGRESS', value: `${prog.pct}%`, sub: `${prog.produced}/${prog.total} 环节` },
-    { label: 'SHOTS', value: String(cnt('storyboard')), sub: '分镜' },
-    { label: 'CLIPS', value: String(cnt('video')), sub: '镜头视频' },
-    { label: 'FILM', value: cnt('final_video') > 0 ? '✓' : '—', sub: '成片' },
+    { label: 'PROGRESS', value: `${prog.pct}%`, sub: t.sharedUi.stagesDone.replace('{n}', String(prog.produced)).replace('{total}', String(prog.total)) },
+    { label: 'SHOTS', value: String(cnt('storyboard')), sub: t.product.storyboard },
+    { label: 'CLIPS', value: String(cnt('video')), sub: t.sharedUi.shotVideos },
+    { label: 'FILM', value: cnt('final_video') > 0 ? '✓' : '—', sub: t.sharedUi.stageFinal },
   ];
-  // v12.115:质检健康分 KPI(quality_report 资产存在时)—— 悬停看一句话摘要
+  // v12.115: QC health KPI when a quality_report asset exists — hover for a one-line summary
   const qr = (assets as Array<{ type?: string; data?: { healthScore?: number; summary?: string } }>).find((a) => a?.type === 'quality_report');
   const health = typeof qr?.data?.healthScore === 'number' ? qr.data.healthScore : null;
   if (health !== null) {
-    kpis.push({ label: 'HEALTH', value: String(health), sub: '质检健康分', color: healthTone(health).color, tip: qr?.data?.summary });
+    kpis.push({ label: 'HEALTH', value: String(health), sub: t.sharedUi.qcHealth, color: healthTone(health).color, tip: qr?.data?.summary });
   }
   const nextStage = stages.find((s) => s.status === 'empty') || stages.find((s) => s.status === 'stale');
   const nextHint = nextStage
-    ? (nextStage.status === 'empty' ? `下一步 · 生成「${nextStage.label}」` : `建议 · 重生「${nextStage.label}」`)
-    : '全链路就绪 · 可导出成片';
+    ? (nextStage.status === 'empty' ? t.sharedUi.nextGen.replace('{name}', stageLabel(nextStage.id, t)) : t.sharedUi.suggestRegen.replace('{name}', stageLabel(nextStage.id, t)))
+    : t.sharedUi.pipelineReady;
 
-  // v12.199:变体选胜 —— POST ab-variant/choose,成功后本地把 chosen 标记切到该变体并刷新主成片
+  // v12.199: pick a winning variant — POST ab-variant/choose, then mark chosen locally and refresh the main film
   const [choosingVariant, setChoosingVariant] = useState<number | null>(null);
   const chooseVariant = async (variant: number) => {
     if (!projectId || choosingVariant !== null) return;
@@ -87,16 +107,16 @@ export function DirectorConsole({
         body: JSON.stringify({ variant }),
       });
       const d = await res.json();
-      if (!res.ok) throw new Error(d.message || '选定失败');
+      if (!res.ok) throw new Error(d.message || t.sharedUi.chooseFailed);
       setWorkshopResult((prev) => prev ? {
         ...prev,
         finalVideoUrl: d.finalVideoUrl || prev.finalVideoUrl,
         variants: prev.variants.map((v) => ({ ...v, chosen: v.variant === variant })),
       } : prev);
-      setWorkshopMsg(`✓ 变体${variant} 已设为正式成片`);
+      setWorkshopMsg(t.sharedUi.variantChosen.replace('{n}', String(variant)));
       onReran?.();
     } catch (e: unknown) {
-      setWorkshopMsg(e instanceof Error ? e.message : '选定失败');
+      setWorkshopMsg(e instanceof Error ? e.message : t.sharedUi.chooseFailed);
     } finally {
       setChoosingVariant(null);
     }
@@ -104,21 +124,21 @@ export function DirectorConsole({
 
   const doWorkshop = async () => {
     if (!projectId || workshopBusy) return;
-    setWorkshopBusy(true); setWorkshopMsg('包装中…(hook→变体→文案→并包,约 1-3 分钟)');
+    setWorkshopBusy(true); setWorkshopMsg(t.sharedUi.packingHint);
     try {
       const res = await fetch(`/api/projects/${projectId}/ad-workshop`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ platform: 'douyin', aspect: '9:16' }),
       });
       const d = await res.json();
-      if (!res.ok) throw new Error(d.message || '包装失败');
+      if (!res.ok) throw new Error(d.message || t.sharedUi.packFailed);
       const st = d.steps || {};
       setWorkshopMsg(
-        `✓ 包装 ${d.okSteps}/${d.totalSteps}:` +
+        t.sharedUi.packSummary.replace('{ok}', String(d.okSteps)).replace('{total}', String(d.totalSteps)) +
         `${st.hookIdeas?.ok ? ` Hook×${(st.hookIdeas.hooks || []).length}` : ' Hook✗'}` +
-        `${st.recompose?.ok ? ` · 变体×${(st.recompose.variants || []).length}` : ' · 合成✗'}` +
-        `${st.publishCopy?.ok ? ' · 文案✓' : ' · 文案✗'}` +
-        `${st.package?.ok ? ' · 并包✓' : ' · 并包✗'}`,
+        `${st.recompose?.ok ? ` · ${t.sharedUi.variantUnit}×${(st.recompose.variants || []).length}` : ` · ${t.sharedUi.composeFail}`}` +
+        `${st.publishCopy?.ok ? ` · ${t.sharedUi.copyOk}` : ` · ${t.sharedUi.copyFail}`}` +
+        `${st.package?.ok ? ` · ${t.sharedUi.packOk}` : ` · ${t.sharedUi.packFail}`}`,
       );
       setWorkshopResult({
         finalVideoUrl: st.recompose?.finalVideoUrl || null,
@@ -128,7 +148,7 @@ export function DirectorConsole({
       });
       onReran?.();
     } catch (e: unknown) {
-      setWorkshopMsg(e instanceof Error ? e.message : '包装失败');
+      setWorkshopMsg(e instanceof Error ? e.message : t.sharedUi.packFailed);
     } finally {
       setWorkshopBusy(false);
       setTimeout(() => setWorkshopMsg(''), 12000);
@@ -144,17 +164,17 @@ export function DirectorConsole({
         body: JSON.stringify({ stage: sid }),
       });
       const d = await res.json();
-      if (!res.ok) throw new Error(d.message || '重跑失败');
+      if (!res.ok) throw new Error(d.message || t.sharedUi.rerunFailed);
       const n = d.plan?.invalidates?.length ?? 0;
       setRerunMsg(
         d.dispatched
-          ? `✓ 已重跑「${stageLabel(sid)}」并派发管线重生`
-          : `✓ 已标记「${stageLabel(sid)}」重跑${n ? `,下游 ${n} 环节置为待更新` : ''}`,
+          ? t.sharedUi.reranDispatched.replace('{name}', stageLabel(sid, t))
+          : t.sharedUi.reranMarked.replace('{name}', stageLabel(sid, t)).replace('{extra}', n ? t.sharedUi.downstreamStale.replace('{n}', String(n)) : ''),
       );
       setImpact(null);
       onReran?.();
     } catch (e: unknown) {
-      setRerunMsg(e instanceof Error ? e.message : '重跑失败');
+      setRerunMsg(e instanceof Error ? e.message : t.sharedUi.rerunFailed);
     } finally {
       setRerunning(null);
       setTimeout(() => setRerunMsg(''), 4000);
@@ -163,13 +183,13 @@ export function DirectorConsole({
 
   return (
     <div className="cinema-card-hi p-5">
-      {/* header + 下一步建议 */}
+      {/* header + next-step hint */}
       <div className="flex items-start justify-between mb-4 gap-3 flex-wrap">
         <div>
           <h3 className="cinema-headline text-base flex items-center gap-2">
-            <Clapperboard className="w-4 h-4 text-[var(--cinema-amber)]" />导演台 · 全链路控片
+            <Clapperboard className="w-4 h-4 text-[var(--cinema-amber)]" />{t.sharedUi.directorDesk}
           </h3>
-          <p className="cinema-subhead text-xs opacity-65 mt-0.5">逐环节查看状态 · 进入任意节点编辑 / 重生 · 了解重跑的下游影响</p>
+          <p className="cinema-subhead text-xs opacity-65 mt-0.5">{t.sharedUi.directorDeskHint}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
           {cnt('final_video') > 0 && projectId && (
@@ -177,9 +197,9 @@ export function DirectorConsole({
               onClick={doWorkshop}
               disabled={workshopBusy}
               className="cinema-chip cinema-chip-amber hover:brightness-110 disabled:opacity-50 cursor-pointer"
-              title="一键后期:Hook 弹药 → A/B 变体 + 双卡 → 发布文案 → 发布包"
+              title={t.sharedUi.adWorkshopTitle}
             >
-              🎁 {workshopBusy ? '包装中…' : '广告包装车间'}
+              🎁 {workshopBusy ? t.sharedUi.packing : t.sharedUi.adWorkshop}
             </button>
           )}
           <span className={`cinema-chip shrink-0 ${nextStage ? 'cinema-chip-amber' : 'cinema-chip-green'}`}>
@@ -193,29 +213,29 @@ export function DirectorConsole({
         <div className="mb-3 text-xs cinema-subhead px-3 py-2 rounded-lg bg-white/5 border border-white/10">{workshopMsg}</div>
       )}
 
-      {/* v12.116:包装结果面板 —— 成片/变体直接可点,健康分着色,首选标题预览 */}
+      {/* v12.116: workshop result — film/variants clickable, health tinted, preferred title */}
       {workshopResult && (
         <div className="mb-4 rounded-[3px] bg-[var(--cinema-surface-2)] border border-[var(--cinema-border)] p-3 space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
             {workshopResult.finalVideoUrl && (
-              <a href={workshopResult.finalVideoUrl} target="_blank" rel="noreferrer" className="cinema-chip cinema-chip-green hover:brightness-110">▶ 主成片</a>
+              <a href={workshopResult.finalVideoUrl} target="_blank" rel="noreferrer" className="cinema-chip cinema-chip-green hover:brightness-110">▶ {t.sharedUi.mainFilm}</a>
             )}
             {workshopResult.variants.filter((v) => v.url).map((v) => (
               <span key={v.variant} className="inline-flex items-center gap-0.5">
                 <a href={v.url as string} target="_blank" rel="noreferrer"
                    className={`cinema-chip hover:brightness-110 ${v.chosen ? 'cinema-chip-amber' : ''}`}
                    title={v.hookTitle || ''}>
-                  {v.chosen ? '★' : '▶'} 变体{v.variant}{v.hookTitle ? ` · ${v.hookTitle.slice(0, 10)}` : ''}
+                  {v.chosen ? '★' : '▶'} {t.sharedUi.variantN.replace('{n}', String(v.variant))}{v.hookTitle ? ` · ${v.hookTitle.slice(0, 10)}` : ''}
                 </a>
-                {/* v12.199:选为正片 —— ab-variant/choose API 此前无前端入口 */}
+                {/* v12.199: pick as hero — ab-variant/choose had no UI before */}
                 {!v.chosen && (
                   <button
                     onClick={() => chooseVariant(v.variant)}
                     disabled={choosingVariant !== null}
                     className="cinema-chip text-[10px] opacity-70 hover:opacity-100 disabled:opacity-30"
-                    title="把该变体设为正式成片"
+                    title={t.sharedUi.setAsHero}
                   >
-                    {choosingVariant === v.variant ? '…' : '选为正片'}
+                    {choosingVariant === v.variant ? '…' : t.sharedUi.pickAsHero}
                   </button>
                 )}
               </span>
@@ -227,12 +247,12 @@ export function DirectorConsole({
             )}
           </div>
           {workshopResult.title && (
-            <p className="cinema-mono text-[11px] opacity-70">首选标题:{workshopResult.title}</p>
+            <p className="cinema-mono text-[11px] opacity-70">{t.sharedUi.prefTitle}:{workshopResult.title}</p>
           )}
         </div>
       )}
 
-      {/* KPI 概览 */}
+      {/* KPI overview */}
       <div className={`grid grid-cols-2 ${kpis.length >= 5 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'} gap-2 mb-4`}>
         {kpis.map((k) => (
           <div key={k.label} title={k.tip} className="rounded-[3px] bg-[var(--cinema-surface-2)] border border-[var(--cinema-border)] px-3 py-2.5">
@@ -243,21 +263,21 @@ export function DirectorConsole({
         ))}
       </div>
 
-      {/* 进度 */}
+      {/* Progress */}
       <div className={`cinema-meter ${rerunMsg ? 'mb-2' : 'mb-5'}`}>
         <div className="cinema-meter-fill" style={{ width: `${prog.pct}%` }} />
       </div>
       {rerunMsg && <p className="cinema-mono text-[11px] text-[var(--cinema-amber)] mb-4">{rerunMsg}</p>}
 
-      {/* 环节流水线 */}
+      {/* Stage pipeline */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {stages.map((s, i) => {
           const Icon = STAGE_ICON[s.id];
-          const meta = STATUS_META[s.status];
+          const statusLabel = s.status === 'empty' ? t.sharedUi.statusEmpty : s.status === 'ready' ? t.sharedUi.statusReady : t.sharedUi.statusStale;
           const down = downstreamStages(s.id);
           return (
             <div key={s.id} className="relative cinema-card p-4 flex flex-col">
-              {/* 连接箭头 (大屏) */}
+              {/* Connector arrow (lg+) */}
               {i < stages.length - 1 && (
                 <ChevronRight className="hidden lg:block absolute -right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--cinema-text-3)] z-10" />
               )}
@@ -266,33 +286,33 @@ export function DirectorConsole({
                   <Icon className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="cinema-headline text-sm">{s.label}</div>
-                  <div className="cinema-mono text-[10px] opacity-50">{s.desc}</div>
+                  <div className="cinema-headline text-sm">{stageLabel(s.id, t)}</div>
+                  <div className="cinema-mono text-[10px] opacity-50">{stageDesc(s.id, t)}</div>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 mb-3">
-                <span className={`${meta.chip} !text-[10px]`}>{meta.label}</span>
-                {s.count > 0 && <span className="cinema-mono text-[10px] opacity-50">{s.count} 项</span>}
+                <span className={`${STATUS_CHIP[s.status]} !text-[10px]`}>{statusLabel}</span>
+                {s.count > 0 && <span className="cinema-mono text-[10px] opacity-50">{t.sharedUi.itemsN.replace('{n}', String(s.count))}</span>}
               </div>
 
               {s.status === 'stale' && (
                 <p className="cinema-mono text-[10px] text-[var(--cinema-amber)] opacity-90 flex items-start gap-1 mb-2">
-                  <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />上游已更新,建议重生本环节
+                  <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />{t.sharedUi.upstreamStale}
                 </p>
               )}
 
               <div className="mt-auto flex gap-1.5">
                 <button onClick={() => onEditStage(s.editTab)} className="cinema-btn-ghost !text-[11px] !py-1.5 flex-1">
-                  <Pencil className="w-3 h-3" />{s.status === 'empty' ? '生成' : '编辑'}
+                  <Pencil className="w-3 h-3" />{s.status === 'empty' ? t.sharedUi.generate : t.common.edit}
                 </button>
                 {s.status !== 'empty' && (
                   <button
                     onClick={() => setImpact(impact === s.id ? null : s.id)}
-                    title="重跑此环节"
+                    title={t.sharedUi.rerunStage}
                     className={`cinema-btn-ghost !text-[11px] !py-1.5 ${impact === s.id ? '!text-[var(--cinema-amber)] !border-[var(--cinema-amber-deep)]' : ''}`}
                   >
-                    <RefreshCw className="w-3 h-3" />重跑
+                    <RefreshCw className="w-3 h-3" />{t.sharedUi.rerun}
                   </button>
                 )}
               </div>
@@ -301,8 +321,8 @@ export function DirectorConsole({
                 <div className="mt-2 rounded-[3px] bg-[var(--cinema-amber)]/[0.06] border border-[var(--cinema-amber-deep)] p-2">
                   <p className="cinema-mono text-[10px] text-[var(--cinema-amber)] opacity-90 leading-relaxed">
                     {down.length > 0
-                      ? <>重跑「{s.label}」后,下游需重新生成:{down.map(stageLabel).join(' → ')}</>
-                      : <>重跑「{s.label}」(末环节,无下游影响)</>}
+                      ? <>{t.sharedUi.rerunDownstream.replace('{name}', stageLabel(s.id, t)).replace('{list}', down.map((id) => stageLabel(id, t)).join(' → '))}</>
+                      : <>{t.sharedUi.rerunLast.replace('{name}', stageLabel(s.id, t))}</>}
                   </p>
                   {projectId && (
                     <button
@@ -311,7 +331,7 @@ export function DirectorConsole({
                       className="cinema-btn-primary !text-[10px] !py-1 mt-1.5 disabled:opacity-50"
                     >
                       {rerunning === s.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                      确认重跑此环节
+                      {t.sharedUi.confirmRerun}
                     </button>
                   )}
                 </div>

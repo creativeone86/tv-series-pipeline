@@ -1,34 +1,38 @@
 'use client';
 
 /**
- * ScriptViewerModal — 剧本资产专用查看器。
+ * ScriptViewerModal — viewer dedicated to script assets.
  *
- * 之前素材库对 script 资产的处理是 `alert(asset.data.synopsis || '无内容')`,
- * 体验极差:只弹一行纯文本,看不到分镜、对白、动作、镜头语言。
+ * The asset library used to handle script assets with
+ * `alert(asset.data.synopsis || 'no content')` — a single line of plain text,
+ * no boards, dialogue, action, or camera language.
  *
- * /api/assets 实际已经把完整 data 打回来(包含 title / synopsis / shots[]),
- * 所以这里只是把结构化数据渲染成可阅读的分镜剧本。
+ * /api/assets already returns the full data (title / synopsis / shots[]),
+ * so this just renders that structured payload as a readable shot script.
  *
- * 渲染结构(与 types/agents.ts#ScriptShot 对齐):
- *   - 标题 + 一句话梗概 + 幕数统计
- *   - 按 Shot 依次展开,每个 Shot 显示:
- *     · 镜头号 / 幕号 / Beat / 时长
- *     · 场景描述 + 动作 + 情绪
- *     · 对白(如有,高亮)
- *     · 摄影语言(shot size / lens / angle / movement / lighting)
- *     · 视觉 prompt / subtext(可折叠)
+ * Layout (aligned with types/agents.ts#ScriptShot):
+ *   - title + one-line synopsis + act count
+ *   - shots in order, each showing:
+ *     · shot # / act # / Beat / duration
+ *     · scene + action + emotion
+ *     · dialogue (highlighted when present)
+ *     · camera language (shot size / lens / angle / movement / lighting)
+ *     · visual prompt / subtext (collapsible)
  *
- * 支持:
- *   - ESC 关闭
- *   - 复制全文(一键)
- *   - 下载 .txt
+ * Also:
+ *   - ESC to close
+ *   - copy full text (one click)
+ *   - download .txt
  */
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, FileText, Copy, Download, Check, MagicWand as Wand2 } from '@phosphor-icons/react';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
+import { useLocale } from '@/hooks/use-locale';
 import Link from 'next/link';
+
+type KitT = ReturnType<typeof useLocale>['t'] & { kitUi: Record<string, string> };
 
 interface MicroBeat {
   ts: string; startSec?: number; endSec?: number;
@@ -46,14 +50,14 @@ interface ScriptShot {
   storyBeat?: string;
   beat?: string;
   visualPrompt?: string;
-  beats?: MicroBeat[];        // v12.6.0 逐秒时间码 beat
+  beats?: MicroBeat[];        // v12.6.0 per-second timecode beats
   beatFunction?: string;
   subtext?: string;
   emotionTemperature?: number;
   cameraWork?: string;
   soundDesign?: string;
   duration?: number;
-  // v2.8 摄影语言
+  // v2.8 camera language
   shotSize?: string;
   lens?: string;
   cameraAngle?: string;
@@ -81,38 +85,41 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   name: string;
   data: ScriptData;
-  /** 若传入, 会在工具栏多出一个"润色"按钮, 跳到 /dashboard/polish?projectId=xxx */
+  /** When set, the toolbar gains a "Polish" button to /dashboard/polish?projectId=xxx */
   projectId?: string;
 }
 
-/** 把 ScriptData 序列化成适合复制/下载的纯文本 */
-function scriptToText(name: string, data: ScriptData): string {
+/** Serialize ScriptData to plain text for copy / download */
+function scriptToText(name: string, data: ScriptData, t: KitT): string {
+  const k = t.kitUi;
   const lines: string[] = [];
   lines.push(`《${data.title || name}》`);
-  if (data.synopsis) lines.push(`\n梗概:${data.synopsis}`);
+  if (data.synopsis) lines.push(`\n${k.synopsis}:${data.synopsis}`);
   if (data.genre || data.style) {
-    lines.push(`\n类型:${[data.genre, data.style].filter(Boolean).join(' · ')}`);
+    lines.push(`\n${k.genre}:${[data.genre, data.style].filter(Boolean).join(' · ')}`);
   }
   lines.push('');
   (data.shots || []).forEach((s) => {
-    lines.push(`\n───── Shot ${s.shotNumber}${s.act ? ` · 第${s.act}幕` : ''} ${s.storyBeat || s.beat || ''} ─────`);
-    if (s.sceneDescription) lines.push(`[场景] ${s.sceneDescription}`);
-    if (s.characters?.length) lines.push(`[人物] ${s.characters.join('、')}`);
-    if (s.action) lines.push(`[动作] ${s.action}`);
-    if (s.emotion) lines.push(`[情绪] ${s.emotion}`);
-    if (s.dialogue) lines.push(`[对白] ${s.dialogue}`);
+    lines.push(`\n───── Shot ${s.shotNumber}${s.act ? ` · ${k.actN.replace('{n}', String(s.act))}` : ''} ${s.storyBeat || s.beat || ''} ─────`);
+    if (s.sceneDescription) lines.push(`[${k.scene}] ${s.sceneDescription}`);
+    if (s.characters?.length) lines.push(`[${k.characters}] ${s.characters.join('、')}`);
+    if (s.action) lines.push(`[${k.action}] ${s.action}`);
+    if (s.emotion) lines.push(`[${k.emotion}] ${s.emotion}`);
+    if (s.dialogue) lines.push(`[${k.dialogueLabel}] ${s.dialogue}`);
     const cam = [s.shotSize, s.lens, s.cameraAngle, s.cameraMovement].filter(Boolean).join(' / ');
-    if (cam) lines.push(`[镜头] ${cam}`);
-    if (s.lightingIntent) lines.push(`[光影] ${s.lightingIntent}`);
-    if (s.subtext) lines.push(`[潜台词] ${s.subtext}`);
-    if (s.beats?.length) { lines.push(`[逐秒分镜]`); for (const b of s.beats) lines.push(`  ${b.ts} ${b.action}${b.camera ? ` 〔${b.camera}〕` : ''}${b.dialogue ? ` 💬${b.dialogue}` : ''}`); }
-    if (s.visualPrompt) lines.push(`[视觉 Prompt] ${s.visualPrompt}`);
-    if (s.duration) lines.push(`[时长] ${s.duration}s`);
+    if (cam) lines.push(`[${k.camera}] ${cam}`);
+    if (s.lightingIntent) lines.push(`[${k.lighting}] ${s.lightingIntent}`);
+    if (s.subtext) lines.push(`[${k.subtext}] ${s.subtext}`);
+    if (s.beats?.length) { lines.push(`[${k.beatSheetPlain}]`); for (const b of s.beats) lines.push(`  ${b.ts} ${b.action}${b.camera ? ` 〔${b.camera}〕` : ''}${b.dialogue ? ` 💬${b.dialogue}` : ''}`); }
+    if (s.visualPrompt) lines.push(`[${k.visualPrompt}] ${s.visualPrompt}`);
+    if (s.duration) lines.push(`[${k.duration}] ${s.duration}s`);
   });
   return lines.join('\n');
 }
 
 export function ScriptViewerModal({ open, onOpenChange, name, data, projectId }: Props) {
+  const { t: loc } = useLocale();
+  const t = loc as KitT;
   const [mounted, setMounted] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -123,7 +130,7 @@ export function ScriptViewerModal({ open, onOpenChange, name, data, projectId }:
 
   const handleClose = useCallback(() => onOpenChange(false), [onOpenChange]);
 
-  // 滚动锁(Escape 由 useFocusTrap 统一处理)
+  // Scroll lock (Escape is handled by useFocusTrap)
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -133,10 +140,10 @@ export function ScriptViewerModal({ open, onOpenChange, name, data, projectId }:
     };
   }, [open]);
 
-  // v10.3.6 a11y: Escape + 焦点陷阱 + 焦点归还
+  // v10.3.6 a11y: Escape + focus trap + restore focus
   const dialogRef = useFocusTrap<HTMLDivElement>(open, handleClose);
 
-  const fullText = useMemo(() => scriptToText(name, data), [name, data]);
+  const fullText = useMemo(() => scriptToText(name, data, t), [name, data, t]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(fullText).then(
@@ -185,13 +192,13 @@ export function ScriptViewerModal({ open, onOpenChange, name, data, projectId }:
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={data.title || name || '剧本查看'}
+        aria-label={data.title || name || t.kitUi.scriptView}
         tabIndex={-1}
         className="relative w-[94vw] max-w-4xl h-[86vh] rounded-2xl overflow-hidden bg-[var(--surface)] border border-[var(--border)] shadow-2xl flex flex-col outline-none"
         style={{ animation: 'zoomIn 0.2s ease' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 顶部工具栏 */}
+        {/* Top toolbar */}
         <div className="flex items-center justify-between p-4 border-b border-[var(--border)] bg-black/20">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 rounded-xl grid place-items-center bg-purple-500/15 text-purple-400 shrink-0">
@@ -202,7 +209,7 @@ export function ScriptViewerModal({ open, onOpenChange, name, data, projectId }:
                 《{data.title || name}》
               </h3>
               <p className="text-[11px] text-[var(--muted)] truncate">
-                剧本 · {shots.length} 个镜头
+                {t.kitUi.scriptShotCount.replace('{n}', String(shots.length))}
                 {data.genre ? ` · ${data.genre}` : ''}
                 {data.style ? ` · ${data.style}` : ''}
               </p>
@@ -214,41 +221,41 @@ export function ScriptViewerModal({ open, onOpenChange, name, data, projectId }:
                 href={`/dashboard/polish?projectId=${encodeURIComponent(projectId)}`}
                 onClick={handleClose}
                 className="px-3 py-1.5 rounded-lg bg-[#E8C547]/15 hover:bg-[#E8C547]/25 transition-colors text-xs text-[#E8C547] flex items-center gap-1.5 border border-[#E8C547]/20"
-                title="打开剧本润色工具, 自动导入本剧本"
+                title={t.kitUi.polishTitle}
               >
                 <Wand2 className="w-3.5 h-3.5" />
-                润色
+                {t.kitUi.polish}
               </Link>
             ) : null}
             <button
               onClick={handleCopy}
               className="px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors text-xs text-white/70 flex items-center gap-1.5"
-              title="复制全文"
+              title={t.kitUi.copyFull}
             >
               {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-              {copied ? '已复制' : '复制'}
+              {copied ? t.kitUi.copied : t.kitUi.copy}
             </button>
             <button
               onClick={handleDownload}
               className="px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors text-xs text-white/70 flex items-center gap-1.5"
-              title="下载 .txt"
+              title={t.kitUi.downloadTxt}
             >
               <Download className="w-3.5 h-3.5" />
-              下载
+              {t.common.download}
             </button>
             <button
               onClick={handleClose}
               className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-              title="关闭 (ESC)"
+              title={t.kitUi.closeEsc}
             >
               <X className="w-4 h-4 text-white/70" />
             </button>
           </div>
         </div>
 
-        {/* 滚动内容 */}
+        {/* Scroll body */}
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-          {/* 梗概 */}
+          {/* Synopsis */}
           {data.synopsis || data.description ? (
             <div className="mb-6 pb-6 border-b border-[var(--border)]">
               <p className="text-[11px] text-[var(--muted)] tracking-wider uppercase mb-2">Synopsis</p>
@@ -258,16 +265,16 @@ export function ScriptViewerModal({ open, onOpenChange, name, data, projectId }:
             </div>
           ) : null}
 
-          {/* 分镜 */}
+          {/* Shots */}
           {shots.length === 0 ? (
             <div className="text-center py-20 text-[var(--muted)]">
               <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">剧本尚未生成具体镜头</p>
+              <p className="text-sm">{t.kitUi.noShots}</p>
             </div>
           ) : (
             <div className="space-y-5">
               {shots.map((shot, i) => (
-                <ShotBlock key={shot.shotNumber ?? i} shot={shot} />
+                <ShotBlock key={shot.shotNumber ?? i} shot={shot} t={t} />
               ))}
             </div>
           )}
@@ -278,21 +285,22 @@ export function ScriptViewerModal({ open, onOpenChange, name, data, projectId }:
   );
 }
 
-function ShotBlock({ shot }: { shot: ScriptShot }) {
+function ShotBlock({ shot, t }: { shot: ScriptShot; t: KitT }) {
+  const k = t.kitUi;
   const camera = [shot.shotSize, shot.lens, shot.cameraAngle, shot.cameraMovement]
     .filter(Boolean)
     .join(' · ');
 
   return (
     <div className="bg-black/20 border border-[var(--border)] rounded-xl p-4 hover:bg-black/30 transition-colors">
-      {/* Shot 头 */}
+      {/* Shot header */}
       <div className="flex items-center gap-3 mb-3 flex-wrap">
         <span className="px-2 py-0.5 rounded-md bg-[#E8C547]/15 text-[#E8C547] text-xs font-mono font-bold">
           Shot {shot.shotNumber}
         </span>
         {shot.act ? (
           <span className="px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-300 text-[11px]">
-            第{shot.act}幕
+            {k.actN.replace('{n}', String(shot.act))}
           </span>
         ) : null}
         {shot.storyBeat || shot.beat ? (
@@ -312,10 +320,10 @@ function ShotBlock({ shot }: { shot: ScriptShot }) {
         ) : null}
       </div>
 
-      {/* v12.6.0 逐秒时间码 beat sheet —— 精确到第几秒的剧情+镜头(替代单段描写) */}
+      {/* v12.6.0 per-second timecode beat sheet — plot + camera to the second (replaces a single blob) */}
       {shot.beats && shot.beats.length > 0 ? (
         <div className="mb-3 rounded-lg border border-[#E8C547]/25 bg-black/30 p-3">
-          <p className="text-[10px] text-[#E8C547] tracking-wider uppercase mb-2">⏱ 逐秒分镜 Beat Sheet</p>
+          <p className="text-[10px] text-[#E8C547] tracking-wider uppercase mb-2">⏱ {k.beatSheet}</p>
           <div className="flex flex-col gap-2">
             {shot.beats.map((b, i) => (
               <div key={i} className="flex gap-2.5">
@@ -336,76 +344,76 @@ function ShotBlock({ shot }: { shot: ScriptShot }) {
         </div>
       ) : null}
 
-      {/* 场景 */}
+      {/* Scene */}
       {shot.sceneDescription ? (
-        <Row label="场景">
+        <Row label={k.scene}>
           {shot.sceneDescription}
         </Row>
       ) : null}
 
-      {/* 人物 */}
+      {/* Cast */}
       {shot.characters?.length ? (
-        <Row label="人物">
+        <Row label={k.characters}>
           {shot.characters.join('、')}
         </Row>
       ) : null}
 
-      {/* 动作 */}
+      {/* Action */}
       {shot.action ? (
-        <Row label="动作">
+        <Row label={k.action}>
           {shot.action}
         </Row>
       ) : null}
 
-      {/* 对白 — 高亮 */}
+      {/* Dialogue — highlighted */}
       {shot.dialogue ? (
         <div className="mt-3 p-3 rounded-lg bg-[#E8C547]/8 border-l-2 border-[#E8C547]/70">
-          <p className="text-[10px] text-[#E8C547] tracking-wider uppercase mb-1">对白 Dialogue</p>
+          <p className="text-[10px] text-[#E8C547] tracking-wider uppercase mb-1">{k.dialogueLabel} Dialogue</p>
           <p className="text-sm text-white/90 leading-relaxed italic whitespace-pre-wrap">
             {shot.dialogue}
           </p>
         </div>
       ) : null}
 
-      {/* 情绪 */}
+      {/* Emotion */}
       {shot.emotion ? (
-        <Row label="情绪">
+        <Row label={k.emotion}>
           {shot.emotion}
-          {typeof shot.emotionTemperature === 'number' ? ` (温度 ${shot.emotionTemperature})` : ''}
+          {typeof shot.emotionTemperature === 'number' ? k.emotionTemp.replace('{n}', String(shot.emotionTemperature)) : ''}
         </Row>
       ) : null}
 
-      {/* 摄影语言 */}
+      {/* Camera language */}
       {camera ? (
-        <Row label="镜头" mono>
+        <Row label={k.camera} mono>
           {camera}
         </Row>
       ) : null}
 
-      {/* 光影 */}
+      {/* Lighting */}
       {shot.lightingIntent ? (
-        <Row label="光影">
+        <Row label={k.lighting}>
           {shot.lightingIntent}
         </Row>
       ) : null}
 
-      {/* 构图 */}
+      {/* Composition */}
       {shot.composition ? (
-        <Row label="构图">
+        <Row label={k.composition}>
           {shot.composition}
         </Row>
       ) : null}
 
-      {/* 声音 */}
+      {/* Sound */}
       {shot.diegeticSound || shot.scoreMood || shot.rhythmicSync ? (
-        <Row label="声音">
+        <Row label={k.sound}>
           {[shot.diegeticSound, shot.scoreMood, shot.rhythmicSync].filter(Boolean).join(' · ')}
         </Row>
       ) : null}
 
-      {/* 潜台词 */}
+      {/* Subtext */}
       {shot.subtext ? (
-        <Row label="潜台词" italic>
+        <Row label={k.subtext} italic>
           {shot.subtext}
         </Row>
       ) : null}

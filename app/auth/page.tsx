@@ -9,26 +9,31 @@ import { useToast } from '@/components/ui/toast-provider';
 import { IMG_AUTH_BG1, IMG_AUTH_BG2 } from '@/lib/placeholder-images';
 import { useLocale } from '@/hooks/use-locale';
 
-/** 秒 → 「X 分 Y 秒」/「Y 秒」—— 540 秒写成「540 秒」读起来没概念。 */
-function fmtWait(sec: number): string {
-  if (sec < 60) return `${sec} 秒`;
+/** Seconds → "X min Y sec" / "Y sec" — "540 sec" is hard to parse at a glance. */
+function fmtWait(sec: number, ui: Record<string, string>): string {
+  if (sec < 60) return ui.waitSec.replace('{n}', String(sec));
   const m = Math.floor(sec / 60); const r = sec % 60;
-  return r ? `${m} 分 ${r} 秒` : `${m} 分钟`;
+  return r
+    ? ui.waitMinSec.replace('{m}', String(m)).replace('{s}', String(r))
+    : ui.waitMin.replace('{n}', String(m));
 }
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('demo@qfmanju.ai');
-  const [password, setPassword] = useState(''); // v12.171:不再预填演示密码(仓库零明文)
+  const [password, setPassword] = useState(''); // v12.171: do not prefill a demo password (repo stays secret-free)
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
   const { login, register } = useAuth();
   const { showToast } = useToast();
-  const { t } = useLocale();
-  // v12.341:限流冷却。此前 429 与 401 都只显示「操作失败」——用户以为密码记错了,
-  // 反复重试(徒劳:锁定窗口是固定的,重试既不会延长也不会提前结束它)。
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { publicUi: Record<string, string> };
+  const ui = t.publicUi;
+  // v12.341: rate-limit cooldown. Previously 429 and 401 both showed "action failed" —
+  // users thought the password was wrong and retried in vain (the lockout window is fixed;
+  // retries neither extend nor shorten it).
   const [cooldownSec, setCooldownSec] = useState(0);
   useEffect(() => {
     if (cooldownSec <= 0) return;
@@ -49,16 +54,16 @@ export default function AuthPage() {
       showToast({ title: mode === 'login' ? t.auth.loginSuccess : t.auth.registerSuccess, type: 'success' });
       router.push('/dashboard');
     } catch (err: any) {
-      // 服务端已经算好了「还剩多少秒」,不该在这里被丢掉 —— 如实告诉用户,
-      // 而不是让他对着一句「登录失败」猜是不是密码错了。
+      // The server already computed "seconds remaining" — do not drop it. Tell the user
+      // the wait, instead of a generic "sign-in failed" that looks like a wrong password.
       if (err?.status === 429) {
         const sec = Number(err?.retryAfterSec) || 0;
         setCooldownSec(sec);
         setError(sec
-          ? `登录尝试过于频繁,请 ${fmtWait(sec)} 后再试(密码可能是对的 —— 锁定期内即使输对也会被拒)`
-          : '登录尝试过于频繁,请稍后再试(密码可能是对的 —— 锁定期内即使输对也会被拒)');
+          ? ui.loginRateLimited.replace('{n}', fmtWait(sec, ui))
+          : ui.loginRateLimitedSoon);
       } else if (err?.status === 401) {
-        setError('邮箱或密码不正确');
+        setError(ui.badCredentials);
       } else {
         setError(err.message || t.auth.actionFailed);
       }
@@ -125,7 +130,7 @@ export default function AuthPage() {
 
             {cooldownSec > 0 && (
               <div id="login-cooldown" role="status" className="text-[11px] text-[var(--soft)] -mt-1">
-                这是防爆破限流,不是密码错误。锁定窗口固定,重试既不会延长也不会缩短它。
+                {ui.cooldownHint}
               </div>
             )}
 
@@ -133,8 +138,9 @@ export default function AuthPage() {
               <div role="alert" className="bg-[rgba(255,88,88,0.12)] border border-[rgba(255,88,88,0.4)] px-3 py-2.5 rounded-xl text-sm">{error}</div>
             )}
 
-            {/* v12.341:冷却期内禁用提交并实时倒计时。**只禁按钮、不禁输入框** ——
-                用户完全可以趁等待把密码改对,没理由连输入都拦住。 */}
+            {/* v12.341: disable submit during cooldown and count down live.
+                Only the button is disabled — inputs stay editable so the user can
+                fix the password while waiting. */}
             <button
               type="submit"
               disabled={loading || cooldownSec > 0}
@@ -142,7 +148,7 @@ export default function AuthPage() {
               className="btn-primary py-3 rounded-xl text-sm w-full disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {cooldownSec > 0
-                ? `${fmtWait(cooldownSec)}后可重试`
+                ? ui.retryAfter.replace('{n}', fmtWait(cooldownSec, ui))
                 : loading ? '...' : mode === 'login' ? t.auth.login : t.auth.register}
             </button>
           </form>

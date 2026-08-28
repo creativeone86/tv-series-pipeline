@@ -36,7 +36,7 @@ const nodeTypes: NodeTypes = {
   review: ReviewNode,
 };
 
-// 数据流连线颜色（暖色调、漫画印刷风）
+// Data-flow edge colors (warm, comic-print palette)
 const EDGE_COLORS: Record<string, string> = {
   'e-writer-character': '#E8C547',
   'e-writer-scene': '#E8C547',
@@ -45,7 +45,7 @@ const EDGE_COLORS: Record<string, string> = {
   'e-storyboard-video': '#4A7EBB',
   'e-video-editor': '#C8432A',
   'e-editor-producer': '#4A7EBB',
-  // 导演监控线（金色统一）
+  // Director monitor edges (unified gold)
   'e-director-writer': '#E8C547',
   'e-director-character': '#E8C547',
   'e-director-scene': '#E8C547',
@@ -54,11 +54,11 @@ const EDGE_COLORS: Record<string, string> = {
   'e-director-editor': '#E8C547',
 };
 
-// 连线样式计算
+// Edge style from node status
 function getEdgeStyle(edgeId: string, sourceStatus: PipelineNodeStatus, targetStatus: PipelineNodeStatus, isDirectorEdge: boolean): Partial<Edge> {
   const color = EDGE_COLORS[edgeId] || '#7C3AED';
 
-  // ═══ 导演监控线：优雅的虚线 ═══
+  // ═══ Director monitor edges: dashed ═══
   if (isDirectorEdge) {
     if (targetStatus === 'running') {
       return {
@@ -96,7 +96,7 @@ function getEdgeStyle(edgeId: string, sourceStatus: PipelineNodeStatus, targetSt
     };
   }
 
-  // ═══ 数据流连线 ═══
+  // ═══ Data-flow edges ═══
   if (targetStatus === 'running') {
     return {
       animated: true,
@@ -123,7 +123,7 @@ function getEdgeStyle(edgeId: string, sourceStatus: PipelineNodeStatus, targetSt
   };
 }
 
-// 初始节点布局
+// Initial node layout
 export function buildInitialNodes(assets: ProjectAsset[], labels?: {
   director?: string; writer?: string; characterDesign?: string; sceneDesign?: string;
   storyboard?: string; videoGen?: string; editor?: string; producer?: string;
@@ -317,7 +317,7 @@ export function PipelineCanvas() {
       </ReactFlow>
 
       <style jsx global>{`
-        /* ═══ 数据流连线动画 ═══ */
+        /* ═══ Data-flow edge animation ═══ */
         .pipeline-canvas .react-flow__edge.animated path {
           animation: flowDash 1.2s linear infinite;
         }
@@ -328,7 +328,7 @@ export function PipelineCanvas() {
           transition: all 0.6s ease;
         }
 
-        /* ═══ 导演监控连线动画 ═══ */
+        /* ═══ Director monitor edge animation ═══ */
         .pipeline-canvas .react-flow__edge.director-edge-active path {
           animation: directorFlowDash 1.8s linear infinite, directorPulse 3s ease-in-out infinite;
         }
@@ -364,7 +364,7 @@ export function PipelineCanvas() {
           50% { filter: drop-shadow(0 0 8px currentColor); }
         }
 
-        /* ═══ 节点优化 ═══ */
+        /* ═══ Node polish ═══ */
         .pipeline-canvas .react-flow__node {
           transition: filter 0.3s ease, transform 0.2s ease;
         }

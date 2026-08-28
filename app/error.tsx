@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * 根路由错误边界 (v10.2.1) — Next App Router segment 级错误兜底。
- * 取代"白屏 / 仅落全局 ErrorBoundary":出错时显示可读信息 + 一键重试(reset 重渲该段)。
+ * Root-route error boundary (v10.2.1) — App Router segment fallback.
+ * Replaces a blank screen / global ErrorBoundary-only: show a readable message + retry (reset re-renders this segment).
  */
 import { useEffect } from 'react';
 import { useLocale } from '@/hooks/use-locale';

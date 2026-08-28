@@ -1,10 +1,12 @@
 'use client';
 
 /**
- * v3.4.1 — Vision Audit tab 容器.
+ * v3.4.1 — Vision Audit tab container.
  *
- * 包 VisionAuditPanel + 数据拉取 + "运行质检"按钮. 挂在项目页"成片质检" tab.
- * GET /api/projects/[id]/vision-audit 读历史; POST .../run 触发新一轮 (烧 token).
+ * Wraps VisionAuditPanel + data fetch + "Run QC" button. Mounted on the
+ * project page "Film QC" tab.
+ * GET /api/projects/[id]/vision-audit reads history; POST .../run starts a new
+ * round (burns tokens).
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -13,8 +15,11 @@ import { VisionAuditPanel, type VisionAuditShot, type VisionAuditSummaryShape } 
 import { PublishReadinessBadge } from './publish-readiness-badge';
 import { ConsistencyReportPanel } from './consistency-report-panel';
 import { LipSyncPanel } from './lipsync-panel';
+import { useLocale } from '@/hooks/use-locale';
 
 export function VisionAuditTab({ projectId, onJumpToWorkshop }: { projectId: string; onJumpToWorkshop?: (shotNumbers: number[]) => void }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectMisc: Record<string, string> };
   const [audits, setAudits] = useState<VisionAuditShot[]>([]);
   const [summary, setSummary] = useState<VisionAuditSummaryShape | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,21 +59,24 @@ export function VisionAuditTab({ projectId, onJumpToWorkshop }: { projectId: str
       if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`);
       setAudits(body.audits || []);
       setSummary(body.summary || null);
-      setRunMsg(`质检完成: ${body.scored}/${body.requested} 镜评分${body.skipped ? `, ${body.skipped} 镜跳过` : ''}`);
-      setReadyKey((k) => k + 1); // 质检数据变了 → 刷新发布就绪门禁徽章
+      setRunMsg(
+        t.projectMisc.auditDoneMsg.replace('{scored}', String(body.scored)).replace('{requested}', String(body.requested))
+        + (body.skipped ? t.projectMisc.auditSkippedSuffix.replace('{n}', String(body.skipped)) : ''),
+      );
+      setReadyKey((k) => k + 1); // QC data changed → refresh publish-readiness badge
     } catch (e) {
-      setError(e instanceof Error ? e.message : '运行失败');
+      setError(e instanceof Error ? e.message : t.projectMisc.auditRunFailed);
     } finally {
       setRunning(false);
     }
-  }, [projectId]);
+  }, [projectId, t.projectMisc.auditDoneMsg, t.projectMisc.auditRunFailed, t.projectMisc.auditSkippedSuffix]);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="cinema-eyebrow flex items-center gap-1.5">
           <ScanEye className="w-3.5 h-3.5" />
-          成片质检 · AI 看画面对不对得上剧本
+          {t.projectMisc.auditTabTitle}
         </div>
         <button
           onClick={runAudit}
@@ -76,7 +84,7 @@ export function VisionAuditTab({ projectId, onJumpToWorkshop }: { projectId: str
           className="cinema-btn cinema-btn-primary !px-3 !py-1.5 !text-[11px] inline-flex items-center gap-1.5 disabled:opacity-50"
         >
           {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-          {running ? '质检中…' : audits.length > 0 ? '重新质检' : '运行质检'}
+          {running ? t.projectMisc.auditRunning : audits.length > 0 ? t.projectMisc.auditRerun : t.projectMisc.auditRun}
         </button>
       </div>
 
@@ -91,7 +99,7 @@ export function VisionAuditTab({ projectId, onJumpToWorkshop }: { projectId: str
 
       {loading ? (
         <div className="flex items-center gap-2 text-white/50 text-sm py-8 justify-center">
-          <Loader2 className="w-4 h-4 animate-spin" /> 加载中…
+          <Loader2 className="w-4 h-4 animate-spin" /> {t.seriesDetail.loading}
         </div>
       ) : (
         <VisionAuditPanel

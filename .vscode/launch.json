@@ -1,0 +1,52 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Next.js: dev (server-side)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Next.js: client (Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}"
+    },
+    {
+      "name": "Next.js: full stack",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}",
+      "serverReadyAction": {
+        "pattern": "- Local:.+(https?://.+)",
+        "uriFormat": "%s",
+        "action": "debugWithChrome"
+      }
+    },
+    {
+      "name": "WS server (dev:ws)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev:ws",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Production: build + start",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run build && npm start",
+      "cwd": "${workspaceFolder}"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Dev: app + WS server",
+      "configurations": ["Next.js: dev (server-side)", "WS server (dev:ws)"],
+      "stopAll": true
+    }
+  ]
+}

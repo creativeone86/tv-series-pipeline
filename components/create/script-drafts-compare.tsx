@@ -3,23 +3,24 @@
 /**
  * components/create/script-drafts-compare (v2.15 G9)
  *
- * 1-3 列剧本草稿对比卡 + "采用此版" 按钮。
- * 数据源: POST /api/script-drafts
+ * 1–3 column script-draft compare cards + "use this draft" button.
+ * Source: POST /api/script-drafts
  *
- * 用法:
+ * Usage:
  *   <ScriptDraftsCompare
  *     idea={idea}
  *     style={style}
  *     count={2}
- *     onPick={(draft) => { ... 把 draft.script.synopsis + shots 拼回 idea, 走 /api/create-stream ... }}
+ *     onPick={(draft) => { ... stitch draft.script.synopsis + shots back into idea, then /api/create-stream ... }}
  *     onCancel={() => setOpen(false)}
  *   />
  *
- * UI 形态: 全屏 modal, 顶部进度, 中间 N 列卡, 底部 cancel + retry 按钮。
+ * UI: fullscreen modal, progress on top, N cards in the middle, cancel + retry at the bottom.
  */
 
 import { useEffect, useState } from 'react';
 import { X, CircleNotch as Loader2, Sparkle as Sparkles, ArrowsClockwise as RefreshCw, Check } from '@phosphor-icons/react';
+import { useLocale } from '@/hooks/use-locale';
 import type { ScriptDraft } from '@/lib/script-drafts';
 
 export interface ScriptDraftsCompareProps {
@@ -33,6 +34,8 @@ export interface ScriptDraftsCompareProps {
 export function ScriptDraftsCompare({
   idea, style, count, onPick, onCancel,
 }: ScriptDraftsCompareProps) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { workshopCreate: Record<string, string> };
   const [loading, setLoading] = useState(true);
   const [drafts, setDrafts] = useState<ScriptDraft[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -50,13 +53,13 @@ export function ScriptDraftsCompare({
       });
       const body = await res.json();
       if (!res.ok) {
-        setError(body.error || '草稿生成失败');
+        setError(body.error || t.workshopCreate.draftsFailed);
         return;
       }
       setDrafts(body.drafts || []);
       setStats(body.stats || null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '草稿生成失败');
+      setError(e instanceof Error ? e.message : t.workshopCreate.draftsFailed);
     } finally {
       setLoading(false);
     }
@@ -64,9 +67,11 @@ export function ScriptDraftsCompare({
 
   useEffect(() => {
     load();
-    // 按 idea / count / style 重新拉
+    // Reload when idea / count / style change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idea, count, style]);
+
+  const footerParts = t.workshopCreate.draftsFooter.split('{adopt}');
 
   return (
     <div
@@ -82,11 +87,14 @@ export function ScriptDraftsCompare({
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-[var(--cinema-amber)]" />
             <h3 className="text-sm font-semibold text-[var(--cinema-text)]">
-              剧本草稿对比 · {count} 版本
+              {t.workshopCreate.draftsTitle.replace('{n}', String(count))}
             </h3>
             {stats && !loading && (
               <span className="cinema-mono text-[10px] opacity-50">
-                {stats.succeeded}/{stats.requested} 成功 · {(stats.elapsedMs / 1000).toFixed(1)}s
+                {t.workshopCreate.draftsStats
+                  .replace('{ok}', String(stats.succeeded))
+                  .replace('{n}', String(stats.requested))}
+                {' · '}{(stats.elapsedMs / 1000).toFixed(1)}s
               </span>
             )}
           </div>
@@ -95,14 +103,14 @@ export function ScriptDraftsCompare({
               onClick={load}
               disabled={loading}
               className="p-1.5 rounded-md hover:bg-white/10 text-white/60 hover:text-white disabled:opacity-30"
-              title="重新生成"
+              title={t.workshopCreate.regenerate}
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
             <button
               onClick={onCancel}
               className="p-1.5 rounded-md hover:bg-white/10 text-white/60 hover:text-white"
-              title="取消"
+              title={t.common.cancel}
             >
               <X className="w-4 h-4" />
             </button>
@@ -119,7 +127,7 @@ export function ScriptDraftsCompare({
             <div className="py-16 flex flex-col items-center gap-3 text-[var(--cinema-text-2)]">
               <Loader2 className="w-8 h-8 animate-spin text-[var(--cinema-amber)]" />
               <p className="cinema-mono text-[11px] opacity-70">
-                LLM 并行生成 {count} 个版本中, 通常 30-60s ...
+                {t.workshopCreate.draftsLoading.replace('{n}', String(count))}
               </p>
             </div>
           ) : (
@@ -133,7 +141,7 @@ export function ScriptDraftsCompare({
 
         {/* footer hint */}
         <div className="px-5 py-2.5 border-t border-[var(--cinema-border)] bg-[var(--cinema-surface-2)] cinema-mono text-[10.5px] text-[var(--cinema-text-3)] leading-relaxed">
-          每个版本的温度 (T) 不同 — 数字越大风格越激进。点 <strong className="text-[var(--cinema-amber)]">采用此版</strong> 进入完整创作流程, 编剧 agent 会基于它做高质量改编。
+          {footerParts[0]}<strong className="text-[var(--cinema-amber)]">{t.workshopCreate.adoptDraft}</strong>{footerParts[1] ?? ''}
         </div>
       </div>
     </div>
@@ -141,8 +149,14 @@ export function ScriptDraftsCompare({
 }
 
 function DraftCard({ draft, index, onPick }: { draft: ScriptDraft; index: number; onPick: () => void }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { workshopCreate: Record<string, string> };
   const isError = !!draft.errorMessage;
-  const tempLabel = draft.temperatureUsed >= 1.1 ? '激进' : draft.temperatureUsed >= 0.9 ? '中等' : '稳健';
+  const tempLabel = draft.temperatureUsed >= 1.1
+    ? t.workshopCreate.tempAggressive
+    : draft.temperatureUsed >= 0.9
+      ? t.workshopCreate.tempMedium
+      : t.workshopCreate.tempSteady;
 
   return (
     <div
@@ -161,13 +175,13 @@ function DraftCard({ draft, index, onPick }: { draft: ScriptDraft; index: number
 
       {isError ? (
         <div className="py-8 text-center cinema-mono text-[11px] text-[var(--cinema-red)] opacity-70">
-          ✗ 生成失败<br />
+          ✗ {t.workshopCreate.genFailed}<br />
           <span className="opacity-60 text-[10px]">{draft.errorMessage?.slice(0, 80)}</span>
         </div>
       ) : draft.script ? (
         <>
           <h4 className="cinema-headline text-base text-[var(--cinema-text)] leading-tight">
-            {draft.script.title || '(未命名)'}
+            {draft.script.title || t.dashProjects.untitled}
           </h4>
           {draft.script.synopsis && (
             <p className="text-[12.5px] text-[var(--cinema-text-2)] line-clamp-3 leading-relaxed">
@@ -175,12 +189,12 @@ function DraftCard({ draft, index, onPick }: { draft: ScriptDraft; index: number
             </p>
           )}
           <div className="flex items-center gap-2 cinema-mono text-[10px] text-[var(--cinema-text-3)] mt-1">
-            <span>{draft.script.shots?.length || 0} 镜</span>
-            {draft.estimatedWords ? <span>· ~{draft.estimatedWords} 字</span> : null}
+            <span>{draft.script.shots?.length || 0} {t.dashProjects.shotsUnit}</span>
+            {draft.estimatedWords ? <span>· {t.workshopCreate.approxWords.replace('{n}', String(draft.estimatedWords))}</span> : null}
             <span>· {draft.styleUsed}</span>
           </div>
 
-          {/* v12.x(#2):逐镜预览 —— 全量展示 + 内部上下滑动(不再只露 2 镜) */}
+          {/* v12.x(#2): per-shot preview — full list, scroll inside (not just 2 shots) */}
           {draft.script.shots && draft.script.shots.length > 0 && (
             <ul className="space-y-1.5 mt-2 max-h-56 overflow-y-auto pr-1 cinema-scroll">
               {draft.script.shots.map((sh, j) => (
@@ -201,7 +215,7 @@ function DraftCard({ draft, index, onPick }: { draft: ScriptDraft; index: number
             className="cinema-btn cinema-btn-primary !text-[12px] !py-2 mt-auto inline-flex items-center justify-center gap-1.5"
           >
             <Check className="w-3.5 h-3.5" />
-            采用此版
+            {t.workshopCreate.adoptDraft}
           </button>
         </>
       ) : null}

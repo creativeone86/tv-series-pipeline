@@ -3,12 +3,12 @@
 /**
  * v3.0 P0.1 — NotificationBell for nav bar.
  *
- * 行为:
- *   - 60s 轮询 /api/notifications, 取 unreadCount + 最近 30 条
- *   - 点 bell 弹 popover, 显示通知列表
- *   - 每条通知点击 → 跳到对应 project (带 commentId hash)
- *   - "全部标已读" 按钮
- *   - badge 在 ≥1 时显示数字 (>99 → "99+")
+ * Behavior:
+ *   - poll /api/notifications every 60s for unreadCount + last 30
+ *   - click the bell to open a popover list
+ *   - click a row → jump to that project (commentId hash)
+ *   - "Mark all read" button
+ *   - badge shows the count when ≥1 (>99 → "99+")
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -25,7 +25,7 @@ import { getToken } from '@/lib/auth';
 
 interface NotificationItem {
   id: string;
-  type: 'mention' | 'reply' | 'project_invite' | 'weekly_digest'; // v10.5.4: 周报
+  type: 'mention' | 'reply' | 'project_invite' | 'weekly_digest'; // v10.5.4: weekly digest
   sourceUserId: string;
   sourceUserName: string;
   projectId: string | null;
@@ -35,7 +35,7 @@ interface NotificationItem {
   createdAt: string;
 }
 
-function formatTime(iso: string, justNow = '刚刚'): string {
+function formatTime(iso: string, justNow = 'just now'): string {
   const d = new Date(iso);
   const diff = (Date.now() - d.getTime()) / 1000;
   if (diff < 60) return justNow;
@@ -45,7 +45,7 @@ function formatTime(iso: string, justNow = '刚刚'): string {
 }
 
 export interface NotificationBellProps {
-  /** 轮询间隔; 0 = 不自动轮询 (例如未登录) */
+  /** Poll interval; 0 = no auto-poll (e.g. signed out) */
   pollIntervalMs?: number;
 }
 
@@ -55,7 +55,7 @@ export function NotificationBell({ pollIntervalMs = 60_000 }: NotificationBellPr
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { t } = useLocale();
-  // v10.2.4: 带登录 token → 通知按当前登录用户取(不再走服务端 demo 兜底取最早用户)。
+  // v10.2.4: send login token so notifications are for the current user (not the oldest demo user).
   const authHeaders = (): Record<string, string> => {
     const tok = getToken();
     return tok ? { Authorization: `Bearer ${tok}` } : {};
@@ -66,7 +66,7 @@ export function NotificationBell({ pollIntervalMs = 60_000 }: NotificationBellPr
     try {
       const res = await fetch('/api/notifications?limit=30', { headers: authHeaders() });
       if (res.status === 401) {
-        // 未登录 — 静默关闭轮询, bell 不显示 badge
+        // Signed out — silently stop polling; hide badge
         setItems([]);
         setUnreadCount(0);
         setError(null);
@@ -86,8 +86,8 @@ export function NotificationBell({ pollIntervalMs = 60_000 }: NotificationBellPr
 
   useEffect(() => {
     refresh();
-    // v10.2.0: 实时改 SSE —— 有新通知即推 → 立即 refresh;轮询降级为慢速兜底(SSE 断线时保活)。
-    // v10.2.4: 带登录 token,SSE 与 refresh 同解析为当前登录用户。
+    // v10.2.0: live SSE — new notification → refresh immediately; poll is a slow fallback if SSE drops.
+    // v10.2.4: send login token so SSE and refresh resolve the same current user.
     const sub = subscribeSSE('/api/notifications/stream', {
       token: getToken(),
       onEvent: (ev) => { if (ev.event === 'notification') refresh(); },
@@ -168,7 +168,7 @@ export function NotificationBell({ pollIntervalMs = 60_000 }: NotificationBellPr
                 const href = n.projectId
                   ? `/projects/${n.projectId}${n.commentId ? `#comment-${n.commentId}` : ''}`
                   : '#';
-                const Icon = n.type === 'mention' ? AtSign : MessageCircle; // weekly_digest 也走 MessageCircle,动词置空
+                const Icon = n.type === 'mention' ? AtSign : MessageCircle; // weekly_digest also uses MessageCircle; verb left empty
                 return (
                   <Link
                     key={n.id}

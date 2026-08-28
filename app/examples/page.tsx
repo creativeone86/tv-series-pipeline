@@ -8,76 +8,39 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useLocale } from "@/hooks/use-locale"
 
-const examples = [
-  {
-    id: 1,
-    title: "赛博朋克侦探",
-    description: "2077年的新东京，一位赛博侦探接到神秘委托",
-    thumbnail: "/placeholder/example1.jpg",
-    genre: "科幻",
-    duration: "3:24",
-    views: "12.5K",
-    likes: "1.2K"
-  },
-  {
-    id: 2,
-    title: "古风仙侠传",
-    description: "修仙世界中的爱恨情仇",
-    thumbnail: "/placeholder/example2.jpg",
-    genre: "古风",
-    duration: "4:15",
-    views: "8.3K",
-    likes: "856"
-  },
-  {
-    id: 3,
-    title: "末日求生录",
-    description: "丧尸末日中的人性挣扎",
-    thumbnail: "/placeholder/example3.jpg",
-    genre: "惊悚",
-    duration: "2:48",
-    views: "15.7K",
-    likes: "2.1K"
-  },
-  {
-    id: 4,
-    title: "校园青春物语",
-    description: "高中生活的酸甜苦辣",
-    thumbnail: "/placeholder/example4.jpg",
-    genre: "青春",
-    duration: "3:56",
-    views: "20.1K",
-    likes: "3.4K"
-  },
-  {
-    id: 5,
-    title: "魔法学院",
-    description: "魔法世界的冒险之旅",
-    thumbnail: "/placeholder/example5.jpg",
-    genre: "奇幻",
-    duration: "5:12",
-    views: "18.9K",
-    likes: "2.8K"
-  },
-  {
-    id: 6,
-    title: "都市爱情故事",
-    description: "现代都市中的浪漫邂逅",
-    thumbnail: "/placeholder/example6.jpg",
-    genre: "爱情",
-    duration: "3:33",
-    views: "25.6K",
-    likes: "4.2K"
-  }
-]
+const EXAMPLE_META = [
+  { id: 1, titleKey: "ideaCyberTitle", descKey: "exCyberDesc", genre: "scifi", thumbnail: "/placeholder/example1.jpg", duration: "3:24", views: "12.5K", likes: "1.2K" },
+  { id: 2, titleKey: "exXianxiaTitle", descKey: "exXianxiaDesc", genre: "gufeng", thumbnail: "/placeholder/example2.jpg", duration: "4:15", views: "8.3K", likes: "856" },
+  { id: 3, titleKey: "exSurvivalTitle", descKey: "exSurvivalDesc", genre: "thriller", thumbnail: "/placeholder/example3.jpg", duration: "2:48", views: "15.7K", likes: "2.1K" },
+  { id: 4, titleKey: "exCampusTitle", descKey: "exCampusDesc", genre: "youth", thumbnail: "/placeholder/example4.jpg", duration: "3:56", views: "20.1K", likes: "3.4K" },
+  { id: 5, titleKey: "ideaMagicTitle", descKey: "exMagicDesc", genre: "fantasy", thumbnail: "/placeholder/example5.jpg", duration: "5:12", views: "18.9K", likes: "2.8K" },
+  { id: 6, titleKey: "exRomanceTitle", descKey: "exRomanceDesc", genre: "romance", thumbnail: "/placeholder/example6.jpg", duration: "3:33", views: "25.6K", likes: "4.2K" },
+] as const
 
-const genres = ["全部", "科幻", "古风", "惊悚", "青春", "奇幻", "爱情"]
+const GENRE_KEYS = [
+  { id: "all", key: "genreAll" },
+  { id: "scifi", key: "genreScifi" },
+  { id: "gufeng", key: "genreGufeng" },
+  { id: "thriller", key: "genreThriller" },
+  { id: "youth", key: "genreYouth" },
+  { id: "fantasy", key: "genreFantasy" },
+  { id: "romance", key: "genreRomance" },
+] as const
 
 export default function ExamplesPage() {
-  const { t } = useLocale()
-  const [selectedGenre, setSelectedGenre] = React.useState("全部")
+  const { t: tRaw } = useLocale()
+  const t = tRaw as typeof tRaw & { publicUi: Record<string, string> }
+  const ui = t.publicUi
+  const [selectedGenre, setSelectedGenre] = React.useState("all")
 
-  const filteredExamples = selectedGenre === "全部"
+  const examples = EXAMPLE_META.map((ex) => ({
+    ...ex,
+    title: ui[ex.titleKey],
+    description: ui[ex.descKey],
+    genreLabel: ui[GENRE_KEYS.find((g) => g.id === ex.genre)?.key || "genreAll"],
+  }))
+
+  const filteredExamples = selectedGenre === "all"
     ? examples
     : examples.filter(ex => ex.genre === selectedGenre)
 
@@ -131,17 +94,17 @@ export default function ExamplesPage() {
             transition={{ delay: 0.1 }}
             className="flex flex-wrap justify-center gap-3 mb-12"
           >
-            {genres.map((genre) => (
+            {GENRE_KEYS.map((genre) => (
               <button
-                key={genre}
-                onClick={() => setSelectedGenre(genre)}
+                key={genre.id}
+                onClick={() => setSelectedGenre(genre.id)}
                 className={`px-6 py-2 rounded-full transition-all ${
-                  selectedGenre === genre
+                  selectedGenre === genre.id
                     ? "bg-gradient-to-r from-[#E8C547] to-[#D4A830] text-white"
                     : "bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white"
                 }`}
               >
-                {genre}
+                {ui[genre.key]}
               </button>
             ))}
           </motion.div>
@@ -164,7 +127,7 @@ export default function ExamplesPage() {
                       </div>
                     </div>
                     <div className="absolute top-3 left-3">
-                      <Badge variant="default">{example.genre}</Badge>
+                      <Badge variant="default">{example.genreLabel}</Badge>
                     </div>
                     <div className="absolute bottom-3 right-3 bg-black/80 px-2 py-1 rounded text-xs">
                       {example.duration}

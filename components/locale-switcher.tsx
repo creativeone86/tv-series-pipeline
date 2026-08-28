@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * v5.0 — 语言切换器.
+ * v5.0 — locale switcher.
  *
- * 下拉选 简/繁/英/日, 即时切换 (走 useLocale, localStorage 持久化 + 广播).
+ * Dropdown for zh-CN / zh-TW / en / ja; instant switch via useLocale (localStorage + broadcast).
  */
 
 import { useState } from 'react';
@@ -12,7 +12,7 @@ import { useLocale } from '@/hooks/use-locale';
 import { LOCALES, LOCALE_LABELS } from '@/lib/i18n';
 
 export function LocaleSwitcher({ compact = false }: { compact?: boolean }) {
-  const { locale, setLocale } = useLocale();
+  const { locale, setLocale, t } = useLocale();
   const [open, setOpen] = useState(false);
 
   return (
@@ -20,7 +20,7 @@ export function LocaleSwitcher({ compact = false }: { compact?: boolean }) {
       <button
         onClick={() => setOpen((v) => !v)}
         className="px-2.5 py-1.5 text-[11px] inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] text-[var(--muted)] hover:text-white hover:border-[var(--border-hover,var(--border))] transition-colors"
-        title="切换语言 / Language"
+        title={t.sharedUi.switchLanguage}
       >
         <Globe className="w-3.5 h-3.5" />
         {!compact && <span>{LOCALE_LABELS[locale]}</span>}

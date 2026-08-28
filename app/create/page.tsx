@@ -21,38 +21,40 @@ import { PromptReadiness } from '@/components/prompt-readiness';
 export default function CreatePage() {
   const [idea, setIdea] = useState('');
   const [videoProvider, setVideoProvider] = useState('minimax');
-  // v12.0.4 一句指令调剪辑风格 —— ''(默认中速)/ preset / 自由文本
+  // v12.0.4 one-line edit-style instruction — '' (default mid-tempo) / preset / free text
   const [editStyle, setEditStyle] = useState('');
-  // v6.1.2: 多模态参考 (图/音/视频), 随创作请求一起提交
+  // v6.1.2: multimodal refs (image/audio/video), submitted with the create request
   const [references, setReferences] = useState<ReferenceAsset[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [result, setResult] = useState<any>(null);
-  // v2.9 P0 Cameo: 主角脸参考图(可选,提交时作为 dataURI 一起发给后端)
+  // v2.9 P0 Cameo: optional lead-face ref (sent as dataURI)
   const [cameoFile, setCameoFile] = useState<File | null>(null);
   const [cameoPreview, setCameoPreview] = useState<string>('');
-  // v2.11 #2: 试穿评分(vision LLM),上传后立刻给用户"这张脸能不能锁死"的反馈
+  // v2.11 #2: try-on score (vision LLM) — immediate "can this face lock?" feedback
   const [cameoScoreLoading, setCameoScoreLoading] = useState(false);
   const [cameoScoreError, setCameoScoreError] = useState<string | null>(null);
   const [cameoScoreData, setCameoScoreData] = useState<CameoScoreBadgeData | null>(null);
   const { agents, setAgents } = useAgentStore();
-  // v2.11 #1: 连续性状态追踪
+  // v2.11 #1: continuity tracking
   const addConsistencyEvent = useAgentStore((s) => s.addConsistencyEvent);
   const setTotalShots = useAgentStore((s) => s.setTotalShots);
   const resetConsistency = useAgentStore((s) => s.resetConsistency);
   const router = useRouter();
   const { showToast } = useToast();
-  const { t } = useLocale();
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { publicUi: Record<string, string> };
+  const ui = t.publicUi;
 
   const handleCameoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      showToast({ title: '只能上传图片文件', type: 'error' });
+      showToast({ title: ui.imagesOnly, type: 'error' });
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      showToast({ title: '图片太大(上限 10MB)', type: 'error' });
+      showToast({ title: ui.imageTooLargeMb.replace('{n}', '10'), type: 'error' });
       return;
     }
     const reader = new FileReader();
@@ -60,7 +62,7 @@ export default function CreatePage() {
       const dataUri = reader.result as string;
       setCameoFile(file);
       setCameoPreview(dataUri);
-      // v2.11 #2: 提交前就跑一次评分,让用户在按"开始创作"之前就能看到适配度
+      // v2.11 #2: score before submit so the user sees fit before hitting Start
       runCameoPreviewScore(dataUri);
     };
     reader.readAsDataURL(file);
@@ -74,7 +76,7 @@ export default function CreatePage() {
     setCameoScoreLoading(false);
   };
 
-  /** v2.11 #2: 用 dataURI 打分,不落盘不阻塞主流程 */
+  /** v2.11 #2: score from a dataURI — no disk write, does not block the main flow */
   const runCameoPreviewScore = async (imageUrl: string) => {
     setCameoScoreLoading(true);
     setCameoScoreError(null);
@@ -86,7 +88,7 @@ export default function CreatePage() {
         body: JSON.stringify({ imageUrl }),
       });
       if (res.status === 503) {
-        setCameoScoreError('vision 服务暂未启用');
+        setCameoScoreError(ui.visionDisabled);
         return;
       }
       if (!res.ok) {
@@ -98,31 +100,31 @@ export default function CreatePage() {
       setCameoScoreData(data);
       if (data.verdict === 'poor') {
         showToast({
-          title: `照片评分偏低 (${data.score}),建议优化后再锁脸`,
+          title: ui.cameoScoreLow.replace('{n}', String(data.score)),
           type: 'warning',
         });
       }
     } catch (e) {
-      setCameoScoreError(e instanceof Error ? e.message : '评分失败');
+      setCameoScoreError(e instanceof Error ? e.message : ui.scoreFailed);
     } finally {
       setCameoScoreLoading(false);
     }
   };
 
   const handleSubmit = async () => {
-    // 验证输入
+    // Validate
     const validation = validateIdea(idea);
     if (!validation.valid) {
-      showToast({ title: validation.error || '输入无效', type: 'error' });
+      showToast({ title: validation.error || ui.invalidInput, type: 'error' });
       return;
     }
 
-    // 清理输入
+    // Sanitize
     const sanitizedIdea = sanitizeInput(idea);
 
     setIsCreating(true);
-    setStatusMessage('正在连接 AI 团队...');
-    resetConsistency();  // v2.11 #1: 新 run 前清掉上次的连续性统计
+    setStatusMessage(ui.connectingTeam);
+    resetConsistency();  // v2.11 #1: clear last-run continuity stats before a new run
 
     try {
       const response = await fetch('/api/create-stream', {
@@ -133,25 +135,25 @@ export default function CreatePage() {
         body: JSON.stringify({
           idea: sanitizedIdea,
           videoProvider,
-          // v2.9 P0 Cameo: 如果用户上传了主角脸,以 data URI 形式发给后端
-          // 后端会 persistAsset 落盘并写入 projects.primary_character_ref
+          // v2.9 P0 Cameo: if the user uploaded a lead face, send it as a data URI
+          // Backend persistAsset writes projects.primary_character_ref
           primaryCharacterRef: cameoPreview || undefined,
-          // v6.1.2: 多模态参考 (图/音/视频). 图片参考可被 cref 消费; 音/视频前向兼容载荷.
+          // v6.1.2: multimodal refs (image/audio/video). Images can feed cref; audio/video stay forward-compatible.
           references: references.length ? references : undefined,
-          // v12.0.4: 一句指令调剪辑风格(空 → 默认中速)
+          // v12.0.4: one-line edit style (empty → default mid-tempo)
           editStyle: editStyle.trim() || undefined,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('创作失败');
+        throw new Error(ui.createFailed);
       }
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
 
       if (!reader) {
-        throw new Error('无法读取响应流');
+        throw new Error(ui.streamUnreadable);
       }
 
       while (true) {
@@ -174,7 +176,7 @@ export default function CreatePage() {
                 case 'status':
                   setStatusMessage(data.data.message);
                   break;
-                // v2.11 #1: 连续性事件
+                // v2.11 #1: continuity event
                 case 'consistencyStatus':
                   addConsistencyEvent({
                     shotNumber: data.data.shotNumber,
@@ -190,9 +192,9 @@ export default function CreatePage() {
                   break;
                 case 'complete':
                   setResult(data.data);
-                  setStatusMessage('创作完成！');
+                  setStatusMessage(ui.createDone);
                   setTimeout(() => {
-                    // 可以跳转到结果页面
+                    // Optional: navigate to the result page
                     // router.push('/projects/new');
                   }, 2000);
                   break;
@@ -200,15 +202,15 @@ export default function CreatePage() {
                   throw new Error(data.data.message);
               }
             } catch (e) {
-              console.error('解析 SSE 数据失败:', e);
+              console.error('Failed to parse SSE data:', e);
             }
           }
         }
       }
     } catch (error) {
-      console.error('创作错误:', error);
-      setStatusMessage('创作失败，请重试');
-      alert(error instanceof Error ? error.message : '创作失败，请重试');
+      console.error('Create error:', error);
+      setStatusMessage(ui.createRetry);
+      alert(error instanceof Error ? error.message : ui.createRetry);
     } finally {
       setIsCreating(false);
     }
@@ -216,7 +218,7 @@ export default function CreatePage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* 导航栏 */}
+      {/* Nav */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/10">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
@@ -249,7 +251,7 @@ export default function CreatePage() {
               animate={{ opacity: 1, y: 0 }}
               className="space-y-8"
             >
-              {/* 标题区域 */}
+              {/* Title */}
               <div className="text-center space-y-4">
                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#E8C547]/10 border border-[#E8C547]/20 rounded-full text-sm">
                   <Wand2 className="w-4 h-4 text-[#E8C547]" />
@@ -267,41 +269,41 @@ export default function CreatePage() {
                 </p>
               </div>
 
-              {/* 创作表单 */}
+              {/* Create form */}
               <div className="bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur-xl">
                 <div className="space-y-6">
-                  {/* 创意输入 */}
+                  {/* Idea input */}
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-3">
                       {t.create.ideaLabel}
                     </label>
-                    {/* v6.1.1: 智能提示词编辑器 (@ 引用资产补全 + 编译预览) */}
+                    {/* v6.1.1: smart prompt editor (@ asset complete + compile preview) */}
                     <PromptEditor
                       value={idea}
                       onChange={setIdea}
-                      placeholder={"支持两种输入方式：\n\n方式一：简短创意（50-500字）\n例如：一个关于时间旅行者的爱情故事，主角是一位物理学家...\n\n方式二：完整剧本（直接粘贴）\n支持标准剧本格式：场景标头、角色对白、△画面描述等，系统将自动解析并忠实改编\n\n输入 @ 可引用角色 / 场景 / 风格资产"}
+                      placeholder={ui.ideaPlaceholderLong}
                       rows={12}
                       className="w-full min-h-[200px] bg-black/50 border border-white/10 rounded-2xl p-6 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#E8C547]/50 focus:border-[#E8C547]/50 transition-all resize-y"
                     />
                     <div className="mt-2 flex items-center justify-between text-sm">
                       <span className={`${idea.length > 500 ? 'text-[#E8C547]' : 'text-gray-500'}`}>
-                        {idea.length} 字符 {idea.length > 500 ? '(剧本模式)' : ''}
+                        {ui.charCount.replace('{n}', String(idea.length))} {idea.length > 500 ? ui.scriptMode : ''}
                       </span>
                       <span className="text-gray-500">
-                        简短创意 50-500 字 / 完整剧本可达 100000 字
+                        {ui.ideaHint}
                       </span>
                     </div>
                   </div>
 
-                  {/* v2.9 P0 Cameo: 主角脸上传(可选)*/}
+                  {/* v2.9 P0 Cameo: optional lead-face upload */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
                         <UserCircle2 className="w-4 h-4 text-[#E8C547]" />
-                        主角脸参考图（可选）
-                        <span className="px-2 py-0.5 bg-[#E8C547]/10 text-[#E8C547] text-xs rounded-full">Cameo 锁脸</span>
+                        {ui.cameoFaceLabel}
+                        <span className="px-2 py-0.5 bg-[#E8C547]/10 text-[#E8C547] text-xs rounded-full">{ui.cameoLockBadge}</span>
                       </label>
-                      <span className="text-xs text-gray-500">上传后全片所有镜头锁定同一张脸</span>
+                      <span className="text-xs text-gray-500">{ui.cameoLockHint}</span>
                     </div>
                     {!cameoPreview ? (
                       <label className="block border-2 border-dashed border-white/10 rounded-xl p-6 text-center cursor-pointer hover:border-[#E8C547]/50 hover:bg-white/5 transition-all">
@@ -313,10 +315,10 @@ export default function CreatePage() {
                         />
                         <UserCircle2 className="w-10 h-10 mx-auto mb-2 text-gray-500" />
                         <div className="text-sm text-gray-400">
-                          点击上传主角脸照片（JPG / PNG，≤10MB）
+                          {ui.cameoUploadHint}
                         </div>
                         <div className="text-xs text-gray-600 mt-1">
-                          不上传也可以 — 系统会自动生成一个锁定的形象
+                          {ui.cameoUploadSub}
                         </div>
                       </label>
                     ) : (
@@ -324,10 +326,10 @@ export default function CreatePage() {
                         <div className="relative inline-flex items-center gap-4 bg-white/5 border border-[#E8C547]/30 rounded-xl p-4 w-full">
                           <img loading="lazy" decoding="async" 
                             src={cameoPreview}
-                            alt="主角脸预览"
+                            alt={ui.cameoPreviewAlt}
                             className="w-20 h-20 rounded-lg object-cover border border-white/10" />
                           <div className="flex-1">
-                            <div className="text-sm font-medium text-[#E8C547]">✓ 已锁定主角脸</div>
+                            <div className="text-sm font-medium text-[#E8C547]">{ui.cameoLocked}</div>
                             <div className="text-xs text-gray-400 mt-1">
                               {cameoFile?.name} · {cameoFile ? (cameoFile.size / 1024).toFixed(0) : 0} KB
                             </div>
@@ -336,12 +338,12 @@ export default function CreatePage() {
                             type="button"
                             onClick={clearCameo}
                             className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-                            aria-label="清除主角脸"
+                            aria-label={ui.cameoClearAria}
                           >
                             <X className="w-4 h-4 text-gray-400" />
                           </button>
                         </div>
-                        {/* v2.11 #2: Cameo 试穿评分 —— 按开始创作前就能看到 */}
+                        {/* v2.11 #2: Cameo try-on score — visible before Start */}
                         <CameoScoreBadge
                           loading={cameoScoreLoading}
                           error={cameoScoreError}
@@ -351,10 +353,10 @@ export default function CreatePage() {
                     )}
                   </div>
 
-                  {/* v6.1.2: 多模态参考 (图/音/视频) */}
+                  {/* v6.1.2: multimodal refs (image/audio/video) */}
                   <MultimodalRefShelf refs={references} onChange={setReferences} />
 
-                  {/* 视频引擎选择 */}
+                  {/* Video engine */}
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-3">
                       {t.create.videoProviderLabel}
@@ -373,7 +375,7 @@ export default function CreatePage() {
                             videoProvider === 'minimax' ? 'text-[#E8C547]' : 'text-gray-400'
                           }`} />
                           <div className="font-semibold mb-1">Minimax</div>
-                          <div className="text-xs text-gray-400">速度快</div>
+                          <div className="text-xs text-gray-400">{ui.engineFast}</div>
                         </div>
                       </button>
 
@@ -390,7 +392,7 @@ export default function CreatePage() {
                             videoProvider === 'vidu' ? 'text-blue-400' : 'text-gray-400'
                           }`} />
                           <div className="font-semibold mb-1">Vidu</div>
-                          <div className="text-xs text-gray-400">质量高</div>
+                          <div className="text-xs text-gray-400">{ui.engineQuality}</div>
                         </div>
                       </button>
 
@@ -406,23 +408,23 @@ export default function CreatePage() {
                           <Lightbulb className={`w-6 h-6 mx-auto mb-2 ${
                             videoProvider === 'keling' ? 'text-orange-400' : 'text-gray-400'
                           }`} />
-                          <div className="font-semibold mb-1">可灵 AI</div>
-                          <div className="text-xs text-gray-400">中文好</div>
+                          <div className="font-semibold mb-1">{ui.klingAi}</div>
+                          <div className="text-xs text-gray-400">{ui.engineChinese}</div>
                         </div>
                       </button>
                     </div>
                   </div>
 
-                  {/* v12.0.4: 一句指令调剪辑风格(快节奏燃向 / 慢叙抒情 / 自由文本)→ 智能剪辑管线 */}
+                  {/* v12.0.4: one-line edit style (fast / lyrical / free text) → smart edit pipeline */}
                   <div data-testid="edit-style-picker">
                     <label className="block text-sm font-medium text-gray-300 mb-1">
-                      剪辑风格 <span className="text-xs text-gray-500">一句话调节奏与转场,可留空(默认中速)</span>
+                      {ui.editStyleLabel} <span className="text-xs text-gray-500">{ui.editStyleHint}</span>
                     </label>
                     <div className="flex flex-wrap gap-2 mb-2">
                       {[
-                        { v: '', label: '默认中速' },
-                        { v: '快节奏燃向', label: '⚡ 快节奏燃向' },
-                        { v: '慢叙抒情', label: '🌙 慢叙抒情' },
+                        { v: '', label: ui.editStyleDefault },
+                        { v: ui.editStyleFastVal, label: ui.editStyleFast },
+                        { v: ui.editStyleSlowVal, label: ui.editStyleSlow },
                       ].map((p) => (
                         <button
                           key={p.label}
@@ -442,12 +444,12 @@ export default function CreatePage() {
                       type="text"
                       value={editStyle}
                       onChange={(e) => setEditStyle(e.target.value)}
-                      placeholder="或自定义:如「抖音爆款卡点」「王家卫式留白」(配 LLM key 时智能解析)"
+                      placeholder={ui.editStyleCustomPh}
                       className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#E8C547]/40 focus:border-[#E8C547]/40 transition-all"
                     />
                   </div>
 
-                  {/* v6.1.3: 生成前就绪度预览 (实时) */}
+                  {/* v6.1.3: pre-generate readiness preview (live) */}
                   <PromptReadiness
                     idea={idea}
                     hasFace={!!cameoPreview}
@@ -455,7 +457,7 @@ export default function CreatePage() {
                     refs={references}
                   />
 
-                  {/* 提交按钮 */}
+                  {/* Submit */}
                   <button
                     onClick={handleSubmit}
                     disabled={!idea.trim()}
@@ -467,17 +469,17 @@ export default function CreatePage() {
                 </div>
               </div>
 
-              {/* 示例创意 */}
+              {/* Example ideas */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-sm text-gray-400">
                   <Lightbulb className="w-4 h-4" />
-                  <span>试试这些创意灵感</span>
+                  <span>{ui.tryIdeas}</span>
                 </div>
                 <div className="grid md:grid-cols-2 gap-3">
-                  {exampleIdeas.map((example, i) => (
+                  {EXAMPLE_IDEA_KEYS.map((example, i) => (
                     <button
                       key={i}
-                      onClick={() => setIdea(example.content)}
+                      onClick={() => setIdea(ui[example.contentKey])}
                       className="group p-4 bg-white/5 border border-white/10 rounded-xl hover:border-[#E8C547]/50 hover:bg-white/10 transition-all text-left"
                     >
                       <div className="flex items-start gap-3">
@@ -486,10 +488,10 @@ export default function CreatePage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-medium mb-1 group-hover:text-[#E8C547] transition-colors">
-                            {example.title}
+                            {ui[example.titleKey]}
                           </div>
                           <div className="text-sm text-gray-400 line-clamp-2">
-                            {example.content}
+                            {ui[example.contentKey]}
                           </div>
                         </div>
                       </div>
@@ -513,11 +515,11 @@ export default function CreatePage() {
               <div>
                 <h2 className="text-4xl font-bold mb-4">
                   <span className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-                    创作完成！
+                    {ui.createDoneTitle}
                   </span>
                 </h2>
                 <p className="text-xl text-gray-400">
-                  你的 AI 漫剧已经准备好了
+                  {ui.createDoneDesc}
                 </p>
               </div>
 
@@ -526,13 +528,13 @@ export default function CreatePage() {
                   href="/projects/1"
                   className="px-8 py-4 bg-gradient-to-r from-[#E8C547] to-[#D4A830] rounded-full font-semibold text-lg hover:shadow-2xl hover:shadow-[#E8C547]/40 transition-all"
                 >
-                  查看作品
+                  {t.home.heroCtaCases}
                 </Link>
                 <Link
                   href="/create"
                   className="px-8 py-4 bg-white/5 border border-white/10 rounded-full font-semibold text-lg hover:bg-white/10 transition-all"
                 >
-                  创作新作品
+                  {ui.createNewWork}
                 </Link>
               </div>
             </motion.div>
@@ -542,7 +544,7 @@ export default function CreatePage() {
             <div className="mb-8 text-center space-y-4">
               <h2 className="text-3xl font-bold">
                 <span className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-                  AI 团队正在为你创作
+                  {ui.teamCreating}
                 </span>
               </h2>
               <p className="text-gray-400">
@@ -550,7 +552,7 @@ export default function CreatePage() {
               </p>
             </div>
 
-            {/* v2.11 #1: 连续性监控面板 —— 实时显示"锁了几张脸 + 接了几条镜头线" */}
+            {/* v2.11 #1: continuity panel — live "faces locked + shot lines joined" */}
             <div className="mb-6 max-w-md mx-auto">
               <ConsistencyPanel />
             </div>
@@ -563,25 +565,9 @@ export default function CreatePage() {
   );
 }
 
-const exampleIdeas = [
-  {
-    title: '赛博朋克侦探',
-    content: '2077年的新东京，一位赛博侦探接到神秘委托，调查连环失踪案，却发现背后隐藏着惊天阴谋',
-    icon: Zap
-  },
-  {
-    title: '古代宫廷',
-    content: '大唐盛世，一位才女入宫，凭借智慧在后宫中周旋，最终成为影响朝政的关键人物',
-    icon: Sparkles
-  },
-  {
-    title: '末日废土',
-    content: '核战后的世界，幸存者们在废墟中寻找希望，一个神秘信号指引他们前往传说中的避难所',
-    icon: Wand2
-  },
-  {
-    title: '魔法学院',
-    content: '魔法学院新生入学，发现自己拥有罕见��魔法天赋，却也因此卷入了一场古老的魔法战争',
-    icon: Lightbulb
-  }
-];
+const EXAMPLE_IDEA_KEYS = [
+  { titleKey: 'ideaCyberTitle', contentKey: 'ideaCyberContent', icon: Zap },
+  { titleKey: 'ideaPalaceTitle', contentKey: 'ideaPalaceContent', icon: Sparkles },
+  { titleKey: 'ideaWastelandTitle', contentKey: 'ideaWastelandContent', icon: Wand2 },
+  { titleKey: 'ideaMagicTitle', contentKey: 'ideaMagicContent', icon: Lightbulb },
+] as const;

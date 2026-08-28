@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * v6.7 — API 健康仪表盘. 一眼看每个网关/模型 正常 / 额度用尽 / 配置缺失 / 不可达.
- * 数据来自 /api/health/providers (服务端实时探测, 缓存 60s, 不回传任何 key).
+ * v6.7 — API health dashboard. At a glance: each gateway/model is ok / out of credits / misconfigured / unreachable.
+ * Data from /api/health/providers (live server probe, 60s cache, never returns keys).
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -11,7 +11,7 @@ import { STATUS_META, type ProviderHealth, type HealthStatus } from '@/lib/provi
 import { getToken } from '@/lib/auth';
 import { useLocale } from '@/hooks/use-locale';
 
-// v10.6.3 模型雷达
+// v10.6.3 model radar
 interface ScanRow {
   module: string; label: string; envKey: string; current: string;
   familyCandidates: number; latest: string | null;
@@ -53,7 +53,7 @@ export default function HealthPage() {
 
   const [data, setData] = useState<{ overall: string; checkedAt: string; providers: ProviderHealth[]; cached?: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
-  // v10.6.3 模型雷达
+  // v10.6.3 model radar
   const [scan, setScan] = useState<ScanReport | null>(null);
   const [scanning, setScanning] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -80,7 +80,7 @@ export default function HealthPage() {
       });
       const b = await res.json();
       if (res.ok && b.ok) {
-        const up = (b.applied || []).map((a: any) => `${a.from} → ${a.to}`).join('、');
+        const up = (b.applied || []).map((a: any) => `${a.from} → ${a.to}`).join(', ');
         const skip = (b.skipped || []).length;
         let msg: string;
         if (b.applied?.length) {
@@ -110,7 +110,7 @@ export default function HealthPage() {
         body: JSON.stringify({ rollback: envKey }),
       });
       if (res.ok) { setRadarMsg(t.healthPage.rolledBack.replace('{envKey}', envKey)); await runScan(); }
-    } catch { /* 静默 */ }
+    } catch { /* silent */ }
   }, [runScan, t]);
 
   const load = useCallback(async (fresh = false) => {
@@ -173,7 +173,7 @@ export default function HealthPage() {
                     <div className="mt-2 flex items-center gap-1.5 text-[11px] text-white/80">
                       <Wallet className="w-3 h-3" />
                       {(p.balance.limitUsd ?? 0) >= 1_000_000
-                        // 上限是占位高值 (预付/充值制) → 只显已用, 标额度充裕
+                        // Ceiling is a placeholder high value (prepaid / top-up) → show used only, mark credits as abundant
                         ? <span>{t.healthPage.balanceUsed} <b>${p.balance.usedUsd ?? 0}</b> · {t.healthPage.balanceAbundant}</span>
                         : p.balance.remainingUsd != null
                           ? <span>{t.healthPage.balanceRemaining} <b>${p.balance.remainingUsd}</b> / {t.healthPage.balanceLimit} ${p.balance.limitUsd}{p.balance.usedUsd != null ? ` · ${t.healthPage.balanceUsed} $${p.balance.usedUsd}` : ''}</span>
@@ -190,7 +190,7 @@ export default function HealthPage() {
             })}
           </div>
 
-          {/* v10.6.3 — 模型雷达:一键扫描各 API 最新模型 + 同家族自动升级 */}
+          {/* v10.6.3 — model radar: one-click scan of latest models per API + same-family auto-upgrade */}
           <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] p-4" data-testid="model-radar">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useLocale } from '@/hooks/use-locale';
 
 interface Scene {
   id: string;
@@ -10,10 +11,11 @@ interface Scene {
 }
 
 export default function Timeline() {
-  const [scenes, setScenes] = useState<Scene[]>([
-    { id: '1', thumbnail: '/placeholder.png', title: '场景 1', duration: '3s' },
-    { id: '2', thumbnail: '/placeholder.png', title: '场景 2', duration: '5s' },
-    { id: '3', thumbnail: '/placeholder.png', title: '场景 3', duration: '4s' },
+  const { t } = useLocale();
+  const [scenes] = useState<Scene[]>([
+    { id: '1', thumbnail: '/placeholder.png', title: t.sharedUi.sceneN.replace('{n}', '1'), duration: '3s' },
+    { id: '2', thumbnail: '/placeholder.png', title: t.sharedUi.sceneN.replace('{n}', '2'), duration: '5s' },
+    { id: '3', thumbnail: '/placeholder.png', title: t.sharedUi.sceneN.replace('{n}', '3'), duration: '4s' },
   ]);
 
   return (
@@ -23,12 +25,12 @@ export default function Timeline() {
         <button className="flex-shrink-0 w-24 h-20 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg flex items-center justify-center hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
           <div className="text-center">
             <div className="text-2xl mb-1">+</div>
-            <div className="text-xs text-gray-600 dark:text-gray-400">添加场景</div>
+            <div className="text-xs text-gray-600 dark:text-gray-400">{t.sharedUi.addScene}</div>
           </div>
         </button>
 
         {/* Scene Cards */}
-        {scenes.map((scene, index) => (
+        {scenes.map((scene) => (
           <div
             key={scene.id}
             className="flex-shrink-0 w-32 h-20 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all group relative"

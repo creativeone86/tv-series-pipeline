@@ -1,17 +1,21 @@
 'use client';
 
 /**
- * v9.4.6 — 一键成片自愈闭环面板(对标可灵「一键成片」,但我们是闭环)。
+ * v9.4.6 — One-click film self-heal loop (Kling-style “one-click film”, but closed-loop).
  *
- * 跑通 lib/oneclick-film 的闭环:每轮 ① Vision 质检(/vision-audit/run)→ ② decideIteration 裁决
- * (done/rebirth/blocked)→ ③ rebirth 则按重生计划自动重拍弱镜(/regenerate-storyboard,带最弱维度
- * steer)→ 复检,最多 N 轮。可灵一键成片是开环;我们生成后自检 + 自动重拍弱镜,达标才停。
+ * Runs lib/oneclick-film: each round ① Vision audit (/vision-audit/run) →
+ * ② decideIteration (done/rebirth/blocked) → ③ on rebirth, auto-reshoot weak
+ * shots (/regenerate-storyboard, steered by weakest dimension) → re-audit,
+ * up to N rounds. Kling one-click is open-loop; we audit after generate and
+ * auto-reshoot weak shots, and stop only when the gate passes.
  *
- * ⚠️ 真实执行:会调用质检 + 重拍(消耗 token)。有上轮数 / 停止 / 运行前确认 三重保护。
+ * Real execution calls audit + reshoot (uses tokens). Triple guard: max
+ * rounds / stop / confirm before run.
  */
 import { useRef, useState } from 'react';
 import { MagicWand, Play, CircleNotch as Loader2, CheckCircle, Warning, X } from '@phosphor-icons/react';
 import { planOneClickFilm, decideIteration } from '@/lib/oneclick-film';
+import { useLocale } from '@/hooks/use-locale';
 
 interface ShotPrompt { shotNumber: number; prompt: string; }
 type LogKind = 'info' | 'ok' | 'warn' | 'err';
@@ -24,12 +28,14 @@ const DIM_STEER: Record<string, string> = {
 };
 
 function authHeader(): Record<string, string> {
-  const t = typeof window !== 'undefined' ? localStorage.getItem('qfmj-token') : null;
-  return t ? { Authorization: `Bearer ${t}` } : {};
+  const tok = typeof window !== 'undefined' ? localStorage.getItem('qfmj-token') : null;
+  return tok ? { Authorization: `Bearer ${tok}` } : {};
 }
 
 export function OneClickFilmPanel({ projectId, shotPrompts }: { projectId: string; shotPrompts: ShotPrompt[] }) {
-  const plan = planOneClickFilm({ idea: '当前项目', maxRebirthRounds: 2 });
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectPanels: Record<string, string> };
+  const plan = planOneClickFilm({ idea: t.projectPanels.currentProject, maxRebirthRounds: 2 });
   const [running, setRunning] = useState(false);
   const [log, setLog] = useState<{ kind: LogKind; text: string }[]>([]);
   const [decision, setDecision] = useState<'done' | 'blocked' | null>(null);
@@ -41,20 +47,20 @@ export function OneClickFilmPanel({ projectId, shotPrompts }: { projectId: strin
   async function run() {
     if (running) return;
     const ok = window.confirm(
-      `「一键成片」自愈闭环将:质检每镜 → 自动重拍低分镜(消耗 token)→ 复检,最多 ${plan.maxRebirthRounds + 1} 轮。\n确认运行?`,
+      t.projectPanels.confirmRun.replace('{n}', String(plan.maxRebirthRounds + 1)),
     );
     if (!ok) return;
     setRunning(true); setLog([]); setDecision(null); stopRef.current = false;
 
     try {
       for (let round = 1; round <= plan.maxRebirthRounds + 1; round++) {
-        if (stopRef.current) { addLog('warn', '已手动停止'); break; }
-        addLog('info', `第 ${round} 轮 · 质检中…`);
+        if (stopRef.current) { addLog('warn', t.projectPanels.stopped); break; }
+        addLog('info', t.projectPanels.roundAudit.replace('{n}', String(round)));
         const aRes = await fetch(`/api/projects/${encodeURIComponent(projectId)}/vision-audit/run`, {
           method: 'POST', headers: authHeader(),
         });
         const aBody = await aRes.json().catch(() => ({}));
-        if (!aRes.ok) { addLog('err', aBody?.error || `质检失败 (HTTP ${aRes.status})`); break; }
+        if (!aRes.ok) { addLog('err', aBody?.error || t.projectPanels.auditFailed.replace('{status}', String(aRes.status))); break; }
 
         const audits = aBody.audits || [];
         const summary = aBody.summary || null;
@@ -64,32 +70,32 @@ export function OneClickFilmPanel({ projectId, shotPrompts }: { projectId: strin
         if (verdict.decision === 'done') { setDecision('done'); break; }
         if (verdict.decision === 'blocked') { setDecision('blocked'); break; }
 
-        // rebirth — 按重生计划自动重拍弱镜
+        // rebirth — auto-reshoot weak shots from the plan
         let regen = 0;
         for (const s of verdict.rebirthShots) {
-          if (stopRef.current) { addLog('warn', '已手动停止'); break; }
+          if (stopRef.current) { addLog('warn', t.projectPanels.stopped); break; }
           const base = promptMap.get(s.shotNumber);
-          if (!base) { addLog('warn', `镜 ${s.shotNumber} 缺分镜 prompt,跳过`); continue; }
+          if (!base) { addLog('warn', t.projectPanels.skipNoPrompt.replace('{n}', String(s.shotNumber))); continue; }
           const steer = s.weakestDimension ? DIM_STEER[s.weakestDimension] : '';
           const customPrompt = (steer ? `${base}, ${steer}` : base).slice(0, 1900);
-          addLog('info', `重拍镜 ${s.shotNumber} · ${s.focusHint}`);
+          addLog('info', t.projectPanels.reshootShot.replace('{n}', String(s.shotNumber)).replace('{hint}', s.focusHint));
           try {
             const rRes = await fetch(`/api/projects/${encodeURIComponent(projectId)}/regenerate-storyboard`, {
               method: 'POST',
               headers: { ...authHeader(), 'Content-Type': 'application/json' },
               body: JSON.stringify({ shotNumber: s.shotNumber, customPrompt, useStyleBible: true, useCref: true }),
             });
-            // SSE: 读完整 body, 看是否 complete
+            // SSE: read full body, look for complete
             const txt = await rRes.text();
             if (rRes.ok && /"type"\s*:\s*"complete"/.test(txt)) regen++;
-            else addLog('warn', `镜 ${s.shotNumber} 重拍未完成`);
-          } catch { addLog('warn', `镜 ${s.shotNumber} 重拍出错`); }
+            else addLog('warn', t.projectPanels.reshootIncomplete.replace('{n}', String(s.shotNumber)));
+          } catch { addLog('warn', t.projectPanels.reshootError.replace('{n}', String(s.shotNumber))); }
         }
-        addLog('info', `本轮重拍 ${regen} 镜,进入复检`);
-        if (regen === 0) { addLog('warn', '无可自动重拍的镜(缺 prompt),转人工'); setDecision('blocked'); break; }
+        addLog('info', t.projectPanels.roundReshoot.replace('{n}', String(regen)));
+        if (regen === 0) { addLog('warn', t.projectPanels.noAutoReshoot); setDecision('blocked'); break; }
       }
     } catch (e) {
-      addLog('err', e instanceof Error ? e.message : '运行出错');
+      addLog('err', e instanceof Error ? e.message : t.projectPanels.runError);
     } finally {
       setRunning(false);
     }
@@ -102,13 +108,12 @@ export function OneClickFilmPanel({ projectId, shotPrompts }: { projectId: strin
       <div className="rounded-xl border border-[#E8C547]/25 bg-[#E8C547]/[0.05] p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-[#E8C547] text-sm font-medium">
-            <MagicWand className="w-4 h-4" weight="fill" /> 一键成片 · 自愈闭环
+            <MagicWand className="w-4 h-4" weight="fill" /> {t.projectPanels.oneclickTitle}
           </div>
-          <span className="text-[10px] text-white/40">对标可灵一键成片 · 我们多了「自检 + 自动重拍」</span>
+          <span className="text-[10px] text-white/40">{t.projectPanels.oneclickBadge}</span>
         </div>
         <p className="mt-2 text-[11px] text-white/55 leading-relaxed">
-          每轮 <b className="text-white/75">质检每镜</b> → <b className="text-white/75">门禁裁决</b> → 低分镜 <b className="text-white/75">自动重拍</b>(带针对最弱维度的修补 steer)→ 复检;
-          达标(pass / warn)即停,最多 {plan.maxRebirthRounds + 1} 轮,到顶仍不达标转人工。
+          {t.projectPanels.oneclickBefore}<b className="text-white/75">{t.projectPanels.oneclickAudit}</b>{t.projectPanels.oneclickMid1}<b className="text-white/75">{t.projectPanels.oneclickGate}</b>{t.projectPanels.oneclickMid2}<b className="text-white/75">{t.projectPanels.oneclickReshoot}</b>{t.projectPanels.oneclickAfter.replace('{n}', String(plan.maxRebirthRounds + 1))}
         </p>
         <div className="mt-2 flex items-center gap-2">
           <button
@@ -119,11 +124,11 @@ export function OneClickFilmPanel({ projectId, shotPrompts }: { projectId: strin
                       : 'bg-[#E8C547]/15 border border-[#E8C547]/40 text-[#E8C547] hover:bg-[#E8C547]/25'
             }`}
           >
-            {running ? <><X className="w-3.5 h-3.5" /> 停止</> : <><Play className="w-3.5 h-3.5" weight="fill" /> 运行自愈闭环</>}
+            {running ? <><X className="w-3.5 h-3.5" /> {t.projectPanels.stop}</> : <><Play className="w-3.5 h-3.5" weight="fill" /> {t.projectPanels.runLoop}</>}
           </button>
-          {auditable === 0 && <span className="text-[11px] text-white/40">先生成分镜后再运行</span>}
-          {decision === 'done' && <span className="text-[11px] text-emerald-400 inline-flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" weight="fill" /> 已达标</span>}
-          {decision === 'blocked' && <span className="text-[11px] text-amber-400 inline-flex items-center gap-1"><Warning className="w-3.5 h-3.5" weight="fill" /> 转人工</span>}
+          {auditable === 0 && <span className="text-[11px] text-white/40">{t.projectPanels.needBoards}</span>}
+          {decision === 'done' && <span className="text-[11px] text-emerald-400 inline-flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" weight="fill" /> {t.projectPanels.passed}</span>}
+          {decision === 'blocked' && <span className="text-[11px] text-amber-400 inline-flex items-center gap-1"><Warning className="w-3.5 h-3.5" weight="fill" /> {t.projectPanels.handoff}</span>}
         </div>
       </div>
 

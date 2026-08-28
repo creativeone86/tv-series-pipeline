@@ -1,14 +1,18 @@
 'use client';
 
 /**
- * /dashboard/edit-chat · 对话式编辑台(v12.251:解析 → 真执行闭环)
+ * /dashboard/edit-chat · conversational edit desk (v12.251: parse → real execute)
  *
- * 对成片用自然语言说「删掉第3镜,改成竖屏卡点字幕」→ 解析成编辑意图 → 「我将:①②③」确认卡 →
- * 选一个项目 + 确认 → 组合级编辑经 `POST /api/projects/[id]/recompose` **真正重合成成片**。
+ * Tell the finished film in plain language what to change → parse into edit
+ * intents → "I will: 1 2 3" confirm card → pick a project + confirm →
+ * composition edits go through `POST /api/projects/[id]/recompose` and **really
+ * recompose** the film.
  *
- * 安全契约:解析只读;破坏性操作(删镜/重配音/重生镜)走**两步确认**(先亮红,再点才执行)。
- * recompose 端点自身还有属主守卫 + 白名单校验(防御纵深)。重生镜/节奏调整不在 recompose 内,
- * 页内如实指路(去项目页重生 / 整片重跑),不假装已执行。
+ * Safety: parse is read-only; destructive ops (drop shot / re-voice / regen shot)
+ * use **two-step confirm** (arm red, then click to run). The recompose endpoint
+ * also has owner guard + allowlist (defense in depth). Shot regen / pace are
+ * not inside recompose; this page points honestly (regen on project page /
+ * re-run the film) and does not pretend they ran.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -17,6 +21,7 @@ import { useToast } from '@/components/ui/toast-provider';
 import { api } from '@/lib/api-client';
 import type { EditOp } from '@/lib/edit-intent';
 import { planExecution, type ExecutionPlan } from '@/lib/edit-intent-execute';
+import { useLocale } from '@/hooks/use-locale';
 
 interface ParseResult {
   intents: EditOp[];
@@ -27,31 +32,31 @@ interface ParseResult {
 }
 interface ProjectLite { id: string; title: string; status?: string; }
 
-const EXAMPLES = [
-  '删掉第3镜,改成竖屏卡点字幕',
-  '节奏快一点,适配抖音',
-  '第2镜调暗一点',
-  '重新配音',
-];
+type DashT = ReturnType<typeof useLocale>['t'] & { dashPages: Record<string, string> };
+
+const EXAMPLE_KEYS = ['ecEx1', 'ecEx2', 'ecEx3', 'ecEx4'] as const;
 
 export default function EditChatPage() {
+  const { t: loc } = useLocale();
+  const t = loc as DashT;
   const [text, setText] = useState('');
   const [parsing, setParsing] = useState(false);
   const [result, setResult] = useState<ParseResult | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const { showToast } = useToast();
 
-  // v12.251 执行态
+  // v12.251 execute state
   const [projects, setProjects] = useState<ProjectLite[]>([]);
   const [projectId, setProjectId] = useState('');
   const [executing, setExecuting] = useState(false);
   const [armed, setArmed] = useState(false);
-  // v12.337 单镜重生执行态:逐镜串行(并行会同时烧多份预算,且失败难归因)
+  // v12.337 per-shot regen: serial (parallel burns N budgets and is hard to attribute)
   const [shotRunning, setShotRunning] = useState<number | null>(null);
   const [shotLog, setShotLog] = useState<Array<{ shotNumber: number; status: 'ok' | 'fail' | 'running'; msg: string }>>([]);
-  const [shotArmed, setShotArmed] = useState(false);           // 破坏性两步确认:先亮红再执行
-  // v12.251 复检修:arm 后短暂禁用按钮(冷却),让**双击**的第二击落空 —— 否则一次双击会
-  // 「arm→立刻执行」一气呵成绕过两步确认(React 在两个 click 宏任务间已提交 armed=true)。
+  const [shotArmed, setShotArmed] = useState(false);           // destructive two-step: arm red, then run
+  // v12.251 review: after arm, briefly disable the button (cooldown) so a **double-click**
+  // second hit is a no-op — otherwise one double-click does arm→execute in one go
+  // (React commits armed=true between the two click macrotasks).
   const [cooldown, setCooldown] = useState(false);
   const cooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [resultVideoUrl, setResultVideoUrl] = useState('');
@@ -60,13 +65,14 @@ export default function EditChatPage() {
   useEffect(() => {
     api.projects()
       .then((rows: any) => setProjects((Array.isArray(rows) ? rows : []).map((r: any) => ({ id: r.id, title: r.title, status: r.status }))))
-      .catch(() => { /* 列表拉取失败不致命,用户仍可解析预览 */ });
+      .catch(() => { /* list fetch failure is non-fatal; user can still parse */ });
   }, []);
   useEffect(() => () => { if (cooldownRef.current) clearTimeout(cooldownRef.current); }, []);
 
   const plan: ExecutionPlan | null = result && !result.unmatched ? planExecution(result.intents) : null;
 
-  // 解除武装:清 armed + 冷却 + 计时器。切项目 / 重解析都要归零,防「上一条破坏性指令的 armed」被下一条复用。
+  // Disarm: clear armed + cooldown + timer. Reset on project change / re-parse so
+  // the previous destructive instruction's armed flag is never reused.
   const disarm = () => {
     setArmed(false);
     setCooldown(false);
@@ -76,7 +82,7 @@ export default function EditChatPage() {
 
   const parse = async (override?: string) => {
     const q = (override ?? text).trim();
-    if (!q) { showToast({ title: '先说一句要改什么', type: 'error' }); return; }
+    if (!q) { showToast({ title: t.dashPages.ecNeedText, type: 'error' }); return; }
     if (override) setText(override);
     setParsing(true);
     setErrorMsg('');
@@ -89,14 +95,14 @@ export default function EditChatPage() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const msg = body.message || `解析失败 (HTTP ${res.status})`;
+        const msg = body.message || t.dashPages.parseFailedHttp.replace('{status}', String(res.status));
         setErrorMsg(msg); showToast({ title: msg, type: 'error' });
         return;
       }
-      // 防御:200 但返回异常/非 JSON(body 被兜成 {})时,ok 不为 true → 明示报错,别让下面的
-      // result.describe.length 撞 undefined 崩页。同时把数组字段归一,渲染永不 undefined.length。
+      // Guard: 200 but odd/non-JSON body (normalized to {}) → ok is not true.
+      // Surface an error instead of crashing on result.describe.length. Normalize arrays.
       if (!body || body.ok !== true) {
-        const msg = '解析返回异常,请重试';
+        const msg = t.dashPages.parseBadBody;
         setErrorMsg(msg); showToast({ title: msg, type: 'error' });
         return;
       }
@@ -108,7 +114,7 @@ export default function EditChatPage() {
         hint: typeof body.hint === 'string' ? body.hint : undefined,
       });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '网络错误,解析失败';
+      const msg = e instanceof Error ? e.message : t.dashPages.parseNetwork;
       setErrorMsg(msg); showToast({ title: msg, type: 'error' });
     } finally {
       setParsing(false);
@@ -116,19 +122,20 @@ export default function EditChatPage() {
   };
 
   /**
-   * v12.337:执行**单镜重生**。竞品对标清单最后一项(Seko 自然语言改单镜)。
+   * v12.337: run **per-shot regen**. Last item on the competitor checklist
+   * (Seko-style natural-language single-shot edit).
    *
-   * 关键契约:把用户那句话作为 `editNote` 交给服务端,由服务端读原镜描述后**合并**,
-   * 而不是当作新的 description 传过去 —— 后者会把原镜的人物/场景/动作整个抹掉,
-   * 且会「成功」返回不报错(见 lib/shot-edit-merge)。
+   * Contract: send the user sentence as `editNote`; the server reads the original
+   * shot description and **merges**. Do not send it as a new description — that
+   * wipes cast/scene/action and still "succeeds" (see lib/shot-edit-merge).
    *
-   * 逐镜**串行**:每镜都是真金白银的一次视频生成,并行等于同时烧 N 份预算。
+   * Serial per shot: each shot is a real paid video gen; parallel = N budgets at once.
    */
   const executeShots = async () => {
     if (!plan || plan.regenShots.length === 0) return;
-    if (!projectId) { showToast({ title: '先选一个要修改的项目', type: 'error' }); return; }
+    if (!projectId) { showToast({ title: t.dashPages.ecNeedProject, type: 'error' }); return; }
     if (cooldown) return;
-    if (!shotArmed) {           // 与组合级同一套两步确认:第一次点只亮红
+    if (!shotArmed) {           // same two-step as compose: first click only arms
       setShotArmed(true);
       setCooldown(true);
       if (cooldownRef.current) clearTimeout(cooldownRef.current);
@@ -138,17 +145,17 @@ export default function EditChatPage() {
     setShotLog([]);
     for (const rs of plan.regenShots) {
       setShotRunning(rs.shotNumber);
-      setShotLog((L) => [...L, { shotNumber: rs.shotNumber, status: 'running', msg: '正在重生…' }]);
+      setShotLog((L) => [...L, { shotNumber: rs.shotNumber, status: 'running', msg: t.dashPages.ecRegenRunning }]);
       try {
         const res = await fetch(`/api/projects/${projectId}/regenerate-shot`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ shotNumber: rs.shotNumber, editNote: rs.note || '' }),
         });
         if (!res.ok || !res.body) {
-          const t = await res.text().catch(() => '');
-          throw new Error(t.slice(0, 120) || `HTTP ${res.status}`);
+          const raw = await res.text().catch(() => '');
+          throw new Error(raw.slice(0, 120) || `HTTP ${res.status}`);
         }
-        // SSE:只取最后的 complete/error,过程中的 status 用于回显服务端的合并说明
+        // SSE: keep last complete/error; mid-stream status echoes the server merge note
         const reader = res.body.getReader(); const dec = new TextDecoder();
         let buf = '', done = false, lastMsg = '';
         let upstreamErr: Error | null = null;
@@ -160,36 +167,36 @@ export default function EditChatPage() {
           for (const c of chunks) {
             const line = c.split('\n').find((l) => l.startsWith('data: '));
             if (!line) continue;
-            // v12.339 修:此前 `throw new Error(...)` 写在 try 里,被下面那个「忽略半包/非 JSON」
-            // 的 catch **一并吞掉** —— 上游报错后循环照常走完,这一镜被标成「已重生 ✓」。
-            // **失败被报告成成功**,正是本仓反复在打的静默失败。解析失败与上游错误是两回事,
-            // 必须分开:catch 只吞解析,上游错误存下来、跳出循环后再抛。
+            // v12.339 fix: a `throw new Error(...)` inside try was swallowed by the
+            // "ignore half-packet / non-JSON" catch — upstream errors still marked
+            // the shot "regenerated". Fail-as-success. Parse fail ≠ upstream error:
+            // catch only swallows parse; upstream is stored and thrown after the loop.
             let ev: any = null;
             try { ev = JSON.parse(line.slice(6)); } catch { continue; }
             if (ev?.type === 'status' && ev.data?.message) lastMsg = String(ev.data.message);
-            if (ev?.type === 'complete') { done = true; lastMsg = '已重生 ✓'; }
-            if (ev?.type === 'error') { upstreamErr = new Error(ev.data?.message || '重生失败'); done = true; break; }
+            if (ev?.type === 'complete') { done = true; lastMsg = t.dashPages.ecRegenOk; }
+            if (ev?.type === 'error') { upstreamErr = new Error(ev.data?.message || t.dashPages.ecRegenFail); done = true; break; }
           }
           if (upstreamErr) break;
         }
-        if (upstreamErr) throw upstreamErr;   // 交给外层 catch 记成 fail —— 不许落进下面的 ok 分支
-        setShotLog((L) => L.map((x) => x.shotNumber === rs.shotNumber ? { ...x, status: 'ok', msg: lastMsg || '已重生 ✓' } : x));
+        if (upstreamErr) throw upstreamErr;   // outer catch records fail — never fall into ok
+        setShotLog((L) => L.map((x) => x.shotNumber === rs.shotNumber ? { ...x, status: 'ok', msg: lastMsg || t.dashPages.ecRegenOk } : x));
       } catch (e) {
-        const msg = e instanceof Error ? e.message : '重生失败';
+        const msg = e instanceof Error ? e.message : t.dashPages.ecRegenFail;
         setShotLog((L) => L.map((x) => x.shotNumber === rs.shotNumber ? { ...x, status: 'fail', msg } : x));
-        // 一镜失败不连累后面的 —— 但如实记下来,不静默跳过
+        // One shot failing must not skip the rest — but record it honestly
       }
     }
     setShotRunning(null);
     setShotArmed(false);
   };
 
-  /** 执行组合级编辑(recompose)。破坏性操作需先 armed(第一次点只亮红,第二次才真跑)。 */
+  /** Run composition-level edit (recompose). Destructive ops must be armed first. */
   const execute = async () => {
     if (!plan || !plan.recompose) return;
-    if (!projectId) { showToast({ title: '先选一个要修改的项目', type: 'error' }); return; }
-    if (cooldown) return; // 冷却期(刚 arm)内的点击一律忽略 —— 挡双击直冲执行。
-    // 两步确认:破坏性但未 armed → 只亮红 + 进冷却,不执行。第二次(冷却结束后)刻意点击才真跑。
+    if (!projectId) { showToast({ title: t.dashPages.ecNeedProject, type: 'error' }); return; }
+    if (cooldown) return; // ignore clicks during cooldown — blocks double-click execute
+    // Two-step: destructive + not armed → arm + cooldown, do not run. Second click after cooldown runs.
     if (plan.destructive && !armed) {
       setArmed(true);
       setCooldown(true);
@@ -208,15 +215,15 @@ export default function EditChatPage() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok || !body?.ok) {
-        const msg = body?.message || `重合成失败 (HTTP ${res.status})`;
+        const msg = body?.message || t.dashPages.recomposeFailedHttp.replace('{status}', String(res.status));
         setExecError(msg); showToast({ title: msg, type: 'error' });
         return;
       }
       setResultVideoUrl(body.finalVideoUrl || '');
       setArmed(false);
-      showToast({ title: '已重合成成片', type: 'success' });
+      showToast({ title: t.dashPages.recomposeOk, type: 'success' });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '网络错误,重合成失败';
+      const msg = e instanceof Error ? e.message : t.dashPages.recomposeNetwork;
       setExecError(msg); showToast({ title: msg, type: 'error' });
     } finally {
       setExecuting(false);
@@ -228,63 +235,63 @@ export default function EditChatPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <ChatText className="w-6 h-6 text-[#E8C547]" weight="duotone" />
-          对话式编辑台
+          {t.dashPages.ecTitle}
         </h1>
         <p className="text-sm text-[var(--soft)] mt-1">
-          对成片用大白话说要改什么 → 解析成一组编辑意图,确认后调既有 recompose / regenerate-shot。
-          <span className="text-[var(--soft)]"> 解析只读,破坏性操作(删镜/重配音)必须二次确认。</span>
+          {t.dashPages.ecSubtitle}
+          <span className="text-[var(--soft)]"> {t.dashPages.ecSafety}</span>
         </p>
       </div>
 
-      {/* 输入区 */}
+      {/* Input */}
       <div className="bg-[rgba(255,255,255,0.06)] border border-[var(--border)] rounded-2xl p-5 space-y-3">
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) parse(); }}
-          placeholder="例如:删掉第3镜,改成竖屏卡点字幕,节奏快一点"
+          placeholder={t.dashPages.ecPlaceholder}
           maxLength={2000}
           rows={3}
           className="w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg focus:outline-none focus:border-[#E8C547]/50 text-sm resize-none"
         />
         <div className="flex flex-wrap gap-1.5">
-          {EXAMPLES.map(ex => (
-            <button key={ex} onClick={() => parse(ex)} disabled={parsing}
+          {EXAMPLE_KEYS.map(k => (
+            <button key={k} onClick={() => parse(t.dashPages[k])} disabled={parsing}
               className="px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/10 text-[11px] text-[var(--muted)] disabled:opacity-40">
-              {ex}
+              {t.dashPages[k]}
             </button>
           ))}
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-[10px] text-[var(--soft)] opacity-60">⌘/Ctrl + Enter 解析 · {text.length}/2000</span>
+          <span className="text-[10px] text-[var(--soft)] opacity-60">{t.dashPages.ecParseHint.replace('{n}', String(text.length))}</span>
           <button
             onClick={() => parse()}
             disabled={parsing || !text.trim()}
             className="px-4 py-2 rounded-xl bg-[#E8C547] hover:bg-[#E8C547]/90 disabled:opacity-40 disabled:cursor-not-allowed text-black font-semibold inline-flex items-center gap-2 text-sm"
           >
-            {parsing ? (<><Loader2 className="w-4 h-4 animate-spin" /> 解析中…</>) : (<><PaperPlaneRight className="w-4 h-4" weight="bold" /> 解析</>)}
+            {parsing ? (<><Loader2 className="w-4 h-4 animate-spin" /> {t.dashPages.parsing}</>) : (<><PaperPlaneRight className="w-4 h-4" weight="bold" /> {t.dashPages.parse}</>)}
           </button>
         </div>
       </div>
 
-      {/* 结果区 */}
+      {/* Result */}
       <div className="mt-5">
         {errorMsg ? (
           <div className="bg-[rgba(255,255,255,0.04)] border border-rose-500/20 rounded-2xl p-6 text-center">
             <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-rose-400" />
-            <div className="text-sm text-rose-300 mb-1">解析失败</div>
+            <div className="text-sm text-rose-300 mb-1">{t.dashPages.parseFailed}</div>
             <div className="text-[11px] text-white/50">{errorMsg}</div>
           </div>
         ) : result ? (
           result.unmatched || (result.describe?.length ?? 0) === 0 ? (
             <div className="bg-[rgba(255,255,255,0.06)] border border-[var(--border)] rounded-2xl p-5 text-[13px] text-[var(--muted)]">
-              {result.hint || '没听懂这句 —— 换个说法试试(如「删掉第3镜」「改成竖屏卡点字幕」)。'}
+              {result.hint || t.dashPages.ecUnmatched}
             </div>
           ) : (
             <div className="bg-[rgba(255,255,255,0.06)] border border-[var(--border)] rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-3">
                 <CheckCircle className="w-4 h-4 text-emerald-400" weight="duotone" />
-                <span className="text-sm text-white font-medium">我将执行以下 {result.describe.length} 项修改:</span>
+                <span className="text-sm text-white font-medium">{t.dashPages.ecWillDo.replace('{n}', String(result.describe.length))}</span>
               </div>
               <ol className="space-y-2 mb-4">
                 {result.describe.map((d, i) => (
@@ -299,17 +306,20 @@ export default function EditChatPage() {
                 <div className="flex items-start gap-2 rounded-lg bg-rose-500/10 border border-rose-500/25 px-3 py-2 mb-4">
                   <ShieldWarning className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" weight="duotone" />
                   <span className="text-[12px] text-rose-200/90">
-                    含删镜 / 重生 / 重配音等**花钱或不可逆**操作 —— 需点两次确认才执行。
+                    {t.dashPages.ecDestructiveWarn}
                   </span>
                 </div>
               )}
 
-              {/* v12.337:单镜重生**在本页直接执行**(此前只指路,让用户自己跑去项目页) */}
+              {/* v12.337: per-shot regen **runs on this page** (used to only point at the project) */}
               {plan && plan.regenShots.length > 0 && (
                 <div className="rounded-lg bg-amber-500/8 border border-amber-500/20 px-3 py-2 mb-4 text-[11px] text-amber-200/85 leading-relaxed">
                   <div className="mb-2">
-                    · 第 {plan.regenShots.map(r => r.shotNumber).join('、')} 镜将<b>重生画面</b> —— 逐镜串行,每镜都是一次真实的付费视频生成。
-                    你的说明会<b>合并进原镜描述</b>(不是替换),其余保持不变。
+                    {t.dashPages.ecRegenLead.replace('{list}', plan.regenShots.map(r => r.shotNumber).join(t.dashPages.listSep))}
+                    <b>{t.dashPages.ecRegenBold1}</b>
+                    {t.dashPages.ecRegenMid}
+                    <b>{t.dashPages.ecRegenBold2}</b>
+                    {t.dashPages.ecRegenTail}
                   </div>
                   <button
                     type="button"
@@ -319,14 +329,14 @@ export default function EditChatPage() {
                       shotArmed ? 'bg-red-500/85 text-white hover:bg-red-500' : 'bg-amber-500/20 text-amber-100 hover:bg-amber-500/30'
                     }`}
                   >
-                    {shotRunning !== null ? `正在重生第 ${shotRunning} 镜…`
-                      : shotArmed ? `确认重生 ${plan.regenShots.length} 个镜头(要花钱)` : `重生这 ${plan.regenShots.length} 个镜头`}
+                    {shotRunning !== null ? t.dashPages.ecRegenShotN.replace('{n}', String(shotRunning))
+                      : shotArmed ? t.dashPages.ecConfirmRegen.replace('{n}', String(plan.regenShots.length)) : t.dashPages.ecRegenThese.replace('{n}', String(plan.regenShots.length))}
                   </button>
                   {shotLog.length > 0 && (
                     <div className="mt-2 space-y-0.5">
                       {shotLog.map((l) => (
                         <div key={l.shotNumber} className={l.status === 'fail' ? 'text-red-300' : l.status === 'ok' ? 'text-emerald-300' : ''}>
-                          第 {l.shotNumber} 镜:{l.msg}
+                          {t.dashPages.ecShotLog.replace('{n}', String(l.shotNumber)).replace('{msg}', l.msg)}
                         </div>
                       ))}
                     </div>
@@ -336,28 +346,28 @@ export default function EditChatPage() {
 
               {plan?.paceHint && (
                 <div className="rounded-lg bg-amber-500/8 border border-amber-500/20 px-3 py-2 mb-4 text-[11px] text-amber-200/85 leading-relaxed">
-                  · 「节奏{plan.paceHint === 'fast' ? '快' : '慢'}一点」需整片重跑(recompose 不改节奏),本页不执行。
+                  {t.dashPages.ecPaceHint.replace('{pace}', plan.paceHint === 'fast' ? t.dashPages.paceFast : t.dashPages.paceSlow)}
                 </div>
               )}
 
-              {/* 项目选择 + 执行(仅组合级 recompose 可在本页直接跑) */}
+              {/* Project pick + execute (only composition-level recompose runs here) */}
               {plan?.recompose ? (
                 <div className="space-y-3">
                   <div>
                     <label className="text-[11px] text-[var(--soft)] uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
-                      <FilmSlate className="w-3.5 h-3.5" /> 对哪个项目的成片执行
+                      <FilmSlate className="w-3.5 h-3.5" /> {t.dashPages.ecWhichProject}
                     </label>
                     <select
                       value={projectId}
                       onChange={e => { setProjectId(e.target.value); disarm(); }}
                       className="w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg focus:outline-none focus:border-[#E8C547]/50 text-sm"
                     >
-                      <option value="">— 选择项目 —</option>
+                      <option value="">{t.dashPages.ecSelectProject}</option>
                       {projects.map(p => (
                         <option key={p.id} value={p.id}>{p.title}{p.status ? ` · ${p.status}` : ''}</option>
                       ))}
                     </select>
-                    {projects.length === 0 && <div className="text-[10px] text-[var(--soft)] mt-1 opacity-60">还没有项目 —— 先去创作工坊出一片。</div>}
+                    {projects.length === 0 && <div className="text-[10px] text-[var(--soft)] mt-1 opacity-60">{t.dashPages.ecNoProjects}</div>}
                   </div>
 
                   <button
@@ -368,33 +378,33 @@ export default function EditChatPage() {
                     }`}
                   >
                     {executing
-                      ? (<><Loader2 className="w-4 h-4 animate-spin" /> 重合成中…</>)
+                      ? (<><Loader2 className="w-4 h-4 animate-spin" /> {t.dashPages.recomposing}</>)
                       : cooldown
-                        ? (<><ShieldWarning className="w-4 h-4" weight="bold" /> 确认删改?稍候…</>)
+                        ? (<><ShieldWarning className="w-4 h-4" weight="bold" /> {t.dashPages.ecConfirmWait}</>)
                         : armed
-                          ? (<><ShieldWarning className="w-4 h-4" weight="bold" /> 确认执行(含不可逆操作)</>)
-                          : (<><CheckCircle className="w-4 h-4" weight="bold" /> {plan.destructive ? '执行(将二次确认)' : '确认执行'}</>)}
+                          ? (<><ShieldWarning className="w-4 h-4" weight="bold" /> {t.dashPages.ecConfirmIrreversible}</>)
+                          : (<><CheckCircle className="w-4 h-4" weight="bold" /> {plan.destructive ? t.dashPages.ecExecWillConfirm : t.dashPages.ecConfirmExec}</>)}
                   </button>
                   {armed && !executing && (
                     <div className="text-[11px] text-rose-300/80 text-center">
-                      {cooldown ? '请稍候,确认按钮即将就绪…' : '这条含不可逆操作,再刻意点一次确认;或'}
-                      {!cooldown && <button onClick={disarm} className="underline ml-1 hover:text-rose-200">取消</button>}
+                      {cooldown ? t.dashPages.ecCooldown : t.dashPages.ecArmHint}
+                      {!cooldown && <button onClick={disarm} className="underline ml-1 hover:text-rose-200">{t.common.cancel}</button>}
                     </div>
                   )}
                 </div>
               ) : (
-                <p className="text-[11px] text-[var(--soft)] mt-1 opacity-70">本条指令没有可在此直接执行的组合级编辑(见上方指路)。</p>
+                <p className="text-[11px] text-[var(--soft)] mt-1 opacity-70">{t.dashPages.ecNoRecompose}</p>
               )}
 
-              {/* 执行结果 */}
+              {/* Execute result */}
               {execError && <div className="mt-3 text-[12px] text-rose-300">✕ {execError}</div>}
               {resultVideoUrl && (
                 <div className="mt-4">
-                  <div className="text-[12px] text-emerald-400 mb-2 inline-flex items-center gap-1.5"><CheckCircle className="w-4 h-4" weight="duotone" /> 重合成完成</div>
+                  <div className="text-[12px] text-emerald-400 mb-2 inline-flex items-center gap-1.5"><CheckCircle className="w-4 h-4" weight="duotone" /> {t.dashPages.recomposeDone}</div>
                   <video src={resultVideoUrl} controls className="w-full rounded-xl bg-black/40 max-h-[420px]" />
                   <a href={resultVideoUrl} target="_blank" rel="noopener"
                     className="mt-2 inline-flex items-center gap-1.5 text-xs text-[var(--muted)] hover:text-white">
-                    <Download className="w-3.5 h-3.5" /> 打开 / 下载成片
+                    <Download className="w-3.5 h-3.5" /> {t.dashPages.openDownloadFilm}
                   </a>
                 </div>
               )}
@@ -402,7 +412,7 @@ export default function EditChatPage() {
           )
         ) : (
           <div className="text-center text-[var(--soft)] text-sm opacity-60 py-10">
-            说一句要改什么,或点上面的示例 —— 解析出的意图会以确认卡形式出现在这里。
+            {t.dashPages.ecEmpty}
           </div>
         )}
       </div>

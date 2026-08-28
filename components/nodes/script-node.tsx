@@ -5,8 +5,11 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { PipelineNodeData } from '@/types/agents';
 import { NodeShell } from './node-shell';
 import { FileText, CircleNotch as Loader2, CheckCircle as CheckCircle2, Clock } from '@phosphor-icons/react';
+import { useLocale } from '@/hooks/use-locale';
 
 function ScriptNodeComponent({ data }: NodeProps) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectMisc: Record<string, string> };
   const d = data as unknown as PipelineNodeData;
   const scriptAsset = d.assets?.find(a => a.type === 'script');
   const scriptData = scriptAsset?.data as any;
@@ -20,17 +23,17 @@ function ScriptNodeComponent({ data }: NodeProps) {
         </div>
         <div className="flex-1">
           <div className="text-sm font-semibold text-white flex items-center gap-2">
-            编剧
+            {t.product.writer}
             <StatusIcon status={d.status} />
           </div>
-          <div className="text-[11px] text-gray-400">剧本 · 角色 · 世界观</div>
+          <div className="text-[11px] text-gray-400">{t.projectMisc.scriptWorldSub}</div>
         </div>
         {d.status === 'running' && <span className="text-[10px] text-green-400 font-medium">{d.progress}%</span>}
       </div>
 
       {scriptData?.synopsis && (
         <div className="mb-3">
-          <div className="text-[11px] text-gray-500 mb-1 font-medium">剧本摘要</div>
+          <div className="text-[11px] text-gray-500 mb-1 font-medium">{t.projectMisc.scriptSynopsis}</div>
           <div className="text-xs text-gray-300 leading-relaxed bg-black/20 rounded-lg p-2.5 max-h-[120px] overflow-y-auto custom-scrollbar cursor-default select-text">
             {scriptData.synopsis}
           </div>
@@ -39,7 +42,7 @@ function ScriptNodeComponent({ data }: NodeProps) {
 
       {characters.length > 0 && (
         <div className="mb-3">
-          <div className="text-[11px] text-gray-500 mb-1.5 font-medium">角色列表</div>
+          <div className="text-[11px] text-gray-500 mb-1.5 font-medium">{t.projectMisc.characterList}</div>
           <div className="grid grid-cols-2 gap-1.5">
             {characters.slice(0, 6).map((c) => (
               <div key={c.id} className="bg-black/20 rounded-lg px-2.5 py-1.5">
@@ -53,12 +56,12 @@ function ScriptNodeComponent({ data }: NodeProps) {
 
       {scriptData?.shots?.length > 0 && (
         <div>
-          <div className="text-[11px] text-gray-500 mb-1.5 font-medium">分镜描述</div>
+          <div className="text-[11px] text-gray-500 mb-1.5 font-medium">{t.projectMisc.shotDescriptions}</div>
           <div className="space-y-1 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
             {scriptData.shots.map((shot: any, i: number) => (
               <div key={i} className="bg-black/20 rounded-lg px-2.5 py-2 select-text cursor-default group/shot">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-[#FF6B6B] font-medium shrink-0">镜头 {shot.shotNumber || i + 1}</span>
+                  <span className="text-[10px] text-[#FF6B6B] font-medium shrink-0">{t.product.shotN.replace('{n}', String(shot.shotNumber || i + 1))}</span>
                   {shot.emotion && <span className="text-[9px] text-gray-500">{shot.emotion}</span>}
                 </div>
                 <div className="text-[11px] text-gray-300 mt-0.5 leading-relaxed group-hover/shot:line-clamp-none line-clamp-2 transition-all">

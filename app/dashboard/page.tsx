@@ -13,7 +13,8 @@ import { ContinueCard } from '@/components/dashboard/continue-card';
 import { timeAgoZh } from '@/lib/relative-time';
 
 export default function DashboardPage() {
-  const { t } = useLocale();
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { dashMore: Record<string, string> };
   const [metrics, setMetrics] = useState({ projects: 0, generations: 0, cases: 0, uptime: 0 });
   const [generations, setGenerations] = useState<any[]>([]);
 
@@ -23,18 +24,18 @@ export default function DashboardPage() {
   }, []);
 
   /**
-   * v12.301:最近动态改为**该用户的真实生成记录**。
-   * generations 接口本身按 user_id 过滤,所以这里不会串用户。
-   * 状态色沿用原来的三色语义:成功=绿、进行中=黄、失败=红。
+   * v12.301: recent activity is **this user's real generation records**.
+   * The generations API already filters by user_id, so records do not leak across users.
+   * Status colors keep the original three-way meaning: success=green, in-progress=amber, failed=red.
    */
   const activity = generations.map((g: any, i: number) => {
     const st = String(g?.status || '');
     const ok = st === 'completed' || st === 'success';
     const failed = st === 'failed' || st === 'error';
-    const label = String(g?.style || g?.prompt || '生成任务').slice(0, 18);
+    const label = String(g?.style || g?.prompt || t.dashMore.genTask).slice(0, 18);
     return {
       key: String(g?.id ?? i),
-      text: `${label} · ${failed ? '生成失败' : ok ? '生成完成' : '进行中'}`,
+      text: `${label} · ${failed ? t.dashMore.genFailed : ok ? t.dashMore.genDone : t.profile.inProgress}`,
       time: timeAgoZh(g?.createdAt) || '',
       dot: failed ? 'bg-red-400' : ok ? 'bg-emerald-400' : 'bg-[#E8C547]',
     };
@@ -53,25 +54,25 @@ export default function DashboardPage() {
             <h1 className="text-[2rem] font-extrabold text-white mb-1.5 tracking-tight leading-none">{t.dashboard.title}</h1>
             <p className="text-sm text-[var(--muted)]">{t.dashboard.subtitle}</p>
           </div>
-          {/* v5.0: 语言切换 */}
+          {/* v5.0: locale switcher */}
           <LocaleSwitcher />
         </div>
       </div>
 
-      {/* v10.5.4 留存面:继续创作卡 — 最近项目 + 下一步建议;空项目态不渲染 */}
+      {/* v10.5.4 retention: continue-creating card — latest project + next-step hint; hidden when there are no projects */}
       <ContinueCard />
 
-      {/* v8.3 P4: Asymmetric Bento — 12 列, 打破"三等宽卡片"的 AI 标志布局.
-          create hero 占 7×2 主导左上, 统计卡在右栏不等高堆叠, 内容/活动 7/5 收尾. */}
+      {/* v8.3 P4: Asymmetric Bento — 12 columns, breaks the "three equal cards" AI-default layout.
+          create hero spans 7×2 top-left; stats stack unevenly on the right; content/activity close 7/5. */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 auto-rows-min stagger">
 
-        {/* ① Create hero — 主导卡, 跨 2 行 */}
+        {/* 1. Create hero — lead card, two rows */}
         <Link
           href="/dashboard/create"
           className="group relative overflow-hidden rounded-[20px] p-7 flex flex-col justify-between min-h-[244px] lg:col-span-7 lg:row-span-2
                      border border-[#E8C547]/20 hover:border-[#E8C547]/45 transition-colors duration-300"
         >
-          {/* 暖金径向光晕 + 噪点叠层背景 */}
+          {/* Warm-gold radial glow + noise overlay */}
           <div aria-hidden className="absolute inset-0 -z-10 bg-[radial-gradient(120%_140%_at_15%_0%,rgba(232,197,71,0.16),transparent_55%),radial-gradient(120%_120%_at_100%_100%,rgba(74,126,187,0.10),transparent_50%)]" />
           <div aria-hidden className="absolute -right-10 -top-10 w-56 h-56 rounded-full bg-[#E8C547]/10 blur-3xl group-hover:bg-[#E8C547]/16 transition-colors duration-500" />
           <div className="flex items-center gap-3.5">
@@ -83,7 +84,7 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-2xl lg:text-[1.75rem] font-extrabold text-white tracking-tight leading-tight mb-2 text-balance">{t.dashboard.quickStartTitle}</h2>
             <p className="text-sm text-[var(--muted)] max-w-md leading-relaxed mb-5">{t.dashboard.quickStartSubtitle}</p>
-            {/* nested CTA 岛屿 */}
+            {/* nested CTA island */}
             <span className="cta cta--gold !text-[13px]">
               {t.dashboard.quickStartTitle}
               <span className="cta__island"><ArrowRight size={16} weight="bold" /></span>
@@ -91,7 +92,7 @@ export default function DashboardPage() {
           </div>
         </Link>
 
-        {/* ② 主统计 — projects, 占右栏第 1 行 */}
+        {/* 2. Primary stat — projects, right column row 1 */}
         <div className="lg:col-span-5 rounded-[20px] border border-[#E8C547]/14 bg-gradient-to-br from-[#E8C547]/12 to-transparent p-5 flex flex-col justify-between min-h-[114px]
                         hover:-translate-y-0.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
           <div className="flex items-center justify-between">
@@ -104,7 +105,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ③ 次级统计 2-up — generations + cases, 占右栏第 2 行 */}
+        {/* 3. Secondary stats 2-up — generations + cases, right column row 2 */}
         <div className="lg:col-span-5 grid grid-cols-2 gap-4">
           <div className="rounded-[20px] border border-pink-500/12 bg-gradient-to-br from-pink-500/12 to-transparent p-5 flex flex-col justify-between
                           hover:-translate-y-0.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
@@ -120,7 +121,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ④ Recent Generations — col-span-7, 真 Double-Bezel */}
+        {/* 4. Recent Generations — col-span-7, true Double-Bezel */}
         <div className="lg:col-span-7">
           <BezelCard>
             <div className="flex items-center justify-between mb-5">
@@ -163,7 +164,7 @@ export default function DashboardPage() {
           </BezelCard>
         </div>
 
-        {/* ⑤ Activity & Status — col-span-5 收尾右栏 */}
+        {/* 5. Activity & Status — col-span-5 closes the right column */}
         <div className="lg:col-span-5 space-y-4">
           <GlassCard>
             <div className="flex items-center gap-2 mb-4">
@@ -172,9 +173,9 @@ export default function DashboardPage() {
             </div>
             <div className="space-y-3">
               {[
-                { label: 'AI 引擎', status: 'Claude 4 Opus + Veo 3.1', color: 'emerald' },
-                { label: '图像生成', status: 'Midjourney v6.1 / Minimax', color: 'rose' },
-                { label: '视频生成', status: 'Google Veo 3.1', color: 'pink' },
+                { label: t.dashMore.aiEngine, status: 'Claude 4 Opus + Veo 3.1', color: 'emerald' },
+                { label: t.dashMore.imageGen, status: 'Midjourney v6.1 / Minimax', color: 'rose' },
+                { label: t.product.videoGen, status: 'Google Veo 3.1', color: 'pink' },
               ].map((s) => (
                 <div key={s.label} className="flex items-center justify-between py-2 border-b border-[var(--border)] last:border-0">
                   <span className="text-xs text-[var(--muted)]">{s.label}</span>
@@ -194,10 +195,10 @@ export default function DashboardPage() {
             </div>
             <div className="space-y-2">
               {/*
-                v12.301:此前这里是**三条写死的假事件**(「剧本智能拆解完成 5 分钟前」等)——
-                所有用户、包括刚注册还没跑过任何任务的新用户,看到的都是同一份,
-                严重破坏产品可信度。现改为读该用户真实的生成记录(generations 按 user_id 过滤)。
-                没有记录时给诚实空态,而不是编三条。
+                v12.301: this used to be **three hardcoded fake events** ("script split done 5 minutes ago", etc.) —
+                every user, including brand-new accounts with zero jobs, saw the same copy,
+                which wrecked product trust. Now it reads this user's real generation records (filtered by user_id).
+                Empty state is honest instead of inventing three rows.
               */}
               {activity.length > 0 ? activity.map((a) => (
                 <div key={a.key} className="flex items-start gap-3 py-2">
@@ -209,7 +210,7 @@ export default function DashboardPage() {
                 </div>
               )) : (
                 <div className="py-4 text-center text-[12px] text-[var(--soft)]">
-                  还没有动态 —— 创建第一个项目后,这里会显示你的真实进度
+                  {t.dashMore.noActivity}
                 </div>
               )}
             </div>

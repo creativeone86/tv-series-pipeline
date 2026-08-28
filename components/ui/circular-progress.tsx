@@ -1,28 +1,28 @@
 'use client';
 
 /**
- * v5.0.2 — 环形进度条 (SVG ring).
+ * v5.0.2 — circular progress (SVG ring).
  *
- * 可控 value (0-100) 的环形进度. 用于长任务 (I2V 生成等) 的可视反馈.
- * 纯展示, 不含计时逻辑 — 进度由调用方喂 (真实 or 时间估算).
+ * Controllable value (0-100). Visual feedback for long tasks (I2V generation, etc.).
+ * Display only — no timer. The caller feeds progress (real or time-estimated).
  */
 
 export interface CircularProgressProps {
   /** 0-100. */
   value: number;
-  /** 直径 px. */
+  /** Diameter in px. */
   size?: number;
-  /** 环宽 px. */
+  /** Ring width in px. */
   stroke?: number;
-  /** 中心主文案 (默认显示百分比). */
+  /** Center primary label (defaults to the percentage). */
   label?: string;
-  /** 中心副文案 (小字). */
+  /** Center secondary label (small type). */
   sublabel?: string;
-  /** 进度色. */
+  /** Progress color. */
   color?: string;
-  /** 轨道色. */
+  /** Track color. */
   trackColor?: string;
-  /** 是否给进度环加轻微脉冲动画 (任务进行中). */
+  /** Soft pulse on the ring while a task is running. */
   pulse?: boolean;
 }
 

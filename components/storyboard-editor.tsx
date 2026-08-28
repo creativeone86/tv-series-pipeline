@@ -3,6 +3,8 @@
 import { useState, useCallback } from 'react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { ZoomableImage } from '@/components/ui/image-lightbox';
+import { useLocale } from '@/hooks/use-locale';
+import type { Translations } from '@/lib/i18n';
 
 export interface StoryboardShot {
   id: string;
@@ -19,7 +21,40 @@ interface Props {
   onChange: (shots: StoryboardShot[]) => void;
 }
 
+const CAM_KEYS = ['closeup', 'mediumClose', 'medium', 'full', 'wide', 'high', 'low', 'follow'] as const;
+
+const CAM_LEGACY: Record<string, string> = {
+  '\u7279\u5199': 'closeup',
+  '\u8fd1\u666f': 'mediumClose',
+  '\u4e2d\u666f': 'medium',
+  '\u5168\u666f': 'full',
+  '\u8fdc\u666f': 'wide',
+  '\u4fef\u62cd': 'high',
+  '\u4ef0\u62cd': 'low',
+  '\u8ddf\u62cd': 'follow',
+};
+
+function camKey(raw: string): string {
+  return CAM_LEGACY[raw] || raw;
+}
+
+function camLabel(raw: string, t: Translations): string {
+  const key = camKey(raw);
+  const map: Record<string, string> = {
+    closeup: t.sharedUi.camCloseup,
+    mediumClose: t.sharedUi.camMediumClose,
+    medium: t.sharedUi.camMedium,
+    full: t.sharedUi.camFull,
+    wide: t.sharedUi.camWide,
+    high: t.sharedUi.camHigh,
+    low: t.sharedUi.camLow,
+    follow: t.sharedUi.camFollow,
+  };
+  return map[key] || raw;
+}
+
 export function StoryboardEditor({ shots, onChange }: Props) {
+  const { t } = useLocale();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
 
@@ -28,7 +63,7 @@ export function StoryboardEditor({ shots, onChange }: Props) {
     onChange([...shots, {
       id: `shot-${Date.now()}`, shotNumber: num,
       description: '', dialogue: '', duration: 5,
-      cameraAngle: '中景',
+      cameraAngle: 'medium',
     }]);
   };
 
@@ -65,15 +100,13 @@ export function StoryboardEditor({ shots, onChange }: Props) {
     setDragId(null);
   }, [dragId, shots, onChange]);
 
-  const cameraOptions = ['特写', '近景', '中景', '全景', '远景', '俯拍', '仰拍', '跟拍'];
-
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
-        <h3 className="font-semibold">分镜编辑器</h3>
+        <h3 className="font-semibold">{t.sharedUi.storyboardEditor}</h3>
         <div className="flex gap-2">
-          <span className="text-xs text-[var(--soft)]">{shots.length} 个镜头 · 总时长 {shots.reduce((a, s) => a + s.duration, 0)}s</span>
-          <button onClick={addShot} className="btn-primary px-3 py-1.5 rounded-lg text-xs">+ 添加镜头</button>
+          <span className="text-xs text-[var(--soft)]">{t.sharedUi.shotMeta.replace('{n}', String(shots.length)).replace('{sec}', String(shots.reduce((a, s) => a + s.duration, 0)))}</span>
+          <button onClick={addShot} className="btn-primary px-3 py-1.5 rounded-lg text-xs">+ {t.sharedUi.addShot}</button>
         </div>
       </div>
 
@@ -102,12 +135,12 @@ export function StoryboardEditor({ shots, onChange }: Props) {
                   <ZoomableImage
                     src={shot.imageUrl}
                     alt={`Shot ${shot.shotNumber}`}
-                    title={`镜头 ${shot.shotNumber}${shot.description ? ' — ' + shot.description.slice(0, 60) : ''}`}
+                    title={t.product.shotN.replace('{n}', String(shot.shotNumber)) + (shot.description ? ' — ' + shot.description.slice(0, 60) : '')}
                     className="w-[100px] h-[70px] rounded-lg bg-[rgba(255,255,255,0.04)] border border-[var(--border)] shrink-0 overflow-hidden"
                   />
                 ) : (
                   <div className="w-[100px] h-[70px] rounded-lg bg-[rgba(255,255,255,0.04)] border border-[var(--border)] shrink-0 grid place-items-center text-[var(--soft)] text-xs overflow-hidden">
-                    <span>预览</span>
+                    <span>{t.sharedUi.preview}</span>
                   </div>
                 )}
 
@@ -118,38 +151,38 @@ export function StoryboardEditor({ shots, onChange }: Props) {
                       <textarea
                         value={shot.description} rows={2}
                         onChange={(e) => updateShot(shot.id, { description: e.target.value })}
-                        placeholder="镜头描述..."
+                        placeholder={t.sharedUi.shotDescPh}
                         className="bg-[rgba(255,255,255,0.06)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs resize-none"
                       />
                       <input
                         value={shot.dialogue}
                         onChange={(e) => updateShot(shot.id, { dialogue: e.target.value })}
-                        placeholder="对白..."
+                        placeholder={t.sharedUi.dialoguePh}
                         className="bg-[rgba(255,255,255,0.06)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs"
                       />
                       <div className="flex gap-2 items-center">
                         <select
-                          value={shot.cameraAngle}
+                          value={camKey(shot.cameraAngle)}
                           onChange={(e) => updateShot(shot.id, { cameraAngle: e.target.value })}
                           className="bg-[rgba(255,255,255,0.06)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs"
                         >
-                          {cameraOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+                          {CAM_KEYS.map((o) => <option key={o} value={o}>{camLabel(o, t)}</option>)}
                         </select>
                         <input
                           type="number" min={1} max={60} value={shot.duration}
                           onChange={(e) => updateShot(shot.id, { duration: Number(e.target.value) || 5 })}
                           className="bg-[rgba(255,255,255,0.06)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs w-16"
                         />
-                        <span className="text-[10px] text-[var(--soft)]">秒</span>
+                        <span className="text-[10px] text-[var(--soft)]">{t.sharedUi.seconds}</span>
                       </div>
-                      <button onClick={() => setEditingId(null)} className="btn-primary px-3 py-1 rounded-lg text-xs w-fit">完成</button>
+                      <button onClick={() => setEditingId(null)} className="btn-primary px-3 py-1 rounded-lg text-xs w-fit">{t.product.statusDone}</button>
                     </div>
                   ) : (
                     <div role="button" tabIndex={0} onClick={() => setEditingId(shot.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditingId(shot.id); } }} className="cursor-pointer">
-                      <div className="text-sm line-clamp-2">{shot.description || <span className="text-[var(--soft)]">点击编辑镜头描述...</span>}</div>
+                      <div className="text-sm line-clamp-2">{shot.description || <span className="text-[var(--soft)]">{t.sharedUi.clickEditShot}</span>}</div>
                       {shot.dialogue && <div className="text-xs text-[var(--accent)] mt-1 italic">「{shot.dialogue}」</div>}
                       <div className="flex gap-2 mt-1.5">
-                        <span className="px-2 py-0.5 rounded-full bg-[rgba(255,255,255,0.08)] text-[10px] text-[var(--soft)]">{shot.cameraAngle}</span>
+                        <span className="px-2 py-0.5 rounded-full bg-[rgba(255,255,255,0.08)] text-[10px] text-[var(--soft)]">{camLabel(shot.cameraAngle, t)}</span>
                         <span className="px-2 py-0.5 rounded-full bg-[rgba(255,255,255,0.08)] text-[10px] text-[var(--soft)]">{shot.duration}s</span>
                       </div>
                     </div>
@@ -158,8 +191,8 @@ export function StoryboardEditor({ shots, onChange }: Props) {
 
                 {/* Actions */}
                 <div className="flex flex-col gap-1 shrink-0">
-                  <button onClick={() => duplicateShot(shot.id)} className="px-1.5 py-1 rounded bg-[rgba(255,255,255,0.08)] text-[10px] hover:bg-[rgba(255,255,255,0.12)]" title="复制">⧉</button>
-                  <button onClick={() => removeShot(shot.id)} className="px-1.5 py-1 rounded bg-[rgba(255,88,88,0.12)] text-[10px] text-red-400 hover:bg-[rgba(255,88,88,0.2)]" title="删除">✕</button>
+                  <button onClick={() => duplicateShot(shot.id)} className="px-1.5 py-1 rounded bg-[rgba(255,255,255,0.08)] text-[10px] hover:bg-[rgba(255,255,255,0.12)]" title={t.sharedUi.duplicate}>⧉</button>
+                  <button onClick={() => removeShot(shot.id)} className="px-1.5 py-1 rounded bg-[rgba(255,88,88,0.12)] text-[10px] text-red-400 hover:bg-[rgba(255,88,88,0.2)]" title={t.common.delete}>✕</button>
                 </div>
               </div>
             </GlassCard>
@@ -168,7 +201,7 @@ export function StoryboardEditor({ shots, onChange }: Props) {
 
         {shots.length === 0 && (
           <div className="text-center py-8 text-[var(--soft)] text-sm border border-dashed border-[var(--border)] rounded-xl">
-            还没有分镜，点击上方按钮添加或通过 AI 自动生成
+            {t.sharedUi.noShotsYet}
           </div>
         )}
       </div>

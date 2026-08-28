@@ -1,12 +1,14 @@
 'use client';
 
 import { ReactNode } from 'react';
+import { useLocale } from '@/hooks/use-locale';
 
 interface CanvasProps {
   children: ReactNode;
 }
 
 export default function Canvas({ children }: CanvasProps) {
+  const { t } = useLocale();
   return (
     <div className="flex-1 overflow-auto p-6">
       <div className="max-w-7xl mx-auto">
@@ -16,17 +18,17 @@ export default function Canvas({ children }: CanvasProps) {
             <div className="flex flex-col items-center justify-center h-full text-center">
               <div className="text-6xl mb-4">🎨</div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                开始创作
+                {t.nav.create}
               </h2>
               <p className="text-gray-600 dark:text-gray-400 mb-6">
-                从左侧工具栏选择一个工具开始创作你的漫剧
+                {t.sharedUi.canvasHint}
               </p>
               <div className="flex gap-3">
                 <button className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium">
-                  新建项目
+                  {t.nav.newProject}
                 </button>
                 <button className="px-6 py-3 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium">
-                  打开项目
+                  {t.sharedUi.openProject}
                 </button>
               </div>
             </div>

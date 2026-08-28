@@ -1,10 +1,11 @@
 'use client';
 
 /**
- * v6.1.2 — 多模态参考货架. 让用户在创作前挂 图/音/视频 参考 (文件或 URL).
- * v9.4.6 (对标可灵 Elements): 升级成「多参元素货架」—— 每个参考可标结构化元素角色
- * (角色/风格/场景/道具/运镜/音色), 经 lib/reference-elements 路由进 cref/sref/DNA 一致性管线,
- * 并给「元素完整度」引导。纯逻辑在 lib/multimodal-ref + lib/reference-elements (已单测).
+ * v6.1.2 — multimodal reference shelf. Attach image / audio / video refs (file or URL)
+ * before creating. v9.4.6 (Kling Elements-style): each ref can take a structured
+ * element role (character / style / scene / prop / motion / voice), routed through
+ * lib/reference-elements into the cref/sref/DNA pipeline, plus an "element completeness"
+ * guide. Pure logic in lib/multimodal-ref + lib/reference-elements (unit-tested).
  */
 
 import { useRef, useState } from 'react';
@@ -15,13 +16,26 @@ import {
   type ReferenceAsset, type RefKind,
 } from '@/lib/multimodal-ref';
 import {
-  ELEMENT_ROLE_LABEL, inferElementRole, elementCompleteness, clampElementWeight,
+  inferElementRole, elementCompleteness, clampElementWeight,
   ELEMENT_WEIGHT_MIN, ELEMENT_WEIGHT_MAX, ELEMENT_WEIGHT_DEFAULT,
   type ElementRole, type ReferenceElement,
 } from '@/lib/reference-elements';
+import { useLocale } from '@/hooks/use-locale';
+import type { Translations } from '@/lib/i18n';
+
+function elementRoleLabel(role: ElementRole, t: Translations): string {
+  return {
+    character: t.product.tabCharacters,
+    style: t.sharedUi.styleRole,
+    scene: t.product.tabScenes,
+    prop: t.sharedUi.propRole,
+    motion: t.sharedUi.motionRole,
+    voice: t.sharedUi.voiceRole,
+  }[role];
+}
 
 const KIND_ICON: Record<RefKind, typeof ImageIcon> = { image: ImageIcon, audio: Music, video: Video };
-const ELEMENT_ROLES = Object.keys(ELEMENT_ROLE_LABEL) as ElementRole[];
+const ELEMENT_ROLES: ElementRole[] = ['character', 'style', 'scene', 'prop', 'motion', 'voice'];
 
 export function MultimodalRefShelf({
   refs,
@@ -30,6 +44,7 @@ export function MultimodalRefShelf({
   refs: ReferenceAsset[];
   onChange: (refs: ReferenceAsset[]) => void;
 }) {
+  const { t } = useLocale();
   const fileRef = useRef<HTMLInputElement>(null);
   const [urlInput, setUrlInput] = useState('');
   const [err, setErr] = useState('');
@@ -45,7 +60,7 @@ export function MultimodalRefShelf({
   const setRole = (id: string, role: ElementRole) =>
     apply(elements.map((r) => (r.id === id ? { ...r, elementRole: role } : r)));
 
-  // v9.4.9: 角色元素强度(cref cw)
+  // v9.4.9: character element strength (cref cw)
   const setWeight = (id: string, weight: number) =>
     apply(elements.map((r) => (r.id === id ? { ...r, weight: clampElementWeight(weight) } : r)));
 
@@ -55,8 +70,8 @@ export function MultimodalRefShelf({
     const additions: ReferenceAsset[] = [];
     for (const f of Array.from(files)) {
       const kind = classifyRef({ mime: f.type, name: f.name });
-      if (!kind) { setErr(`不支持的文件类型:${f.name}`); continue; }
-      if (f.size > 25 * 1024 * 1024) { setErr(`${f.name} 超过 25MB,请用 URL 引用`); continue; }
+      if (!kind) { setErr(t.sharedUi.unsupportedFile.replace('{name}', f.name)); continue; }
+      if (f.size > 25 * 1024 * 1024) { setErr(t.sharedUi.fileOver25.replace('{name}', f.name)); continue; }
       try {
         const dataUrl = await new Promise<string>((res, rej) => {
           const r = new FileReader();
@@ -65,7 +80,7 @@ export function MultimodalRefShelf({
           r.readAsDataURL(f);
         });
         additions.push({ id: nanoid(), kind, url: dataUrl, name: f.name });
-      } catch { setErr(`读取失败:${f.name}`); }
+      } catch { setErr(t.sharedUi.readFailed.replace('{name}', f.name)); }
     }
     if (additions.length) apply([...refs, ...additions]);
     if (fileRef.current) fileRef.current.value = '';
@@ -75,7 +90,7 @@ export function MultimodalRefShelf({
     const url = urlInput.trim();
     if (!url) return;
     const kind = classifyRef({ url });
-    if (!kind) { setErr('无法识别该 URL 的媒体类型(需 图 / 音 / 视频)'); return; }
+    if (!kind) { setErr(t.sharedUi.badMediaUrl); return; }
     apply([...refs, { id: nanoid(), kind, url, name: url.split('/').pop()?.split('?')[0] || url }]);
     setUrlInput('');
   };
@@ -92,10 +107,10 @@ export function MultimodalRefShelf({
       <div className="flex items-center justify-between mb-2">
         <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
           <Paperclip className="w-4 h-4 text-[#E8C547]" />
-          多参元素(可选)
-          <span className="px-2 py-0.5 bg-[#E8C547]/10 text-[#E8C547] text-xs rounded-full">按角色锁一致性</span>
+          {t.sharedUi.multiRefOptional}
+          <span className="px-2 py-0.5 bg-[#E8C547]/10 text-[#E8C547] text-xs rounded-full">{t.sharedUi.lockByRole}</span>
         </label>
-        <span className="text-xs text-gray-400">图 {MAX_PER_KIND.image} · 音 {MAX_PER_KIND.audio} · 视频 {MAX_PER_KIND.video}</span>
+        <span className="text-xs text-gray-400">{t.sharedUi.refLimits.replace('{img}', String(MAX_PER_KIND.image)).replace('{aud}', String(MAX_PER_KIND.audio)).replace('{vid}', String(MAX_PER_KIND.video))}</span>
       </div>
 
       <div className="flex gap-2">
@@ -104,7 +119,7 @@ export function MultimodalRefShelf({
           onClick={() => fileRef.current?.click()}
           className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-gray-300 hover:bg-white/10 transition-all inline-flex items-center gap-1.5"
         >
-          <Plus className="w-4 h-4" /> 上传文件
+          <Plus className="w-4 h-4" /> {t.sharedUi.uploadFile}
         </button>
         <input ref={fileRef} type="file" accept={ACCEPT_ATTR} multiple className="hidden" onChange={(e) => addFromFiles(e.target.files)} />
         <input
@@ -112,7 +127,7 @@ export function MultimodalRefShelf({
           value={urlInput}
           onChange={(e) => setUrlInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addFromUrl())}
-          placeholder="或粘贴 图/音/视频 链接后回车"
+          placeholder={t.sharedUi.pasteMediaUrl}
           className="flex-1 bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-gray-600 focus:outline-none focus:border-[#E8C547]/40 transition-all"
         />
       </div>
@@ -137,24 +152,24 @@ export function MultimodalRefShelf({
                   type="button"
                   onClick={() => remove(r.id)}
                   className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-500/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                  aria-label="移除参考"
+                  aria-label={t.sharedUi.removeRef}
                 >
                   <X className="w-3 h-3" />
                 </button>
-                {/* v9.4.6: 元素角色 — 决定该参考路由进 cref/sref/DNA 的哪一路 */}
+                {/* v9.4.6: element role — which cref/sref/DNA path this ref routes into */}
                 <select
                   value={role}
                   onChange={(e) => setRole(r.id, e.target.value as ElementRole)}
-                  title={`元素角色 · ${r.name}`}
+                  title={`${t.sharedUi.elementRole} · ${r.name}`}
                   className="mt-1 w-20 bg-black/60 border border-white/10 rounded text-[10px] text-gray-200 px-1 py-0.5 focus:outline-none focus:border-[#E8C547]/40 cursor-pointer"
                 >
                   {ELEMENT_ROLES.map((er) => (
-                    <option key={er} value={er}>{ELEMENT_ROLE_LABEL[er]}</option>
+                    <option key={er} value={er}>{elementRoleLabel(er, t)}</option>
                   ))}
                 </select>
-                {/* v9.4.9: 角色元素强度 (cref cw, 越大越锁脸) */}
+                {/* v9.4.9: character strength (cref cw; higher = tighter face lock) */}
                 {role === 'character' && (
-                  <div className="mt-1 flex items-center gap-1" title="角色强度 cw(25-125,越大越锁脸)">
+                  <div className="mt-1 flex items-center gap-1" title={t.sharedUi.cwTitle}>
                     <span className="text-[9px] text-gray-500 shrink-0">cw</span>
                     <input
                       type="range" min={ELEMENT_WEIGHT_MIN} max={ELEMENT_WEIGHT_MAX} step={5}
@@ -171,11 +186,11 @@ export function MultimodalRefShelf({
         </div>
       )}
 
-      {/* v9.4.6: 元素完整度引导 (可灵式「加元素」, 落到我们的 DNA/cref/sref 能力) */}
+      {/* v9.4.6: element completeness guide (Kling-style "add elements") */}
       {completeness && (
         <div className="mt-2.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[11px] text-gray-400">元素完整度</span>
+            <span className="text-[11px] text-gray-400">{t.sharedUi.elementComplete}</span>
             <span className="text-[11px] font-medium text-gray-300 tabular-nums">{completeness.score}%</span>
           </div>
           <div className="h-1 rounded-full bg-white/10 overflow-hidden">

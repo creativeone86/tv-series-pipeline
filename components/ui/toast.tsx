@@ -9,7 +9,7 @@ export interface ToastProps {
   description?: string
   type?: "success" | "error" | "warning" | "info"
   duration?: number
-  /** 可选行动按钮,例如 "重试此步" */
+  /** Optional action button, e.g. "Retry this step" */
   action?: { label: string; onClick: () => void }
   onClose?: () => void
 }

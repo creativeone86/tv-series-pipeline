@@ -3,38 +3,42 @@
 /**
  * CharacterLockSection (v2.12 Phase 1)
  *
- * 创作工坊前置的"角色锁脸"区块 —— 让用户在创建项目前就能上传 1-3 个
- * 主要角色的脸照,确保全片这些角色长相统一。
+ * Pre-create "cameo lock" block — upload 1–3 lead faces before the project
+ * starts so those faces stay consistent across the film.
  *
- * 单卡片字段:
- *   - 名称 (text)             — 例如"李长安"
- *   - 定位 (preset)           — 主角 / 对手 / 配角 / 客串 — 决定 cw
- *   - 头像 (file or URL)      — 本地上传 OR 直接贴外链
+ * Per-card fields:
+ *   - name (text)             — e.g. "Li Changan"
+ *   - role (preset)           — lead / antagonist / supporting / cameo — drives cw
+ *   - avatar (file or URL)    — local upload or paste an external URL
  *
- * Phase 1 行为说明:
- *   仅持久化数据;编排器只把 lockedCharacters[0] 拿去当全片 cameoFaceUrl
- *   (兜底现有单角色锁脸链路)。Phase 2 会做 per-shot 角色路由,根据
- *   Writer 标的角色名匹配对应的 cref。
+ * Phase 1 behavior:
+ *   Persist only; the orchestrator uses lockedCharacters[0] as the film-wide
+ *   cameoFaceUrl (fallback for the existing single-character lock path).
+ *   Phase 2 will route per-shot cref by matching Writer-tagged character names.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { Upload, Link as LinkIcon, X, CircleNotch as Loader2, UserCircle as UserCircle2, Sparkle as Sparkles } from '@phosphor-icons/react';
 import { useToast } from '@/components/ui/toast-provider';
+import { useLocale } from '@/hooks/use-locale';
 import type { CharacterTraits } from '@/lib/character-traits';
 
+/** Sentinel used by lib/character-traits when a dimension is unspecified. */
+const TRAIT_UNSPECIFIED = '\u672a\u660e\u793a';
+
 export interface LockedCharacter {
-  /** 角色名 — 必填(空字符串视为该槽位未启用) */
+  /** Character name — required (empty string means the slot is unused) */
   name: string;
-  /** 定位标签 — 决定 cw */
+  /** Role tag — drives cw */
   role: 'lead' | 'antagonist' | 'supporting' | 'cameo';
-  /** Midjourney --cw 值, 由 role 推导 */
+  /** Midjourney --cw, derived from role */
   cw: number;
-  /** persistAsset 后的稳定 URL */
+  /** Stable URL after persistAsset */
   imageUrl: string;
   /**
-   * v2.12 Sprint A.2: 上传脸后自动调 /api/character-traits/from-face 反向抽到的 6-8 维档案。
-   * confident=false 时前端给提示让用户检查;数据透传给 create-stream → orchestrator,
-   * 编排器拼 prompt 时把这些维度合进 Character Bible,提升角色识别度与一致性。
+   * v2.12 Sprint A.2: 6–8 dim dossier auto-extracted via /api/character-traits/from-face.
+   * When confident=false, prompt the user to review. Passed through create-stream →
+   * orchestrator and merged into the Character Bible for recognition / consistency.
    */
   traits?: CharacterTraits;
 }
@@ -48,21 +52,20 @@ const MAX_SLOTS = 3;
 
 const ROLE_PRESETS: Array<{
   id: LockedCharacter['role'];
-  label: string;
   cw: number;
-  hint: string;
 }> = [
-  { id: 'lead',        label: '主角',  cw: 125, hint: '锁脸最强,出现在大多数镜头' },
-  { id: 'antagonist',  label: '对手',  cw: 125, hint: '与主角对位的关键角色' },
-  { id: 'supporting',  label: '配角',  cw: 100, hint: '次要角色,出现频率中等' },
-  { id: 'cameo',       label: '客串',  cw:  80, hint: '只在 1-2 个镜头里出现' },
+  { id: 'lead',        cw: 125 },
+  { id: 'antagonist',  cw: 125 },
+  { id: 'supporting',  cw: 100 },
+  { id: 'cameo',       cw:  80 },
 ];
 
 const DEFAULT_SLOT: LockedCharacter = { name: '', role: 'lead', cw: 125, imageUrl: '' };
 
 /**
- * v12.147(Agent Memory 深化):从角色库挑的角色填进第一个空槽(name 和 imageUrl 都空才算空)。
- * 无空槽 → null(调用方提示先清一个)。纯函数便于单测。
+ * v12.147 (Agent Memory): fill the first empty slot (both name and imageUrl blank)
+ * from a library pick. No empty slot → null (caller asks the user to clear one).
+ * Pure function so it is easy to unit-test.
  */
 export function fillFirstEmptySlot(
   slots: LockedCharacter[],
@@ -76,30 +79,32 @@ export function fillFirstEmptySlot(
 }
 
 export function CharacterLockSection({ value, onChange }: Props) {
-  // 始终内部维持 3 个槽位;onChange 时过滤掉空的(name 或 imageUrl 缺失)
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { workshopCreate: Record<string, string> };
+  // Always keep 3 slots internally; onChange filters out empty ones (missing name or imageUrl)
   const [slots, setSlots] = useState<LockedCharacter[]>(() => {
     const padded = [...value];
     while (padded.length < MAX_SLOTS) padded.push({ ...DEFAULT_SLOT });
     return padded.slice(0, MAX_SLOTS);
   });
 
-  // 当外部 value 变化时同步(例如 reset 后)
+  // Sync when the external value changes (e.g. after reset)
   useEffect(() => {
     const padded = [...value];
     while (padded.length < MAX_SLOTS) padded.push({ ...DEFAULT_SLOT });
     setSlots(padded.slice(0, MAX_SLOTS));
-  }, [value.length]); // 只看长度避免循环
+  }, [value.length]); // length only, to avoid a loop
 
   const updateSlot = (idx: number, patch: Partial<LockedCharacter>) => {
     setSlots(prev => {
       const next = [...prev];
       next[idx] = { ...next[idx], ...patch };
-      // role 变了 → cw 跟着变(除非用户已手动覆盖,Phase 1 不暴露手动 cw)
+      // role change → cw follows (Phase 1 does not expose manual cw)
       if (patch.role) {
         const preset = ROLE_PRESETS.find(p => p.id === patch.role);
         if (preset) next[idx].cw = preset.cw;
       }
-      // 通知父组件
+      // Notify parent
       onChange(next.filter(s => s.name.trim() && s.imageUrl));
       return next;
     });
@@ -109,7 +114,7 @@ export function CharacterLockSection({ value, onChange }: Props) {
     updateSlot(idx, { name: '', imageUrl: '' });
   };
 
-  // v12.147:从角色库带出(global_assets 跨项目记忆)—— 首次展开才拉取,零成本默认收起
+  // v12.147: pull from the character library (global_assets). Fetch on first expand; collapsed by default.
   const [libOpen, setLibOpen] = useState(false);
   const [libAssets, setLibAssets] = useState<Array<{ id: string; name: string; thumbnail: string; metadata?: any }> | null>(null);
   const [libHint, setLibHint] = useState('');
@@ -125,7 +130,7 @@ export function CharacterLockSection({ value, onChange }: Props) {
   };
   const pickFromLibrary = (a: { id: string; name: string; thumbnail: string; metadata?: any }) => {
     const filled = fillFirstEmptySlot(slots, { name: a.name, imageUrl: a.thumbnail, traits: a.metadata?.traits });
-    if (!filled) { setLibHint('3 个槽位已满,先清空一个再带出'); return; }
+    if (!filled) { setLibHint(t.workshopCreate.slotsFull); return; }
     setLibHint('');
     setSlots(filled.next);
     onChange(filled.next.filter(s => s.name.trim() && s.imageUrl));
@@ -136,18 +141,18 @@ export function CharacterLockSection({ value, onChange }: Props) {
       <div className="flex items-baseline justify-between">
         <div className="flex items-center gap-2">
           <UserCircle2 className="w-3.5 h-3.5 text-[#E8C547] cinema-page:text-[var(--cinema-amber)]" />
-          {/* 同时兼容旧/新主题: cinema-page 内显示 mono eyebrow, 否则显示原 h3 */}
-          <span className="cinema-eyebrow tracking-widest hidden [.cinema-page_&]:inline">CAMEO LOCK · 角色锁脸</span>
+          {/* cinema-page: mono eyebrow; otherwise the original h3 */}
+          <span className="cinema-eyebrow tracking-widest hidden [.cinema-page_&]:inline">{t.workshopCreate.cameoLockTitle}</span>
           <h3 className="text-sm font-semibold [.cinema-page_&]:hidden">
-            角色锁脸 <span className="text-xs text-gray-400">(可选 · 最多 3 人)</span>
+            {t.workshopCreate.cameoLockHeading} <span className="text-xs text-gray-400">{t.workshopCreate.cameoLockOptional}</span>
           </h3>
         </div>
         <span className="text-[11px] text-gray-400 [.cinema-page_&]:cinema-mono [.cinema-page_&]:tracking-wider">
-          <span className="[.cinema-page_&]:hidden">🔒 上传后,该角色在全片所有镜头里脸都会锁定</span>
-          <span className="hidden [.cinema-page_&]:inline">UP TO 3 · 全片锁脸</span>
+          <span className="[.cinema-page_&]:hidden">🔒 {t.workshopCreate.cameoLockHint}</span>
+          <span className="hidden [.cinema-page_&]:inline">{t.workshopCreate.cameoLockHintShort}</span>
         </span>
       </div>
-      {/* v12.147:跨项目角色记忆 —— 一键把历史项目的角色带进锁脸槽 */}
+      {/* v12.147: cross-project character memory — one tap to fill a lock slot */}
       <div>
         <button
           type="button"
@@ -155,17 +160,17 @@ export function CharacterLockSection({ value, onChange }: Props) {
           className="text-[11px] text-cyan-300/80 hover:text-cyan-200 transition-colors cinema-mono"
           data-testid="char-library-toggle"
         >
-          📚 从角色库带出{libOpen ? ' ▲' : ' ▼'}
+          📚 {t.workshopCreate.pickFromLibrary}{libOpen ? ' ▲' : ' ▼'}
         </button>
         {libOpen && (
           <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
             {libAssets === null ? (
-              <span className="text-[10px] text-gray-500">加载角色库…</span>
+              <span className="text-[10px] text-gray-500">{t.workshopCreate.loadingLibrary}</span>
             ) : libAssets.length === 0 ? (
-              <span className="text-[10px] text-gray-500">角色库还是空的 —— 在「角色工坊」里保存角色,或完片后手动入库,下次这里一键带出</span>
+              <span className="text-[10px] text-gray-500">{t.workshopCreate.libraryEmpty}</span>
             ) : (
               libAssets.map((a) => (
-                <button key={a.id} type="button" onClick={() => pickFromLibrary(a)} title={`带出「${a.name}」`} className="shrink-0 text-center group">
+                <button key={a.id} type="button" onClick={() => pickFromLibrary(a)} title={t.workshopCreate.pickNamed.replace('{name}', a.name)} className="shrink-0 text-center group">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={a.thumbnail}
@@ -206,6 +211,8 @@ interface CardProps {
 }
 
 function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { workshopCreate: Record<string, string> };
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -213,7 +220,14 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
   const [urlDraft, setUrlDraft] = useState('');
   const { showToast } = useToast();
 
-  // v2.12 Sprint A.3: Bible 跨项目复用查询(debounced)
+  const roleLabel = (id: LockedCharacter['role']) => {
+    if (id === 'lead') return t.workshopCreate.roleLead;
+    if (id === 'antagonist') return t.workshopCreate.roleAntagonist;
+    if (id === 'supporting') return t.workshopCreate.roleSupporting;
+    return t.workshopCreate.roleCameo;
+  };
+
+  // v2.12 Sprint A.3: cross-project Bible lookup (debounced)
   const [bibleHit, setBibleHit] = useState<{
     bible: {
       role: LockedCharacter['role'];
@@ -225,14 +239,14 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
     usedInProjectsCount: number;
   } | null>(null);
   const [bibleDismissed, setBibleDismissed] = useState(false);
-  // v12.2.3 跨集复用:精确名未命中时,展示库里「相似角色」(向量/文本检索)
+  // v12.2.3 series reuse: when the exact name misses, show similar library characters
   const [similarHits, setSimilarHits] = useState<Array<{
     id: string; name: string; score: number;
     bible?: { imageUrl: string; role: LockedCharacter['role']; sampleFaces?: string[]; hasDna?: boolean };
   }>>([]);
 
   useEffect(() => {
-    // 已经有头像或者用户已经 dismiss 过 → 不再 lookup
+    // Already has a face, or the user dismissed → skip lookup
     if (slot.imageUrl || bibleDismissed) {
       setBibleHit(null);
       setSimilarHits([]);
@@ -257,7 +271,7 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
           return;
         }
         setBibleHit(null);
-        // v12.2.3 无精确命中 → 找相似(向量优先,无 key 退文本兜底);只取带头像的角色
+        // v12.2.3 no exact hit → similar (vector first, text fallback); keep rows that have a face
         const sim = await fetch(`/api/global-assets/similar?q=${encodeURIComponent(trimmed)}&type=character&k=3`, { signal: ctrl.signal });
         if (sim.ok) {
           const sj = await sim.json();
@@ -275,7 +289,7 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
     if (!hit.bible?.imageUrl) return;
     onUpdate({ role: hit.bible.role || 'supporting', cw: hit.bible.role === 'lead' ? 125 : 100, imageUrl: hit.bible.imageUrl });
     setSimilarHits([]);
-    showToast({ title: `已复用库里相似角色「${hit.name}」的形象`, type: 'success' });
+    showToast({ title: t.workshopCreate.reusedSimilar.replace('{name}', hit.name), type: 'success' });
   };
 
   const reuseBible = () => {
@@ -287,12 +301,12 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
       traits: bibleHit.bible.traits ?? undefined,
     });
     setBibleHit(null);
-    showToast({ title: `已复用「${slot.name}」的历史档案`, type: 'success' });
+    showToast({ title: t.workshopCreate.reusedBible.replace('{name}', slot.name), type: 'success' });
   };
 
   /**
-   * v2.12 Sprint A.2: 上传成功后 fire-and-forget 调 GPT-4o Vision,
-   * 反向抽 6-8 维档案,展示成 chips。失败静默(不打断主流程,只是没 chips)。
+   * v2.12 Sprint A.2: after a successful upload, fire-and-forget GPT-4o Vision
+   * to extract a 6–8 dim dossier as chips. Failures are silent (no chips, flow continues).
    */
   const extractTraits = async (imageUrl: string) => {
     setExtracting(true);
@@ -306,11 +320,11 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
         const traits: CharacterTraits = await res.json();
         onUpdate({ traits });
         if (traits.confident === false) {
-          showToast({ title: '自动识别置信度低,可手动调整', type: 'info' });
+          showToast({ title: t.workshopCreate.traitsLowConfidence, type: 'info' });
         }
       }
     } catch {
-      /* 静默 — 即使 vision 挂了用户仍然能继续创作,只是没自动 6 维档案 */
+      /* Silent — vision down should not block create; we just skip the 6-dim dossier */
     } finally {
       setExtracting(false);
     }
@@ -318,11 +332,11 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
 
   const handleFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
-      showToast({ title: '只能上传图片', type: 'error' });
+      showToast({ title: t.workshopCreate.imageOnly, type: 'error' });
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      showToast({ title: '图片太大(上限 10MB)', type: 'error' });
+      showToast({ title: t.workshopCreate.imageTooLarge, type: 'error' });
       return;
     }
     setBusy(true);
@@ -332,13 +346,13 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
       const res = await fetch('/api/upload/character-face', { method: 'POST', body: form });
       const body = await res.json();
       if (!res.ok) {
-        showToast({ title: body.error || '上传失败', type: 'error' });
+        showToast({ title: body.error || t.product.dropFailed, type: 'error' });
         return;
       }
       onUpdate({ imageUrl: body.url });
       extractTraits(body.url);
     } catch (e) {
-      showToast({ title: e instanceof Error ? e.message : '上传失败', type: 'error' });
+      showToast({ title: e instanceof Error ? e.message : t.product.dropFailed, type: 'error' });
     } finally {
       setBusy(false);
     }
@@ -348,7 +362,7 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
     const trimmed = urlDraft.trim();
     if (!trimmed) return;
     if (!/^https?:\/\//i.test(trimmed)) {
-      showToast({ title: 'URL 必须以 http:// 或 https:// 开头', type: 'error' });
+      showToast({ title: t.workshopCreate.urlMustHttp, type: 'error' });
       return;
     }
     setBusy(true);
@@ -360,7 +374,7 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
       });
       const body = await res.json();
       if (!res.ok) {
-        showToast({ title: body.error || 'URL 抓取失败', type: 'error' });
+        showToast({ title: body.error || t.workshopCreate.urlFetchFailed, type: 'error' });
         return;
       }
       onUpdate({ imageUrl: body.url });
@@ -368,7 +382,7 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
       setUrlDraft('');
       extractTraits(body.url);
     } catch (e) {
-      showToast({ title: e instanceof Error ? e.message : 'URL 抓取失败', type: 'error' });
+      showToast({ title: e instanceof Error ? e.message : t.workshopCreate.urlFetchFailed, type: 'error' });
     } finally {
       setBusy(false);
     }
@@ -382,12 +396,12 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
         ? 'border-[#E8C547]/35 bg-[#E8C547]/5'
         : 'border-dashed border-white/15 bg-white/[0.02]'
     }`}>
-      {/* 槽位徽章 */}
+      {/* Slot badge */}
       <div className="absolute -top-2 -left-2 w-6 h-6 rounded-full bg-[#E8C547] text-black text-[11px] font-bold flex items-center justify-center shadow">
         {slotLabel}
       </div>
 
-      {/* v2.12 Sprint A.3: 历史 Bible 命中提示 */}
+      {/* v2.12 Sprint A.3: historical Bible hit */}
       {bibleHit && !hasImage && (
         <div className="mb-2 px-2 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-2 text-[10.5px]">
           <img loading="lazy" decoding="async" 
@@ -396,10 +410,10 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
             className="w-7 h-7 rounded-md object-cover flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="text-emerald-200 font-semibold truncate">
-              📚 已找到「{slot.name.trim()}」
+              📚 {t.workshopCreate.bibleFound.replace('{name}', slot.name.trim())}
             </div>
             <div className="text-emerald-200/60 text-[9.5px]">
-              {bibleHit.usedInProjectsCount} 个历史项目用过
+              {t.workshopCreate.bibleUsedIn.replace('{n}', String(bibleHit.usedInProjectsCount))}
             </div>
           </div>
           <button
@@ -407,7 +421,7 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
             onClick={reuseBible}
             className="px-2 py-0.5 rounded bg-emerald-500/25 hover:bg-emerald-500/40 text-emerald-100 text-[10px] font-medium flex-shrink-0"
           >
-            一键复用
+            {t.workshopCreate.reuseOnce}
           </button>
           <button
             type="button"
@@ -420,11 +434,11 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
         </div>
       )}
 
-      {/* v12.2.3: 精确名未命中 → 库里相似角色推荐(防重复建 + 跨集漂移) */}
+      {/* v12.2.3: no exact name → similar library recs (avoid dupes + series drift) */}
       {!bibleHit && !hasImage && similarHits.length > 0 && (
         <div className="mb-2 px-2 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/30 text-[10.5px]" data-testid="similar-character-rec">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-sky-200/80 text-[9.5px]">🔁 你库里有相似角色,复用可保跨集一致</span>
+            <span className="text-sky-200/80 text-[9.5px]">🔁 {t.workshopCreate.similarHint}</span>
             <button type="button" onClick={() => setSimilarHits([])} className="p-0.5 rounded hover:bg-white/10 text-white/40 hover:text-white" aria-label="dismiss similar"><X className="w-3 h-3" /></button>
           </div>
           <div className="flex flex-col gap-1">
@@ -433,14 +447,14 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
                 <img loading="lazy" decoding="async" src={hit.bible!.imageUrl} alt="" className="w-7 h-7 rounded-md object-cover flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="text-sky-100 font-medium truncate">{hit.name}</div>
-                  <div className="text-sky-200/50 text-[9px]">相似度 {Math.round(hit.score * 100)}%{hit.bible!.hasDna ? ' · 带 DNA' : ''}</div>
+                  <div className="text-sky-200/50 text-[9px]">{t.workshopCreate.similarity.replace('{n}', String(Math.round(hit.score * 100)))}{hit.bible!.hasDna ? t.workshopCreate.hasDna : ''}</div>
                 </div>
                 <button
                   type="button"
                   onClick={() => reuseSimilar(hit)}
                   className="px-2 py-0.5 rounded bg-sky-500/25 hover:bg-sky-500/40 text-sky-100 text-[10px] font-medium flex-shrink-0"
                 >
-                  复用形象
+                  {t.workshopCreate.reuseLook}
                 </button>
               </div>
             ))}
@@ -448,7 +462,7 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
         </div>
       )}
 
-      {/* 图片预览 / 上传区 */}
+      {/* Image preview / upload */}
       <div className="flex items-start gap-3">
         <div
           onClick={() => !busy && !hasImage && inputRef.current?.click()}
@@ -459,7 +473,7 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
           {busy ? (
             <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
           ) : hasImage ? (
-            <img loading="lazy" decoding="async" src={slot.imageUrl} alt={slot.name || `角色 ${slotLabel}`} className="w-full h-full object-cover" />
+            <img loading="lazy" decoding="async" src={slot.imageUrl} alt={slot.name || t.workshopCreate.characterAlt.replace('{slot}', slotLabel)} className="w-full h-full object-cover" />
           ) : (
             <Upload className="w-5 h-5 text-gray-400" />
           )}
@@ -469,26 +483,26 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
             type="text"
             value={slot.name}
             onChange={e => onUpdate({ name: e.target.value })}
-            placeholder="角色名(例如 李长安)"
-            aria-label="角色名"
+            placeholder={t.workshopCreate.characterNamePlaceholder}
+            aria-label={t.workshopCreate.characterNameAria}
             className="w-full px-2 py-1.5 text-xs bg-black/30 border border-white/10 rounded-md focus:outline-none focus:border-[#E8C547]/50"
           />
           <select
             value={slot.role}
             onChange={e => onUpdate({ role: e.target.value as LockedCharacter['role'] })}
-            aria-label="角色定位"
+            aria-label={t.workshopCreate.characterRoleAria}
             className="w-full px-2 py-1.5 text-xs bg-black/30 border border-white/10 rounded-md focus:outline-none focus:border-[#E8C547]/50"
           >
             {ROLE_PRESETS.map(p => (
               <option key={p.id} value={p.id}>
-                {p.label} · cw={p.cw}
+                {roleLabel(p.id)} · cw={p.cw}
               </option>
             ))}
           </select>
         </div>
       </div>
 
-      {/* 操作行 */}
+      {/* Actions */}
       <div className="mt-3 flex items-center gap-1.5">
         <input
           ref={inputRef}
@@ -510,7 +524,7 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
               className="flex-1 px-2 py-1 text-[11px] rounded bg-white/5 hover:bg-white/10 disabled:opacity-40 inline-flex items-center justify-center gap-1"
             >
               <Upload className="w-3 h-3" />
-              上传文件
+              {t.workshopCreate.uploadFile}
             </button>
             <button
               type="button"
@@ -519,7 +533,7 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
               className="flex-1 px-2 py-1 text-[11px] rounded bg-white/5 hover:bg-white/10 disabled:opacity-40 inline-flex items-center justify-center gap-1"
             >
               <LinkIcon className="w-3 h-3" />
-              用 URL
+              {t.workshopCreate.useUrl}
             </button>
           </>
         )}
@@ -531,7 +545,7 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
             className="px-2 py-1 text-[11px] rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 disabled:opacity-40 inline-flex items-center justify-center gap-1"
           >
             <X className="w-3 h-3" />
-            清除
+            {t.workshopCreate.clear}
           </button>
         )}
       </div>
@@ -552,12 +566,12 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
             disabled={busy || !urlDraft.trim()}
             className="px-2 py-1 text-[11px] rounded bg-[#E8C547]/15 text-[#E8C547] hover:bg-[#E8C547]/25 disabled:opacity-40"
           >
-            抓取
+            {t.workshopCreate.fetchUrl}
           </button>
         </div>
       )}
 
-      {/* v2.12 Sprint A.2: 自动抽到的 6 维档案 chips */}
+      {/* v2.12 Sprint A.2: auto-extracted 6-dim dossier chips */}
       {hasImage && (extracting || slot.traits) && (
         <TraitChips traits={slot.traits} extracting={extracting} />
       )}
@@ -566,7 +580,7 @@ function CharacterCard({ slotLabel, slot, onUpdate, onClear }: CardProps) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// TraitChips — 反向抽取出的 6-8 维档案 chips
+// TraitChips — 6–8 dim dossier chips extracted from the face
 // ─────────────────────────────────────────────────────────────────────
 
 function TraitChips({
@@ -576,30 +590,33 @@ function TraitChips({
   traits?: CharacterTraits;
   extracting: boolean;
 }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { workshopCreate: Record<string, string> };
+
   if (extracting) {
     return (
       <div className="mt-2.5 pt-2 border-t border-white/8 flex items-center gap-1.5 text-[10.5px] text-violet-300/80">
         <Sparkles className="w-3 h-3 animate-pulse" />
-        <span>AI 正在从这张脸抽取角色档案...</span>
+        <span>{t.workshopCreate.extractingTraits}</span>
       </div>
     );
   }
 
   if (!traits) return null;
 
-  // gender 映射成中文,只显示有真实信息的维度
-  const genderText = traits.gender === 'male' ? '男' : traits.gender === 'female' ? '女' : null;
+  // Map gender; only show dimensions that have real values
+  const genderText = traits.gender === 'male' ? t.workshopCreate.genderMale : traits.gender === 'female' ? t.workshopCreate.genderFemale : null;
   const chips: Array<{ label: string; full?: string }> = [];
   if (genderText) chips.push({ label: genderText });
-  if (traits.ageGroup && traits.ageGroup !== '未明示') chips.push({ label: traits.ageGroup });
-  if (traits.skinTone && traits.skinTone !== '未明示') chips.push({ label: traits.skinTone });
-  if (traits.appearance && traits.appearance !== '未明示') {
+  if (traits.ageGroup && traits.ageGroup !== TRAIT_UNSPECIFIED) chips.push({ label: traits.ageGroup });
+  if (traits.skinTone && traits.skinTone !== TRAIT_UNSPECIFIED) chips.push({ label: traits.skinTone });
+  if (traits.appearance && traits.appearance !== TRAIT_UNSPECIFIED) {
     chips.push({ label: traits.appearance.length > 8 ? traits.appearance.slice(0, 8) + '…' : traits.appearance, full: traits.appearance });
   }
-  if (traits.costume && traits.costume !== '未明示') {
+  if (traits.costume && traits.costume !== TRAIT_UNSPECIFIED) {
     chips.push({ label: traits.costume.length > 8 ? traits.costume.slice(0, 8) + '…' : traits.costume, full: traits.costume });
   }
-  if (traits.personality && traits.personality !== '未明示') {
+  if (traits.personality && traits.personality !== TRAIT_UNSPECIFIED) {
     chips.push({ label: traits.personality.length > 8 ? traits.personality.slice(0, 8) + '…' : traits.personality, full: traits.personality });
   }
 
@@ -609,9 +626,9 @@ function TraitChips({
     <div className="mt-2.5 pt-2 border-t border-white/8">
       <div className="flex items-center gap-1 text-[9.5px] uppercase tracking-widest text-violet-300/70 mb-1.5">
         <Sparkles className="w-2.5 h-2.5" />
-        <span>AI 抽取档案</span>
+        <span>{t.workshopCreate.aiTraits}</span>
         {traits.confident === false && (
-          <span className="ml-1 px-1 rounded bg-amber-500/15 text-amber-300 normal-case tracking-normal text-[9px]">置信度低</span>
+          <span className="ml-1 px-1 rounded bg-amber-500/15 text-amber-300 normal-case tracking-normal text-[9px]">{t.workshopCreate.lowConfidence}</span>
         )}
       </div>
       <div className="flex flex-wrap gap-1">

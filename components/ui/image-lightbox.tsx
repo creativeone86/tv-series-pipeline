@@ -4,21 +4,24 @@ import { useState, useEffect, useCallback, ReactNode } from 'react';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { createPortal } from 'react-dom';
 import { X, CaretLeft as ChevronLeft, CaretRight as ChevronRight, MagnifyingGlassPlus as ZoomIn, ImageBroken as ImageOff, ArrowsClockwise as RefreshCw } from '@phosphor-icons/react';
+import { useLocale } from '@/hooks/use-locale';
+
+type KitT = ReturnType<typeof useLocale>['t'] & { kitUi: Record<string, string> };
 
 /**
- * 统一的图片放大查看组件。
+ * Shared image zoom viewer.
  *
- * 两种用法:
+ * Two usages:
  *
- * 1) ZoomableImage — 自带状态,最常见的"点击 img 弹出放大"场景
- *    <ZoomableImage src={url} alt="主角" title="角色名" />
+ * 1) ZoomableImage — owns its own open state; the usual "click img to enlarge"
+ *    <ZoomableImage src={url} alt="lead" title="Character" />
  *
- * 2) ImageLightboxModal — 受控模式,适合画廊(外部管理 index + prev/next)
+ * 2) ImageLightboxModal — controlled; good for galleries (parent owns index + prev/next)
  *    <ImageLightboxModal src={currentUrl} title="..." onClose={...} onPrev={...} onNext={...} />
  *
- * 设计来源:
- *   - assets/page.tsx 原有 ImagePreviewModal 的成熟实现 (ESC/箭头/z-index=99999/backdrop-blur)
- *   - 提取到 ui/ 目录后全站复用,避免每个调用点重写一遍
+ * Provenance:
+ *   - mature ImagePreviewModal in assets/page.tsx (ESC/arrows/z-index=99999/backdrop-blur)
+ *   - extracted to ui/ so every call site does not rewrite it
  */
 
 interface LightboxProps {
@@ -29,19 +32,21 @@ interface LightboxProps {
   onNext?: () => void;
   hasPrev?: boolean;
   hasNext?: boolean;
-  /** 右上角可选的"下载/另存"按钮或其他自定义 action */
+  /** Optional top-right "download / save as" or other custom action */
   extraAction?: ReactNode;
 }
 
 export function ImageLightboxModal({
   src, title, onClose, onPrev, onNext, hasPrev, hasNext, extraAction,
 }: LightboxProps) {
-  // v10.3.5 a11y: 焦点陷阱 + Escape(document 级)+ 焦点归还;箭头翻页仍由下方 effect 处理
+  const { t: loc } = useLocale();
+  const t = loc as KitT;
+  // v10.3.5 a11y: focus trap + document-level Escape + restore focus; arrow paging stays in the effect below
   const dialogRef = useFocusTrap<HTMLDivElement>(true, onClose);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // Escape 由 useFocusTrap 统一处理
+      // Escape is handled by useFocusTrap
       if (e.key === 'ArrowLeft' && hasPrev && onPrev) onPrev();
       if (e.key === 'ArrowRight' && hasNext && onNext) onNext();
     };
@@ -60,7 +65,7 @@ export function ImageLightboxModal({
     <div
       className="fixed inset-0 flex items-center justify-center"
       style={{ zIndex: 99999 }}
-      // 阻止 React Flow 等父级组件收到 pointer 事件
+      // Stop React Flow (and other parents) from receiving pointer events
       onMouseDown={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
@@ -70,7 +75,7 @@ export function ImageLightboxModal({
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={title || '图片预览'}
+        aria-label={title || t.kitUi.imagePreview}
         tabIndex={-1}
         className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center outline-none"
       >
@@ -79,7 +84,7 @@ export function ImageLightboxModal({
           <button
             onClick={onClose}
             className="text-white/60 hover:text-white transition-colors p-1"
-            aria-label="关闭"
+            aria-label={t.product.close}
           >
             <X className="w-5 h-5" />
           </button>
@@ -94,7 +99,7 @@ export function ImageLightboxModal({
           <button
             onClick={onPrev}
             className="absolute left-[-50px] top-1/2 -translate-y-1/2 p-2 text-white/50 hover:text-white transition-colors"
-            aria-label="上一张"
+            aria-label={t.kitUi.prevImage}
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
@@ -103,7 +108,7 @@ export function ImageLightboxModal({
           <button
             onClick={onNext}
             className="absolute right-[-50px] top-1/2 -translate-y-1/2 p-2 text-white/50 hover:text-white transition-colors"
-            aria-label="下一张"
+            aria-label={t.kitUi.nextImage}
           >
             <ChevronRight className="w-6 h-6" />
           </button>
@@ -118,33 +123,35 @@ interface ZoomableImageProps {
   src: string;
   alt?: string;
   title?: string;
-  /** 外层容器 className（应用到触发器的 div） */
+  /** Outer wrapper className (applied to the trigger div) */
   className?: string;
-  /** img 本身 className */
+  /** className on the img itself */
   imgClassName?: string;
-  /** 是否显示 hover 时的放大镜图标（默认 true） */
+  /** Show the hover magnifier (default true) */
   showHoverIcon?: boolean;
-  /** 自定义渲染触发器（取代默认的 <img>） */
+  /** Custom trigger (replaces the default <img>) */
   children?: ReactNode;
-  /** 是否禁用点击放大（默认 false） */
+  /** Disable click-to-zoom (default false) */
   disabled?: boolean;
 }
 
 /**
- * 自带开/关状态的可点击放大图。最常用的形态。
+ * Click-to-zoom image that owns its open/close state. The usual form.
  *
- * 例: <ZoomableImage src={c.mediaUrls[0]} alt={c.name} title={c.name} className="aspect-[16/9]" />
+ * e.g. <ZoomableImage src={c.mediaUrls[0]} alt={c.name} title={c.name} className="aspect-[16/9]" />
  */
 export function ZoomableImage({
   src, alt, title, className, imgClassName, showHoverIcon = true, children, disabled = false,
 }: ZoomableImageProps) {
+  const { t: loc } = useLocale();
+  const t = loc as KitT;
   const [open, setOpen] = useState(false);
-  // v2.19 P1.1: 图片加载失败兜底 — img onError 后切到 placeholder + 重试按钮.
-  // retryNonce 加到 src 后做 cache-buster, 避免浏览器复用上次 404 的缓存.
+  // v2.19 P1.1: image-load fallback — onError swaps in a placeholder + retry.
+  // retryNonce is appended as a cache-buster so the browser does not reuse a 404.
   const [errored, setErrored] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
 
-  // src 换了 → 重置 error 状态 (例如父组件重生了 imageUrl)
+  // New src → reset error (e.g. parent regenerated imageUrl)
   useEffect(() => {
     setErrored(false);
     setRetryNonce(0);
@@ -152,13 +159,13 @@ export function ZoomableImage({
 
   const handleClick = useCallback((e: React.MouseEvent | React.PointerEvent) => {
     if (disabled || !src || errored) return;
-    // 阻止事件冒泡到 React Flow 节点(否则会触发节点拖拽/选中)
+    // Stop bubbling to React Flow nodes (otherwise it starts a drag / select)
     e.preventDefault();
     e.stopPropagation();
     setOpen(true);
   }, [disabled, src, errored]);
 
-  // Pointer events 版本 - React Flow 把 pointerDown 当做拖拽触发
+  // Pointer-events version — React Flow treats pointerDown as a drag start
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     e.stopPropagation();
   }, []);
@@ -170,7 +177,7 @@ export function ZoomableImage({
     setRetryNonce((n) => n + 1);
   }, []);
 
-  // 拼 cache-buster 到 src — 只在 retry 时启用, 不污染正常 URL
+  // Cache-bust only on retry — do not pollute the normal URL
   const effectiveSrc = retryNonce > 0
     ? `${src}${src.includes('?') ? '&' : '?'}retry=${retryNonce}`
     : src;
@@ -186,15 +193,15 @@ export function ZoomableImage({
           <div className="w-full h-full bg-black/40 border border-white/10 flex flex-col items-center justify-center gap-1.5 p-2 rounded-[inherit]">
             <ImageOff className="w-5 h-5 text-white/40" />
             <span className="cinema-mono text-[10px] opacity-50 text-center px-2 leading-tight">
-              图片加载失败
+              {t.kitUi.imageLoadFail}
             </span>
             <button
               onClick={handleRetry}
               className="cinema-mono text-[10px] inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 hover:bg-white/15 transition-colors"
-              title="重试加载"
+              title={t.kitUi.retryLoad}
             >
               <RefreshCw className="w-2.5 h-2.5" />
-              重试
+              {t.errors.retry}
             </button>
           </div>
         ) : (

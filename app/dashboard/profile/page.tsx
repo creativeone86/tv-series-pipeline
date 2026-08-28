@@ -6,7 +6,8 @@ import { useLocale } from '@/hooks/use-locale';
 
 export default function ProfilePage() {
   const { user } = useAuth();
-  const { t } = useLocale();
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { dashMore: Record<string, string> };
 
   return (
     <div>
@@ -30,7 +31,7 @@ export default function ProfilePage() {
           </div>
           <div className="text-center">
             <span className="text-xs text-[var(--soft)]">{t.settings.language}</span>
-            <strong className="block mt-1">{user?.locale === 'en' ? 'English' : '中文'}</strong>
+            <strong className="block mt-1">{user?.locale === 'en' ? 'English' : t.dashMore.chinese}</strong>
           </div>
         </div>
       </div>
@@ -38,13 +39,13 @@ export default function ProfilePage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <GlassCard>
           <h4 className="font-semibold mb-3">{t.profile.visualPref}</h4>
-          <p className="text-sm text-[var(--muted)]">默认风格：Poetic Mist</p>
-          <p className="text-sm text-[var(--muted)]">色彩：Film Warm</p>
+          <p className="text-sm text-[var(--muted)]">{t.dashMore.defaultStyle}</p>
+          <p className="text-sm text-[var(--muted)]">{t.dashMore.colorPref}</p>
         </GlassCard>
         <GlassCard>
           <h4 className="font-semibold mb-3">{t.profile.collabSpace}</h4>
-          <p className="text-sm text-[var(--muted)]">团队：青枫漫剧 Studio</p>
-          <p className="text-sm text-[var(--muted)]">权限：创作 + 发布</p>
+          <p className="text-sm text-[var(--muted)]">{t.dashMore.teamStudio}</p>
+          <p className="text-sm text-[var(--muted)]">{t.dashMore.permCreatePublish}</p>
         </GlassCard>
       </div>
     </div>

@@ -4,6 +4,9 @@ import * as React from "react"
 import { Book, CaretDown as ChevronDown, CaretUp as ChevronUp } from '@phosphor-icons/react';import { cn } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "./card"
 import { Button } from "./button"
+import { useLocale } from '@/hooks/use-locale'
+
+type KitT = ReturnType<typeof useLocale>['t'] & { kitUi: Record<string, string> };
 
 interface Shot {
   shotNumber: number
@@ -22,6 +25,8 @@ interface ScriptReaderProps {
 }
 
 export function ScriptReader({ title, synopsis, shots, className }: ScriptReaderProps) {
+  const { t: loc } = useLocale()
+  const t = loc as KitT
   const [expandedShots, setExpandedShots] = React.useState<Set<number>>(new Set([0]))
 
   const toggleShot = (shotNumber: number) => {
@@ -59,10 +64,10 @@ export function ScriptReader({ title, synopsis, shots, className }: ScriptReader
           </div>
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={expandAll}>
-              展开全部
+              {t.kitUi.expandAll}
             </Button>
             <Button variant="ghost" size="sm" onClick={collapseAll}>
-              收起全部
+              {t.kitUi.collapseAll}
             </Button>
           </div>
         </div>
@@ -87,7 +92,7 @@ export function ScriptReader({ title, synopsis, shots, className }: ScriptReader
                     {shot.shotNumber}
                   </div>
                   <div className="text-left">
-                    <div className="font-medium text-white">第 {shot.shotNumber} 镜</div>
+                    <div className="font-medium text-white">{t.kitUi.shotN.replace('{n}', String(shot.shotNumber))}</div>
                     <div className="text-sm text-neutral-400 line-clamp-1">
                       {shot.sceneDescription}
                     </div>
@@ -104,13 +109,13 @@ export function ScriptReader({ title, synopsis, shots, className }: ScriptReader
               {isExpanded && (
                 <div className="p-4 pt-0 space-y-3">
                   <div>
-                    <div className="text-xs text-neutral-500 uppercase mb-1">场景描述</div>
+                    <div className="text-xs text-neutral-500 uppercase mb-1">{t.kitUi.sceneDesc}</div>
                     <div className="text-sm text-neutral-300">{shot.sceneDescription}</div>
                   </div>
 
                   {shot.characters.length > 0 && (
                     <div>
-                      <div className="text-xs text-neutral-500 uppercase mb-1">角色</div>
+                      <div className="text-xs text-neutral-500 uppercase mb-1">{t.product.statCast}</div>
                       <div className="flex flex-wrap gap-2">
                         {shot.characters.map((char, idx) => (
                           <span
@@ -126,21 +131,21 @@ export function ScriptReader({ title, synopsis, shots, className }: ScriptReader
 
                   {shot.dialogue && (
                     <div>
-                      <div className="text-xs text-neutral-500 uppercase mb-1">对话</div>
+                      <div className="text-xs text-neutral-500 uppercase mb-1">{t.kitUi.dialogue}</div>
                       <div className="text-sm text-neutral-300 italic">"{shot.dialogue}"</div>
                     </div>
                   )}
 
                   {shot.action && (
                     <div>
-                      <div className="text-xs text-neutral-500 uppercase mb-1">动作</div>
+                      <div className="text-xs text-neutral-500 uppercase mb-1">{t.kitUi.action}</div>
                       <div className="text-sm text-neutral-300">{shot.action}</div>
                     </div>
                   )}
 
                   {shot.emotion && (
                     <div>
-                      <div className="text-xs text-neutral-500 uppercase mb-1">情绪氛围</div>
+                      <div className="text-xs text-neutral-500 uppercase mb-1">{t.kitUi.emotionMood}</div>
                       <div className="text-sm text-neutral-300">{shot.emotion}</div>
                     </div>
                   )}

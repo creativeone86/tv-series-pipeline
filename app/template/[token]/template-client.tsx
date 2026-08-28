@@ -1,16 +1,17 @@
 'use client';
 
 /**
- * /template/[token] · v2.18 P2.3 — 分享模板的公开落地页 (client part)
+ * /template/[token] · v2.18 P2.3 — public landing page for a shared template (client part)
  *
- * v2.19 P0.3: 拆成 server page.tsx (generateMetadata + OG meta) + 这个 client。
- * 任何人都能访问 (无 auth). 点 "克隆到我的库" 触发 POST clone 端点 — 那个端点
- * 要求 auth, 没登录的用户被引导去登录后回流.
+ * v2.19 P0.3: split into server page.tsx (generateMetadata + OG meta) + this client.
+ * Anyone can visit (no auth). "Clone to my library" POSTs the clone endpoint — that
+ * endpoint requires auth; unsigned-in users are sent to login and returned here.
  */
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Copy, Check, Eye, Users, Warning as AlertTriangle, ArrowLeft, CircleNotch as Loader2 } from '@phosphor-icons/react';
+import { useLocale } from '@/hooks/use-locale';
 
 interface SharedTemplate {
   token: string;
@@ -39,6 +40,9 @@ interface SharedTemplate {
 }
 
 export default function SharedTemplateClient({ token }: { token: string }) {
+  const { t: tRaw, locale } = useLocale();
+  const loc = tRaw as typeof tRaw & { publicUi: Record<string, string> };
+  const ui = loc.publicUi;
   const [data, setData] = useState<SharedTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,18 +55,18 @@ export default function SharedTemplateClient({ token }: { token: string }) {
         const res = await fetch(`/api/templates/shared/${encodeURIComponent(token)}`);
         const body = await res.json();
         if (!res.ok) {
-          setError(body.error || '加载失败');
+          setError(body.error || ui.loadFailed);
           return;
         }
         setData(body);
       } catch (e) {
-        setError(e instanceof Error ? e.message : '加载失败');
+        setError(e instanceof Error ? e.message : ui.loadFailed);
       } finally {
         setLoading(false);
       }
     };
     fetchTemplate();
-  }, [token]);
+  }, [token, ui.loadFailed]);
 
   const doClone = async () => {
     setCloning(true);
@@ -74,12 +78,12 @@ export default function SharedTemplateClient({ token }: { token: string }) {
       });
       const body = await res.json();
       if (!res.ok) {
-        alert(body.error || '克隆失败');
+        alert(body.error || ui.cloneFailed);
         return;
       }
       setCloned({ id: body.newAssetId, name: body.newAssetName });
     } catch (e) {
-      alert(e instanceof Error ? e.message : '克隆失败');
+      alert(e instanceof Error ? e.message : ui.cloneFailed);
     } finally {
       setCloning(false);
     }
@@ -90,7 +94,7 @@ export default function SharedTemplateClient({ token }: { token: string }) {
       <div className="cinema-page min-h-screen flex items-center justify-center text-white">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-[var(--cinema-amber)]" />
-          <p className="cinema-mono text-[11px] opacity-70">加载分享模板...</p>
+          <p className="cinema-mono text-[11px] opacity-70">{ui.loadingTemplate}</p>
         </div>
       </div>
     );
@@ -101,17 +105,18 @@ export default function SharedTemplateClient({ token }: { token: string }) {
       <div className="cinema-page min-h-screen flex items-center justify-center text-white px-4">
         <div className="cinema-card-hi p-8 max-w-md w-full text-center">
           <AlertTriangle className="w-10 h-10 text-[var(--cinema-amber)] mx-auto mb-3" />
-          <h1 className="cinema-headline text-lg mb-2">链接不可用</h1>
-          <p className="cinema-mono text-[11px] opacity-70 mb-4">{error || '该分享模板不存在或已过期'}</p>
+          <h1 className="cinema-headline text-lg mb-2">{ui.linkUnavailable}</h1>
+          <p className="cinema-mono text-[11px] opacity-70 mb-4">{error || ui.templateGone}</p>
           <Link href="/dashboard/create" className="cinema-btn cinema-btn-primary !text-[12px]">
-            去自己创建一个
+            {ui.goCreateOwn}
           </Link>
         </div>
       </div>
     );
   }
 
-  const t = data.template;
+  const tpl = data.template;
+  const displayName = locale === 'en' ? (tpl.nameEn || tpl.name) : tpl.name;
 
   return (
     <div className="cinema-page min-h-screen text-white">
@@ -120,7 +125,7 @@ export default function SharedTemplateClient({ token }: { token: string }) {
         <div className="max-w-3xl mx-auto px-6 py-3 flex items-center justify-between">
           <Link href="/dashboard/create" className="cinema-btn-ghost cinema-btn !p-2 inline-flex items-center gap-1 !text-[11px]">
             <ArrowLeft className="w-3.5 h-3.5" />
-            返回创作工坊
+            {ui.backToWorkshop}
           </Link>
           <div className="flex items-center gap-2">
             <span className="cinema-chip cinema-chip-amber">
@@ -129,16 +134,16 @@ export default function SharedTemplateClient({ token }: { token: string }) {
             </span>
             <span className="cinema-chip">
               <Copy className="w-3 h-3" />
-              {data.cloneCount} 克隆
+              {ui.clonesN.replace('{n}', String(data.cloneCount))}
             </span>
           </div>
         </div>
       </nav>
 
       <main className="max-w-3xl mx-auto px-6 py-8 space-y-5">
-        {/* 顶部:icon + 名字 + 作者 */}
+        {/* Top: icon + name + author */}
         <div className="cinema-card-hi p-5 flex items-start gap-4">
-          <div className="text-5xl">{t.icon || '📄'}</div>
+          <div className="text-5xl">{tpl.icon || '📄'}</div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <span className="cinema-eyebrow">SHARED TEMPLATE</span>
@@ -149,35 +154,34 @@ export default function SharedTemplateClient({ token }: { token: string }) {
                 </span>
               )}
             </div>
-            <h1 className="cinema-headline text-2xl truncate">{t.name}</h1>
-            {t.nameEn && <div className="cinema-mono text-[11px] opacity-50 mt-0.5">{t.nameEn}</div>}
-            {t.description && (
-              <p className="cinema-subhead text-sm mt-2 opacity-85 leading-relaxed">{t.description}</p>
+            <h1 className="cinema-headline text-2xl truncate">{displayName}</h1>
+            {tpl.nameEn && locale !== 'en' && <div className="cinema-mono text-[11px] opacity-50 mt-0.5">{tpl.nameEn}</div>}
+            {tpl.description && (
+              <p className="cinema-subhead text-sm mt-2 opacity-85 leading-relaxed">{tpl.description}</p>
             )}
           </div>
         </div>
 
-        {/* 操作:克隆 / 立刻用 */}
+        {/* Actions: clone / use now */}
         {cloned ? (
           <div className="cinema-card-hi p-5 border-[var(--cinema-green)]/40">
             <div className="flex items-center gap-2 mb-2">
               <Check className="w-5 h-5 text-[var(--cinema-green)]" />
-              <h3 className="cinema-headline text-base">已克隆到你的模板库</h3>
+              <h3 className="cinema-headline text-base">{ui.clonedToLibrary}</h3>
             </div>
             <p className="cinema-mono text-[11px] opacity-75 mb-4">
-              新模板:「{cloned.name}」(id: {cloned.id.slice(0, 12)}...) 已保存到你的个人库, 下次创作时在
-              "故事模板库" 里就能看到。
+              {ui.clonedDetail.replace('{name}', cloned.name).replace('{id}', cloned.id.slice(0, 12))}
             </p>
             <Link href="/dashboard/create" className="cinema-btn cinema-btn-primary !text-[12px]">
-              去使用 →
+              {ui.goUse}
             </Link>
           </div>
         ) : (
           <div className="cinema-card-hi p-5 flex items-center justify-between gap-3 flex-wrap">
             <div>
-              <div className="cinema-eyebrow mb-1">克隆到自己的模板库</div>
+              <div className="cinema-eyebrow mb-1">{ui.cloneToLibraryEyebrow}</div>
               <p className="cinema-mono text-[11px] opacity-70">
-                克隆后这个模板会出现在你的个人库, 后续可改可删, 不影响原作者。
+                {ui.cloneToLibraryHint}
               </p>
             </div>
             <button
@@ -190,33 +194,33 @@ export default function SharedTemplateClient({ token }: { token: string }) {
               ) : (
                 <Copy className="w-3.5 h-3.5" />
               )}
-              {cloning ? '克隆中…' : '克隆到我的库'}
+              {cloning ? ui.cloning : ui.cloneToMyLibrary}
             </button>
           </div>
         )}
 
-        {/* 详情卡 */}
-        {t.exampleIdea && (
+        {/* Detail cards */}
+        {tpl.exampleIdea && (
           <div className="cinema-card-hi p-4">
-            <div className="cinema-eyebrow mb-2">EXAMPLE IDEA · 示例创意</div>
-            <p className="cinema-subhead text-[12.5px] opacity-90 leading-relaxed">{t.exampleIdea}</p>
+            <div className="cinema-eyebrow mb-2">{ui.exampleIdeaLabel}</div>
+            <p className="cinema-subhead text-[12.5px] opacity-90 leading-relaxed">{tpl.exampleIdea}</p>
           </div>
         )}
 
-        {t.structureHint && (
+        {tpl.structureHint && (
           <div className="cinema-card-hi p-4">
-            <div className="cinema-eyebrow mb-2">STRUCTURE · 结构提示</div>
-            <p className="cinema-subhead text-[11.5px] opacity-85 leading-relaxed">{t.structureHint}</p>
+            <div className="cinema-eyebrow mb-2">{ui.structureLabel}</div>
+            <p className="cinema-subhead text-[11.5px] opacity-85 leading-relaxed">{tpl.structureHint}</p>
           </div>
         )}
 
-        {((t.keyElements && t.keyElements.length > 0) || (t.tags && t.tags.length > 0)) && (
+        {((tpl.keyElements && tpl.keyElements.length > 0) || (tpl.tags && tpl.tags.length > 0)) && (
           <div className="grid sm:grid-cols-2 gap-3">
-            {t.keyElements && t.keyElements.length > 0 && (
+            {tpl.keyElements && tpl.keyElements.length > 0 && (
               <div className="cinema-card-hi p-3">
                 <div className="cinema-eyebrow mb-2">KEY ELEMENTS</div>
                 <div className="flex flex-wrap gap-1">
-                  {t.keyElements.map((el) => (
+                  {tpl.keyElements.map((el) => (
                     <span key={el} className="cinema-chip cinema-chip-amber">
                       {el}
                     </span>
@@ -224,11 +228,11 @@ export default function SharedTemplateClient({ token }: { token: string }) {
                 </div>
               </div>
             )}
-            {t.tags && t.tags.length > 0 && (
+            {tpl.tags && tpl.tags.length > 0 && (
               <div className="cinema-card-hi p-3">
                 <div className="cinema-eyebrow mb-2">TAGS</div>
                 <div className="flex flex-wrap gap-1">
-                  {t.tags.map((tg) => (
+                  {tpl.tags.map((tg) => (
                     <span key={tg} className="cinema-chip">{tg}</span>
                   ))}
                 </div>
@@ -238,31 +242,31 @@ export default function SharedTemplateClient({ token }: { token: string }) {
         )}
 
         <div className="cinema-card p-4">
-          <div className="cinema-eyebrow mb-2">RECOMMENDED · 推荐设置</div>
+          <div className="cinema-eyebrow mb-2">{ui.recommendedLabel}</div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 cinema-mono text-[11px]">
             <div>
-              <div className="opacity-50">画风</div>
-              <div className="opacity-90">{t.styleRecommendation || '—'}</div>
+              <div className="opacity-50">{ui.styleLook}</div>
+              <div className="opacity-90">{tpl.styleRecommendation || '—'}</div>
             </div>
             <div>
-              <div className="opacity-50">时长</div>
-              <div className="opacity-90">{t.recommendedDuration ? `${t.recommendedDuration}s` : '—'}</div>
+              <div className="opacity-50">{ui.duration}</div>
+              <div className="opacity-90">{tpl.recommendedDuration ? `${tpl.recommendedDuration}s` : '—'}</div>
             </div>
             <div>
-              <div className="opacity-50">画幅</div>
-              <div className="opacity-90">{t.recommendedAspect || '—'}</div>
+              <div className="opacity-50">{ui.aspect}</div>
+              <div className="opacity-90">{tpl.recommendedAspect || '—'}</div>
             </div>
             <div>
-              <div className="opacity-50">运镜</div>
-              <div className="opacity-90">{t.recommendedCamera || '—'}</div>
+              <div className="opacity-50">{ui.camera}</div>
+              <div className="opacity-90">{tpl.recommendedCamera || '—'}</div>
             </div>
           </div>
         </div>
 
-        {t.colorPalette && (
+        {tpl.colorPalette && (
           <div className="cinema-card p-3">
             <div className="cinema-eyebrow mb-1">COLOR PALETTE</div>
-            <p className="cinema-mono text-[11px] opacity-75">{t.colorPalette}</p>
+            <p className="cinema-mono text-[11px] opacity-75">{tpl.colorPalette}</p>
           </div>
         )}
       </main>

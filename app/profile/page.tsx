@@ -12,12 +12,13 @@ import { useToast } from "@/components/ui/toast-provider"
 import { useLocale } from "@/hooks/use-locale"
 
 export default function ProfilePage() {
-  const [name, setName] = React.useState("张三")
-  const [email, setEmail] = React.useState("zhangsan@example.com")
-  const [bio, setBio] = React.useState("热爱创作的 AI 漫剧制作人")
-  const [loading, setLoading] = React.useState(false)
   const { showToast } = useToast()
-  const { t } = useLocale()
+  const { t: tRaw } = useLocale()
+  const t = tRaw as typeof tRaw & { publicUi: Record<string, string> }
+  const [name, setName] = React.useState(t.publicUi.demoName)
+  const [email, setEmail] = React.useState("zhangsan@example.com")
+  const [bio, setBio] = React.useState(t.publicUi.demoBio)
+  const [loading, setLoading] = React.useState(false)
 
   const handleSave = async () => {
     setLoading(true)

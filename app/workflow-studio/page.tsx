@@ -1,10 +1,11 @@
 'use client';
 
 /**
- * v4.1.2 — Agent 编排可视化编辑器.
+ * v4.1.2 — Visual editor for agent orchestration.
  *
- * 增删步骤、选 agent 类型、勾依赖、实时校验 + 执行分层预览、保存、dry-run 执行.
- * 走 v4.1 / v4.1.1 API. 纯逻辑 import 自 client-safe 的 agent-workflow-core.
+ * Add/remove steps, pick agent type, tick dependencies, live validate + layered
+ * execution preview, save, dry-run. Talks to the v4.1 / v4.1.1 API. Pure logic
+ * is imported from the client-safe agent-workflow-core.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -15,19 +16,23 @@ import {
   type WorkflowGraph, type WorkflowNode, type StepKind,
 } from '@/lib/agent-workflow-core';
 import { ArrowLeft, Plus, Trash as Trash2, FloppyDisk as Save, Play, TreeStructure as Workflow, CircleNotch as Loader2, CheckCircle as CheckCircle2, XCircle, Warning as AlertTriangle } from '@phosphor-icons/react';
+import { useLocale } from '@/hooks/use-locale';
 
 const KINDS = Object.keys(STEP_CATALOG) as StepKind[];
 
 function authHeaders(): Record<string, string> {
-  const t = typeof window !== 'undefined' ? localStorage.getItem('qfmj-token') : null;
-  return t ? { Authorization: `Bearer ${t}` } : {};
+  const tok = typeof window !== 'undefined' ? localStorage.getItem('qfmj-token') : null;
+  return tok ? { Authorization: `Bearer ${tok}` } : {};
 }
 
 export default function WorkflowStudioPage() {
-  const [graph, setGraph] = useState<WorkflowGraph>(() => defaultWorkflow('我的工作流'));
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { publicUi: Record<string, string> };
+  const ui = t.publicUi;
+  const [graph, setGraph] = useState<WorkflowGraph>(() => defaultWorkflow(ui.myWorkflow));
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
-  const [ideaInput, setIdeaInput] = useState('一个都市悬疑短剧');
+  const [ideaInput, setIdeaInput] = useState(ui.urbanMysteryIdea);
   const [msg, setMsg] = useState<string | null>(null);
   const [runSteps, setRunSteps] = useState<Array<{ nodeId: string; kind: string; status: string; ms: number; error?: string }> | null>(null);
   const [savedList, setSavedList] = useState<Array<{ id: string; name: string }>>([]);
@@ -43,7 +48,7 @@ export default function WorkflowStudioPage() {
   const validation = useMemo(() => validateWorkflow(graph), [graph]);
   const plan = useMemo(() => topoSort(graph), [graph]);
 
-  // ── 编辑操作 ──
+  // ── Edit ops ──
   const setName = (name: string) => setGraph((g) => ({ ...g, name }));
   const addNode = (kind: StepKind) => setGraph((g) => ({
     ...g,
@@ -78,18 +83,18 @@ export default function WorkflowStudioPage() {
       });
       const b = await res.json();
       if (!res.ok) throw new Error(b?.error || (b?.errors || []).join('; ') || `HTTP ${res.status}`);
-      setMsg('已保存'); loadList();
-    } catch (e) { setMsg('保存失败: ' + (e instanceof Error ? e.message : '')); }
+      setMsg(ui.savedOk); loadList();
+    } catch (e) { setMsg(ui.saveFailedPrefix.replace('{n}', e instanceof Error ? e.message : '')); }
     finally { setSaving(false); }
   };
 
   const run = async (mode: 'dry-run' | 'real') => {
     setRunning(true); setMsg(null);
-    // v4.1.5: 初始化每步为 pending, SSE 边跑边亮
+    // v4.1.5: seed every step as pending; SSE lights them as they run
     setRunSteps(graph.nodes.map((n) => ({ nodeId: n.id, kind: n.kind, status: 'pending', ms: 0 })));
-    const tag = mode === 'real' ? '真实运行' : 'dry-run';
+    const tag = mode === 'real' ? ui.runReal : 'dry-run';
     try {
-      // 先存再跑 (stream 读持久化的)
+      // Persist first, then run (the stream reads the saved graph)
       await fetch('/api/workflows', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(graph) });
       const { parseSSEChunk } = await import('@/lib/sse');
       const res = await fetch(`/api/workflows/${encodeURIComponent(graph.id)}/execute/stream`, {
@@ -118,31 +123,31 @@ export default function WorkflowStudioPage() {
           else if (ev.event === 'step-error') setStatus(ev.data.nodeId, 'failed');
           else if (ev.event === 'done') {
             if (Array.isArray(ev.data?.result?.steps)) setRunSteps(ev.data.result.steps);
-            setMsg(ev.data?.result?.ok ? `${tag} 执行完成 ✓` : `${tag} 完成 (有失败步骤)`);
+            setMsg(ev.data?.result?.ok ? ui.runDone.replace('{n}', tag) : ui.runDoneWithFails.replace('{n}', tag));
             finished = true;
           } else if (ev.event === 'error') {
-            throw new Error(ev.data?.error || '执行失败');
+            throw new Error(ev.data?.error || ui.runFailed);
           }
         }
       }
-    } catch (e) { setMsg('执行失败: ' + (e instanceof Error ? e.message : '')); }
+    } catch (e) { setMsg(ui.runFailedPrefix.replace('{n}', e instanceof Error ? e.message : '')); }
     finally { setRunning(false); }
   };
 
   return (
     <div className="cinema-page min-h-screen bg-[var(--cinema-bg,#0a0a0f)] text-white p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-5">
-        <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-white/60 hover:text-white text-sm"><ArrowLeft className="w-4 h-4" /> 返回</Link>
-        <h1 className="inline-flex items-center gap-2 text-lg font-semibold"><Workflow className="w-5 h-5 text-indigo-400" /> Agent 编排工作室</h1>
+        <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-white/60 hover:text-white text-sm"><ArrowLeft className="w-4 h-4" /> {ui.back}</Link>
+        <h1 className="inline-flex items-center gap-2 text-lg font-semibold"><Workflow className="w-5 h-5 text-indigo-400" /> {ui.studioTitle}</h1>
         <div className="flex gap-2">
           <button onClick={save} disabled={saving || !validation.valid} className="cinema-btn !px-3 !py-1.5 !text-[11px] inline-flex items-center gap-1.5 disabled:opacity-40">
-            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} 保存
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} {t.common.save}
           </button>
           <button onClick={() => run('dry-run')} disabled={running || !validation.valid} className="cinema-btn !px-3 !py-1.5 !text-[11px] inline-flex items-center gap-1.5 disabled:opacity-40">
             {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />} dry-run
           </button>
-          <button onClick={() => run('real')} disabled={running || !validation.valid} title="真跑 orchestrator (需配置 LLM key)" className="cinema-btn cinema-btn-primary !px-3 !py-1.5 !text-[11px] inline-flex items-center gap-1.5 disabled:opacity-40">
-            {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />} 真实运行
+          <button onClick={() => run('real')} disabled={running || !validation.valid} title={ui.runRealTitle} className="cinema-btn cinema-btn-primary !px-3 !py-1.5 !text-[11px] inline-flex items-center gap-1.5 disabled:opacity-40">
+            {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />} {ui.runReal}
           </button>
         </div>
       </div>
@@ -150,22 +155,22 @@ export default function WorkflowStudioPage() {
       {msg && <div className="mb-3 text-sm text-amber-300">{msg}</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* 左: 编辑 */}
+        {/* Left: editor */}
         <div className="lg:col-span-2 space-y-3">
           <div className="flex items-center gap-2">
-            <input value={graph.name} onChange={(e) => setName(e.target.value)} className="cinema-input flex-1 !text-sm" placeholder="工作流名称" />
+            <input value={graph.name} onChange={(e) => setName(e.target.value)} className="cinema-input flex-1 !text-sm" placeholder={ui.workflowNamePh} />
             {savedList.length > 0 && (
               <select onChange={(e) => e.target.value && loadWorkflow(e.target.value)} className="cinema-input !text-xs" defaultValue="">
-                <option value="">载入已存…</option>
+                <option value="">{ui.loadSaved}</option>
                 {savedList.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             )}
           </div>
 
-          {/* 创意输入 (real 运行 / director 步用) */}
-          <input value={ideaInput} onChange={(e) => setIdeaInput(e.target.value)} className="cinema-input w-full !text-sm" placeholder="创意 idea (真实运行时喂给 AI 导演)" />
+          {/* Idea input (real run / director step) */}
+          <input value={ideaInput} onChange={(e) => setIdeaInput(e.target.value)} className="cinema-input w-full !text-sm" placeholder={ui.ideaPh} />
 
-          {/* 调色板 */}
+          {/* Palette */}
           <div className="flex flex-wrap gap-1.5">
             {KINDS.map((k) => (
               <button key={k} onClick={() => addNode(k)} title={STEP_CATALOG[k].description}
@@ -175,7 +180,7 @@ export default function WorkflowStudioPage() {
             ))}
           </div>
 
-          {/* 节点列表 */}
+          {/* Node list */}
           <div className="space-y-2">
             {graph.nodes.map((n) => (
               <div key={n.id} className="rounded-lg border border-white/10 bg-white/5 p-3">
@@ -186,8 +191,8 @@ export default function WorkflowStudioPage() {
                   </div>
                   <button onClick={() => removeNode(n.id)} className="text-rose-400/70 hover:text-rose-400"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
-                <input value={n.label} onChange={(e) => updateNode(n.id, { label: e.target.value })} className="cinema-input w-full !text-xs mb-2" placeholder="步骤标签" />
-                <div className="text-[10px] text-white/40 mb-1">依赖 (勾选先决步骤):</div>
+                <input value={n.label} onChange={(e) => updateNode(n.id, { label: e.target.value })} className="cinema-input w-full !text-xs mb-2" placeholder={ui.stepLabelPh} />
+                <div className="text-[10px] text-white/40 mb-1">{ui.depsHint}</div>
                 <div className="flex flex-wrap gap-1.5">
                   {graph.nodes.filter((o) => o.id !== n.id).map((o) => (
                     <label key={o.id} className={`px-1.5 py-0.5 rounded text-[10px] border cursor-pointer ${n.dependsOn.includes(o.id) ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' : 'border-white/15 text-white/50'}`}>
@@ -195,32 +200,32 @@ export default function WorkflowStudioPage() {
                       {o.label}
                     </label>
                   ))}
-                  {graph.nodes.length <= 1 && <span className="text-[10px] text-white/30">无其他步骤</span>}
+                  {graph.nodes.length <= 1 && <span className="text-[10px] text-white/30">{ui.noOtherSteps}</span>}
                 </div>
               </div>
             ))}
-            {graph.nodes.length === 0 && <div className="text-center text-white/40 text-sm py-8">点上方调色板添加步骤</div>}
+            {graph.nodes.length === 0 && <div className="text-center text-white/40 text-sm py-8">{ui.emptyPalette}</div>}
           </div>
         </div>
 
-        {/* 右: 校验 + 执行计划 + 结果 */}
+        {/* Right: validate + plan + results */}
         <div className="space-y-3">
           <div className="rounded-lg border border-white/10 bg-white/5 p-3">
             <div className="cinema-eyebrow mb-2 flex items-center gap-1.5">
-              {validation.valid ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />} 校验
+              {validation.valid ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />} {ui.validate}
             </div>
-            {validation.valid ? <div className="text-[11px] text-emerald-400">通过 ✓</div> : (
+            {validation.valid ? <div className="text-[11px] text-emerald-400">{ui.validateOk}</div> : (
               <ul className="text-[11px] text-rose-300 space-y-0.5 list-disc list-inside">{validation.errors.map((e, i) => <li key={i}>{e}</li>)}</ul>
             )}
           </div>
 
           <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-            <div className="cinema-eyebrow mb-2">执行计划 (层内并行)</div>
+            <div className="cinema-eyebrow mb-2">{ui.execPlan}</div>
             {plan.ok ? (
               <div className="space-y-1.5">
                 {plan.levels.map((lvl, i) => (
                   <div key={i} className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] text-white/40 w-10">第{i + 1}层</span>
+                    <span className="text-[10px] text-white/40 w-10">{ui.layerN.replace('{n}', String(i + 1))}</span>
                     {lvl.map((id) => <span key={id} className="px-1.5 py-0.5 rounded text-[10px] bg-white/10">{graph.nodes.find((n) => n.id === id)?.label || id}</span>)}
                   </div>
                 ))}
@@ -230,7 +235,7 @@ export default function WorkflowStudioPage() {
 
           {runSteps && (
             <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <div className="cinema-eyebrow mb-2">运行结果</div>
+              <div className="cinema-eyebrow mb-2">{ui.runResults}</div>
               <div className="space-y-1">
                 {runSteps.map((s) => (
                   <div key={s.nodeId} className="flex items-center justify-between text-[11px]">

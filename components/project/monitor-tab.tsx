@@ -1,24 +1,30 @@
 'use client';
 
 /**
- * components/project/monitor-tab (v8.0) — 技术监看台 (对标 CineFlow 底部监视器 + EDL/AAF 导出)
+ * components/project/monitor-tab (v8.0) — tech monitor (CineFlow-style bottom
+ * monitor + EDL/AAF export)
  *
- *   - 视频示波器:选一帧分镜 → 直方图 / 亮度波形 / RGB Parade (canvas 实采像素, lib/scopes 计算)
- *   - 专业出片:导出 EDL (CMX3600) / FCP7 XML 对接 DaVinci Resolve / Premiere Pro
+ *   - Video scopes: pick a board frame → histogram / luma waveform / RGB Parade
+ *     (canvas samples pixels, lib/scopes computes)
+ *   - Pro delivery: export EDL (CMX3600) / FCP7 XML for DaVinci / Premiere
  *
- * 注: 示波器需同源素材像素; 跨域外链图无法读 ImageData 时给出提示。
+ * Note: scopes need same-origin pixels; cross-origin hotlinks cannot read
+ * ImageData — we show a hint in that case.
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Pulse as Activity, FileArrowDown as FileDown, Gauge, WarningCircle as AlertCircle, FilmStrip, ArrowsClockwise, CheckCircle, CircleNotch, Clock } from '@phosphor-icons/react';
 import { computeHistogram, computeColumns, scopeStats, type ScopeStats } from '@/lib/scopes';
 import { formatEta, type ShotRenderState, type RenderLoopSummary } from '@/lib/render-loop';
+import { useLocale } from '@/hooks/use-locale';
 
 function firstMedia(sb: any): string | undefined {
   return sb?.persistentUrl || sb?.mediaUrls?.[0] || sb?.media_urls?.[0] || sb?.persistent_url;
 }
 
 export function MonitorTab({ projectId, storyboards = [] }: { projectId: string; storyboards?: any[] }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectPanels: Record<string, string> };
   const withImg = storyboards.filter((s) => firstMedia(s));
   const [sel, setSel] = useState<string | undefined>(() => firstMedia(withImg[0]));
   const [stats, setStats] = useState<ScopeStats | null>(null);
@@ -50,14 +56,14 @@ export function MonitorTab({ projectId, storyboards = [] }: { projectId: string;
         drawParade(paradeRef.current, data, w, h);
         setErr('');
       } catch {
-        setErr('该素材为跨域外链, 浏览器禁止读取像素 — 示波器需同源/已落盘素材');
+        setErr(t.projectPanels.crossOrigin);
         setStats(null);
       }
     };
-    img.onerror = () => { if (!cancelled) { setErr('图片加载失败'); setStats(null); } };
+    img.onerror = () => { if (!cancelled) { setErr(t.projectPanels.imageLoadFail); setStats(null); } };
     img.src = sel;
     return () => { cancelled = true; };
-  }, [sel]);
+  }, [sel, t.projectPanels]);
 
   function download(format: 'edl' | 'fcpxml' | 'aaf') {
     const a = document.createElement('a');
@@ -70,36 +76,39 @@ export function MonitorTab({ projectId, storyboards = [] }: { projectId: string;
 
   return (
     <div className="flex flex-col gap-4">
-      {/* v9.2.1 渲染循环 — 每镜进度 / 重试 / 耗时 + 整体 ETA 实时反馈 */}
+      {/* v9.2.1 render loop — per-shot progress / retry / duration + overall ETA */}
       <RenderLoopPanel projectId={projectId} />
 
-      {/* 出片对接 */}
+      {/* Delivery interop */}
       <div className="cinema-card !p-4">
-        <div className="cinema-eyebrow mb-2 flex items-center gap-1.5"><FileDown size={13} className="text-[var(--monitor-blue)]" /> 专业出片对接 · DaVinci / Premiere / Avid</div>
+        <div className="cinema-eyebrow mb-2 flex items-center gap-1.5"><FileDown size={13} className="text-[var(--monitor-blue)]" /> {t.projectPanels.exportTitle}</div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => download('edl')} className="cinema-btn-ghost !text-[11px]"><FileDown size={13} /> 导出 EDL (CMX3600)</button>
-          <button onClick={() => download('fcpxml')} className="cinema-btn-ghost !text-[11px]"><FileDown size={13} /> 导出 FCP7 XML</button>
-          <button onClick={() => download('aaf')} className="cinema-btn-ghost !text-[11px]"><FileDown size={13} /> 导出 AAF (Avid)</button>
-          <span className="cinema-mono text-[10px] opacity-50 self-center">含镜头时长 + 素材路径, 按项目帧率生成时间码</span>
+          <button onClick={() => download('edl')} className="cinema-btn-ghost !text-[11px]"><FileDown size={13} /> {t.projectPanels.exportEdl}</button>
+          <button onClick={() => download('fcpxml')} className="cinema-btn-ghost !text-[11px]"><FileDown size={13} /> {t.projectPanels.exportFcpxml}</button>
+          <button onClick={() => download('aaf')} className="cinema-btn-ghost !text-[11px]"><FileDown size={13} /> {t.projectPanels.exportAaf}</button>
+          <span className="cinema-mono text-[10px] opacity-50 self-center">{t.projectPanels.exportHint}</span>
         </div>
       </div>
 
-      {/* 示波器 */}
+      {/* Scopes */}
       <div className="cinema-card !p-4">
         <div className="flex items-center justify-between mb-3">
-          <span className="cinema-eyebrow flex items-center gap-1.5"><Activity size={13} className="text-[var(--scope-green)]" /> 视频示波器</span>
+          <span className="cinema-eyebrow flex items-center gap-1.5"><Activity size={13} className="text-[var(--scope-green)]" /> {t.projectPanels.scopesTitle}</span>
           {stats && (
             <span className="cinema-mono text-[10px] opacity-70 flex items-center gap-2">
-              <Gauge size={11} /> 均亮 {stats.avgLuma} · 高光裁切 {(stats.clippedHighlights * 100).toFixed(1)}% · 暗部 {(stats.clippedShadows * 100).toFixed(1)}%
+              <Gauge size={11} /> {t.projectPanels.scopeStats
+                .replace('{avg}', String(stats.avgLuma))
+                .replace('{hi}', (stats.clippedHighlights * 100).toFixed(1))
+                .replace('{lo}', (stats.clippedShadows * 100).toFixed(1))}
             </span>
           )}
         </div>
 
-        {withImg.length === 0 && <div className="cinema-mono text-[11px] opacity-50">暂无分镜图可分析</div>}
+        {withImg.length === 0 && <div className="cinema-mono text-[11px] opacity-50">{t.projectPanels.noBoards}</div>}
 
         {withImg.length > 0 && (
           <>
-            {/* 选帧 */}
+            {/* Frame picker */}
             <div className="flex gap-1.5 overflow-x-auto custom-scrollbar pb-2 mb-3">
               {withImg.map((sb, i) => {
                 const u = firstMedia(sb);
@@ -116,8 +125,8 @@ export function MonitorTab({ projectId, storyboards = [] }: { projectId: string;
             {err && <div className="flex items-center gap-1.5 text-[var(--secondary)] text-xs mb-2"><AlertCircle size={13} />{err}</div>}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Scope label="直方图 HISTOGRAM"><canvas ref={histRef} width={256} height={90} className="w-full" style={{ imageRendering: 'pixelated' }} /></Scope>
-              <Scope label="亮度波形 WAVEFORM"><canvas ref={waveRef} width={256} height={90} className="w-full" /></Scope>
+              <Scope label={t.projectPanels.hist}><canvas ref={histRef} width={256} height={90} className="w-full" style={{ imageRendering: 'pixelated' }} /></Scope>
+              <Scope label={t.projectPanels.waveform}><canvas ref={waveRef} width={256} height={90} className="w-full" /></Scope>
               <Scope label="RGB PARADE"><canvas ref={paradeRef} width={256} height={90} className="w-full" /></Scope>
             </div>
           </>
@@ -127,8 +136,10 @@ export function MonitorTab({ projectId, storyboards = [] }: { projectId: string;
   );
 }
 
-/** v9.2.1 渲染循环 — 初始拉一次快照, 再开 SSE 实时回填; done 即停 (防 EventSource 重连风暴)。 */
+/** v9.2.1 render loop — snapshot once, then SSE live fill; stop on done (avoid EventSource reconnect storm). */
 function RenderLoopPanel({ projectId }: { projectId: string }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectPanels: Record<string, string> };
   const [data, setData] = useState<{ summary: RenderLoopSummary; shots: ShotRenderState[] } | null>(null);
   const [live, setLive] = useState(false);
 
@@ -156,8 +167,8 @@ function RenderLoopPanel({ projectId }: { projectId: string }) {
   if (!data || data.summary.total === 0) {
     return (
       <div className="cinema-card !p-4">
-        <div className="cinema-eyebrow mb-1 flex items-center gap-1.5"><FilmStrip size={13} className="text-[var(--monitor-blue)]" /> 渲染循环 · RENDER LOOP</div>
-        <div className="cinema-mono text-[11px] opacity-50">剧本 / 分镜尚未生成 — 开始创作后这里实时显示每镜渲染进度。</div>
+        <div className="cinema-eyebrow mb-1 flex items-center gap-1.5"><FilmStrip size={13} className="text-[var(--monitor-blue)]" /> {t.projectPanels.renderLoop}</div>
+        <div className="cinema-mono text-[11px] opacity-50">{t.projectPanels.renderEmpty}</div>
       </div>
     );
   }
@@ -167,11 +178,11 @@ function RenderLoopPanel({ projectId }: { projectId: string }) {
     <div className="cinema-card !p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="cinema-eyebrow flex items-center gap-1.5">
-          <FilmStrip size={13} className="text-[var(--monitor-blue)]" /> 渲染循环 · RENDER LOOP
+          <FilmStrip size={13} className="text-[var(--monitor-blue)]" /> {t.projectPanels.renderLoop}
           {live && <span className="inline-flex items-center gap-1 text-[9px] text-[var(--monitor-blue)]"><span className="w-1.5 h-1.5 rounded-full bg-[var(--monitor-blue)] animate-pulse" /> LIVE</span>}
         </span>
         <span className="cinema-mono text-[10px] opacity-70 flex items-center gap-1.5">
-          <Clock size={11} /> ETA {formatEta(s.etaMs)}{s.avgShotMs != null ? ` · 均 ${Math.round(s.avgShotMs / 1000)}s/镜` : ''}
+          <Clock size={11} /> ETA {formatEta(s.etaMs)}{s.avgShotMs != null ? t.projectPanels.etaAvg.replace('{n}', String(Math.round(s.avgShotMs / 1000))) : ''}
         </span>
       </div>
 
@@ -181,7 +192,7 @@ function RenderLoopPanel({ projectId }: { projectId: string }) {
         </div>
         <span className="cinema-mono text-[11px] tabular-nums">{s.done}/{s.total}</span>
         <span className="cinema-mono text-[11px] opacity-60 tabular-nums">{s.percent}%</span>
-        {s.failed > 0 && <span className="cinema-mono text-[10px] text-[var(--secondary)]">{s.failed} 失败</span>}
+        {s.failed > 0 && <span className="cinema-mono text-[10px] text-[var(--secondary)]">{t.projectPanels.failedN.replace('{n}', String(s.failed))}</span>}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -190,7 +201,7 @@ function RenderLoopPanel({ projectId }: { projectId: string }) {
             <ShotStatusIcon status={sh.status} />
             <span className="cinema-mono text-[10px] opacity-50 shrink-0">#{String(sh.shotNumber).padStart(2, '0')}</span>
             <span className="text-[11px] truncate flex-1" title={sh.name}>{sh.name}</span>
-            <span className="cinema-mono text-[9px] opacity-50 shrink-0">{sh.stage === 'video' ? '视频' : '分镜'}</span>
+            <span className="cinema-mono text-[9px] opacity-50 shrink-0">{sh.stage === 'video' ? t.projectPanels.stageVideo : t.projectPanels.stageBoard}</span>
             {sh.attempts > 1 && <span className="cinema-mono text-[9px] text-[var(--secondary)] flex items-center gap-0.5 shrink-0"><ArrowsClockwise size={9} />{sh.attempts}</span>}
             {sh.durationMs != null && <span className="cinema-mono text-[9px] opacity-40 shrink-0">{Math.round(sh.durationMs / 1000)}s</span>}
           </div>
@@ -216,7 +227,7 @@ function Scope({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-// ── canvas 绘制 (纯客户端) ──
+// ── canvas draw (client only) ──
 function drawHistogram(cv: HTMLCanvasElement | null, hist: { r: number[]; g: number[]; b: number[]; luma: number[] }) {
   if (!cv) return;
   const ctx = cv.getContext('2d'); if (!ctx) return;

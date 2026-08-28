@@ -9,16 +9,17 @@ import { LocaleSwitcher } from '@/components/locale-switcher';
 import { useLocale } from '@/hooks/use-locale';
 
 export default function ProjectsPage() {
-  const { t } = useLocale();
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { publicUi: Record<string, string> };
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // 模拟项目数据
+  // Mock project cards (copy looked up via t)
   const mockProjects = [
     {
       id: '1',
-      title: '赛博朋克侦探',
-      synopsis: '2077年的新东京，一位赛博侦探接到神秘委托...',
+      title: t.publicUi.ideaCyberTitle,
+      synopsis: t.publicUi.projCyberSynopsis,
       coverImage: '/placeholder/project1.jpg',
       status: 'completed',
       createdAt: '2024-03-20',
@@ -26,8 +27,8 @@ export default function ProjectsPage() {
     },
     {
       id: '2',
-      title: '古代宫廷',
-      synopsis: '大唐盛世，一位才女入宫，凭借智慧在后宫中周旋...',
+      title: t.publicUi.ideaPalaceTitle,
+      synopsis: t.publicUi.projPalaceSynopsis,
       coverImage: '/placeholder/project2.jpg',
       status: 'creating',
       createdAt: '2024-03-21',
@@ -35,8 +36,8 @@ export default function ProjectsPage() {
     },
     {
       id: '3',
-      title: '末日废土',
-      synopsis: '核战后的世界，幸存者们在废墟中寻找希望...',
+      title: t.publicUi.ideaWastelandTitle,
+      synopsis: t.publicUi.projWastelandSynopsis,
       coverImage: '/placeholder/project3.jpg',
       status: 'completed',
       createdAt: '2024-03-19',
@@ -44,15 +45,15 @@ export default function ProjectsPage() {
     }
   ];
 
-  // 筛选和搜索逻辑
+  // Filter + search
   const filteredProjects = useMemo(() => {
     return mockProjects.filter((project) => {
-      // 状态筛选
+      // Status filter
       if (statusFilter !== 'all' && project.status !== statusFilter) {
         return false;
       }
 
-      // 搜索筛选
+      // Text search
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         return (
@@ -67,7 +68,7 @@ export default function ProjectsPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* 导航栏 */}
+      {/* Nav */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/10">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
@@ -94,7 +95,7 @@ export default function ProjectsPage() {
 
       <main className="pt-24 pb-12 px-6">
         <div className="container mx-auto max-w-7xl">
-          {/* 标题区域 */}
+          {/* Title */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -110,7 +111,7 @@ export default function ProjectsPage() {
             </p>
           </motion.div>
 
-          {/* 搜索和筛选 */}
+          {/* Search + filters */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -124,7 +125,7 @@ export default function ProjectsPage() {
             />
           </motion.div>
 
-          {/* 项目网格 */}
+          {/* Project grid */}
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProjects.map((project, index) => (
               <motion.div
@@ -135,12 +136,12 @@ export default function ProjectsPage() {
               >
                 <Link href={`/projects/${project.id}`}>
                   <div className="group bg-white/5 border border-white/10 rounded-2xl overflow-hidden hover:border-[#E8C547]/50 transition-all cursor-pointer">
-                    {/* 封面图 */}
+                    {/* Cover */}
                     <div className="aspect-video bg-gradient-to-br from-[#E8C547]/15 to-[#D4A830]/15 flex items-center justify-center relative overflow-hidden">
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                       <Sparkles className="w-16 h-16 text-gray-600" />
 
-                      {/* 状态标签 */}
+                      {/* Status */}
                       <div className="absolute top-4 right-4">
                         {project.status === 'completed' ? (
                           <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 border border-green-500/30 rounded-full text-sm">
@@ -156,7 +157,7 @@ export default function ProjectsPage() {
                       </div>
                     </div>
 
-                    {/* 项目信息 */}
+                    {/* Meta */}
                     <div className="p-6">
                       <h3 className="text-xl font-semibold mb-2 group-hover:text-[#E8C547] transition-colors">
                         {project.title}
@@ -186,7 +187,7 @@ export default function ProjectsPage() {
               </div>
             )}
 
-            {/* 新建项目卡片 */}
+            {/* New-project card */}
             {filteredProjects.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}

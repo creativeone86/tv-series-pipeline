@@ -37,7 +37,7 @@ describe('MODE_PRESETS 配置', () => {
 describe('ModeCard', () => {
   it('渲染图标和名称', () => {
     render(<ModeCard preset={MODE_PRESETS.mv} />);
-    expect(screen.getByText('MV 音乐视频')).toBeInTheDocument();
+    expect(screen.getAllByText('Music Video').length).toBeGreaterThan(0);
     expect(screen.getByText('🎵')).toBeInTheDocument();
   });
 

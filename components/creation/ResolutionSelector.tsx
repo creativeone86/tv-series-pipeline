@@ -3,16 +3,17 @@
 /**
  * ResolutionSelector (v2.0 Sprint 0 D5)
  *
- * 分辨率档位选择器 —— 360P / 480P / 720P (本期最高 720P)。
+ * Resolution tier picker — 360P / 480P / 720P (max 720P this cycle).
  *
- * 功能：
- *  - 三档可视化卡片（尺寸示意 + 价格预估）
- *  - 可选时长联动计算本次生成的成本
- *  - 显示 aspect ratio 切换（16:9 / 9:16 / 1:1）
- *  - 创建档不含 4K(本期决议:引擎创建最高 720P)。4K 走成片后**单镜「4K 重渲」**
- *    (`regenerate-shot-4k`,Kling Master 1080p → lanczos 2160p,plan-gated)——已上线、非"敬请期待"。
+ * Features:
+ *  - Three visual cards (size cue + cost estimate)
+ *  - Duration-linked cost for this generation
+ *  - Aspect-ratio switch (16:9 / 9:16 / 1:1)
+ *  - Create path has no 4K (engine create max 720P). 4K is post-film
+ *    single-shot "4K re-render" (`regenerate-shot-4k`, Kling Master 1080p
+ *    → lanczos 2160p, plan-gated) — shipped, not "coming soon".
  *
- * 使用：
+ * Usage:
  *   <ResolutionSelector
  *     value={{ resolution: '720p', aspectRatio: '16:9' }}
  *     durationSec={5}
@@ -23,17 +24,18 @@
 import * as React from 'react';
 import type { ResolutionTier, AspectRatio } from '@/types/agents';
 import { cn } from '@/lib/utils';
+import { useLocale } from '@/hooks/use-locale';
 
 // ──────────────────────────────────────────────────────────
-// 成本表（单位 ¥/秒，估算；后端 cost_log 会写真实值）
+// Cost table (CNY / sec, estimate; backend cost_log writes the real value)
 // ──────────────────────────────────────────────────────────
 
 interface TierMeta {
   label: string;
   dim: string;
   pricePerSec: number;
-  desc: string;
-  badge?: string;
+  descKey: string;
+  badgeKey?: string;
 }
 
 const TIER_META: Record<ResolutionTier, TierMeta> = {
@@ -41,27 +43,27 @@ const TIER_META: Record<ResolutionTier, TierMeta> = {
     label: '360P',
     dim: '640 × 360',
     pricePerSec: 0.05,
-    desc: '草稿档，快速验证分镜',
+    descKey: 'tier360Desc',
   },
   '480p': {
     label: '480P',
     dim: '854 × 480',
     pricePerSec: 0.12,
-    desc: '标准档，社交分发可用',
-    badge: '推荐',
+    descKey: 'tier480Desc',
+    badgeKey: 'tierRecommended',
   },
   '720p': {
     label: '720P',
     dim: '1280 × 720',
     pricePerSec: 0.22,
-    desc: '高清档，适合成片',
+    descKey: 'tier720Desc',
   },
 };
 
-const ASPECT_RATIOS: Array<{ value: AspectRatio; label: string; icon: string }> = [
-  { value: '16:9', label: '横屏 16:9', icon: '▭' },
-  { value: '9:16', label: '竖屏 9:16', icon: '▯' },
-  { value: '1:1', label: '方形 1:1', icon: '◻' },
+const ASPECT_RATIOS: Array<{ value: AspectRatio; labelKey: string; icon: string }> = [
+  { value: '16:9', labelKey: 'aspectLandscape', icon: '▭' },
+  { value: '9:16', labelKey: 'aspectPortrait', icon: '▯' },
+  { value: '1:1', labelKey: 'aspectSquare', icon: '◻' },
 ];
 
 // ──────────────────────────────────────────────────────────
@@ -86,9 +88,9 @@ export interface ResolutionSelectorValue {
 export interface ResolutionSelectorProps {
   value: ResolutionSelectorValue;
   onChange: (next: ResolutionSelectorValue) => void;
-  /** 用于计算本次成本预估的时长（秒） */
+  /** Duration in seconds used for this-run cost estimate */
   durationSec?: number;
-  /** 是否禁用 aspect ratio 切换（某些模式强制固定比例） */
+  /** Disable aspect-ratio switching (some modes lock the ratio) */
   lockAspectRatio?: boolean;
   className?: string;
 }
@@ -100,14 +102,18 @@ export function ResolutionSelector({
   lockAspectRatio = false,
   className,
 }: ResolutionSelectorProps) {
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { workshop: Record<string, string> };
+  const w = t.workshop ?? {};
+
   return (
     <div className={cn('flex flex-col gap-5', className)}>
-      {/* 分辨率卡片 */}
+      {/* Resolution cards */}
       <div>
         <div className="mb-2 flex items-baseline justify-between">
-          <h4 className="text-sm font-semibold text-white">分辨率</h4>
+          <h4 className="text-sm font-semibold text-white">{w.resolutionTitle || 'Resolution'}</h4>
           <span className="text-xs text-neutral-400">
-            创建最高 720P · 成片后单镜可「4K 重渲」(Kling Master · plan-gated)
+            {w.resolutionHint || 'Create max 720P · per-shot 4K re-render after film (Kling Master · plan-gated)'}
           </span>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" data-testid="resolution-grid">
@@ -115,6 +121,7 @@ export function ResolutionSelector({
             const meta = TIER_META[tier];
             const selected = value.resolution === tier;
             const cost = estimateCost(tier, durationSec);
+            const badge = meta.badgeKey ? (w[meta.badgeKey] || t.billing.recommended) : undefined;
             return (
               <button
                 key={tier}
@@ -130,16 +137,16 @@ export function ResolutionSelector({
                 data-selected={selected}
                 aria-pressed={selected}
               >
-                {meta.badge && (
+                {badge && (
                   <span className="absolute right-2 top-2 rounded bg-[#E8C547]/30 px-1.5 py-0.5 text-[10px] font-bold text-[#E8C547]">
-                    {meta.badge}
+                    {badge}
                   </span>
                 )}
                 <div className="text-lg font-bold text-white">{meta.label}</div>
                 <div className="mt-1 text-xs text-neutral-400">{meta.dim}</div>
-                <div className="mt-3 text-[11px] text-neutral-300">{meta.desc}</div>
+                <div className="mt-3 text-[11px] text-neutral-300">{w[meta.descKey] || meta.label}</div>
                 <div className="mt-3 flex items-baseline gap-1 border-t border-white/10 pt-2">
-                  <span className="text-xs text-neutral-400">预估</span>
+                  <span className="text-xs text-neutral-400">{w.estimated || 'Est.'}</span>
                   <span className="text-sm font-semibold text-[#E8C547]">
                     ¥{cost.toFixed(2)}
                   </span>
@@ -154,9 +161,9 @@ export function ResolutionSelector({
       {/* Aspect Ratio */}
       <div>
         <div className="mb-2 flex items-baseline justify-between">
-          <h4 className="text-sm font-semibold text-white">画面比例</h4>
+          <h4 className="text-sm font-semibold text-white">{w.aspectTitle || 'Aspect ratio'}</h4>
           {lockAspectRatio && (
-            <span className="text-[11px] text-neutral-500">此模式强制固定比例</span>
+            <span className="text-[11px] text-neutral-500">{w.aspectLocked || 'This mode locks the ratio'}</span>
           )}
         </div>
         <div className="flex gap-2" data-testid="aspect-ratio-row">
@@ -180,7 +187,7 @@ export function ResolutionSelector({
                 aria-pressed={selected}
               >
                 <div className="text-2xl leading-none">{ar.icon}</div>
-                <div className="mt-1 text-xs">{ar.label}</div>
+                <div className="mt-1 text-xs">{w[ar.labelKey] || ar.value}</div>
               </button>
             );
           })}

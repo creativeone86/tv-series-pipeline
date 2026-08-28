@@ -14,12 +14,13 @@ import type { Locale } from "@/lib/i18n"
 export default function SettingsPage() {
   const { settings, updateSettings, isLoading } = useSettings()
   const { showToast } = useToast()
-  const { t, locale, setLocale } = useLocale()
+  const { t: tRaw, locale, setLocale } = useLocale()
+  const t = tRaw as typeof tRaw & { publicUi: Record<string, string> }
 
   const theme = settings.theme
   const notifications = settings.notifications.email
 
-  // 语言下拉直接驱动真 i18n locale(同时同步到 useSettings)
+  // Language dropdown drives the real i18n locale (and syncs to useSettings)
   const setLanguage = (value: string) => {
     setLocale(value as Locale)
     updateSettings({ language: value })
@@ -100,10 +101,10 @@ export default function SettingsPage() {
                       value={locale}
                       onChange={(e) => setLanguage(e.target.value)}
                     >
-                      <option value="zh-CN">简体中文</option>
-                      <option value="zh-TW">繁體中文</option>
+                      <option value="zh-CN">{t.publicUi.langZhCN}</option>
+                      <option value="zh-TW">{t.publicUi.langZhTW}</option>
                       <option value="en">English</option>
-                      <option value="ja">日本語</option>
+                      <option value="ja">{t.publicUi.langJa}</option>
                     </Select>
                   </div>
                 </CardContent>

@@ -3,21 +3,21 @@
 /**
  * components/ui/tooltip (v2.13.5 · shadcn-style on Radix)
  *
- * 比 native title="..." 强:
- *   - 跟随光标的可定制 (top/bottom/left/right + sideOffset)
- *   - 触摸屏 long-press 才触发, 不污染移动端
- *   - 真正的 ARIA aria-describedby 关联, 屏幕阅读器友好
+ * Stronger than native title="...":
+ *   - customizable placement that follows the cursor (top/bottom/left/right + sideOffset)
+ *   - touch: long-press only, so it does not pollute mobile
+ *   - real ARIA aria-describedby for screen readers
  *
- * 用法:
+ * Usage:
  *   <TooltipProvider>
  *     <Tooltip>
  *       <TooltipTrigger asChild><button>SHOT 03</button></TooltipTrigger>
- *       <TooltipContent>第 3 个镜头 · Cameo 92 / Edit cut</TooltipContent>
+ *       <TooltipContent>Shot 3 · Cameo 92 / Edit cut</TooltipContent>
  *     </Tooltip>
  *   </TooltipProvider>
  *
- * 整页用:在 layout 顶层包一个 <TooltipProvider delayDuration={300}>;
- * 局部用:就近包一个即可。
+ * Page-wide: wrap the layout root in <TooltipProvider delayDuration={300}>;
+ * local: wrap just the cluster that needs it.
  */
 
 import * as React from 'react';
@@ -36,7 +36,7 @@ const TooltipContent = React.forwardRef<
     ref={ref}
     sideOffset={sideOffset}
     className={cn(
-      // 影院风: 黑底 amber 框 + cinema-mono
+      // Cinema: black field, amber frame + cinema-mono
       'z-50 overflow-hidden rounded-md border px-2.5 py-1.5',
       'border-[var(--cinema-border-hi)] bg-[var(--cinema-surface-hi)]',
       'cinema-mono text-[10.5px] tracking-wide text-[var(--cinema-text)]',

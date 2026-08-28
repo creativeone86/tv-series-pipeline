@@ -1,14 +1,17 @@
 'use client';
 
 /**
- * ReplicateWorkbench (v11.1.2) — 拉片复刻 · 替换工作台(拉片 tab 内)。
+ * ReplicateWorkbench (v11.1.2) — pull-sheet replica / replace workbench
+ * (inside the pull-sheet tab).
  *
- * 加替换规则(全局指令「所有人物→猫咪」/ 逐维度角色·场景·道具,可带参考图)→
- * 预览改写后的逐镜 prompt(全开放可编辑)→ 复刻起片(建新项目并行生成)。
+ * Add replace rules (global “all people→cats” / per-dimension cast · scene ·
+ * prop, optional ref image) → preview rewritten per-shot prompts (all editable)
+ * → start replica (new project, parallel generate).
  */
 import { useCallback, useState } from 'react';
 import { MagicWand, Plus, X, CircleNotch, FilmSlate, BookmarkSimple as Bookmark } from '@phosphor-icons/react';
 import { getToken } from '@/lib/auth';
+import { useLocale } from '@/hooks/use-locale';
 
 type Kind = 'global' | 'character' | 'scene' | 'prop';
 interface Rule { kind: Kind; from: string; to: string; refImage?: string }
@@ -26,14 +29,20 @@ function fidColor(v: number): string {
   return 'var(--cinema-red)';
 }
 
-const KIND_LABEL: Record<Kind, string> = { global: '全局替换', character: '角色', scene: '场景', prop: '道具' };
-
 function authHeaders(): Record<string, string> {
-  const t = getToken();
-  return { 'Content-Type': 'application/json', ...(t ? { Authorization: `Bearer ${t}` } : {}) };
+  const tok = getToken();
+  return { 'Content-Type': 'application/json', ...(tok ? { Authorization: `Bearer ${tok}` } : {}) };
 }
 
 export function ReplicateWorkbench({ projectId, sheetSource = 'factory' }: { projectId: string; sheetSource?: string }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectPanels: Record<string, string> };
+  const kindLabel = (k: Kind) => ({
+    global: t.projectPanels.kindGlobal,
+    character: t.product.tabCharacters,
+    scene: t.product.tabScenes,
+    prop: t.projectPanels.kindProp,
+  }[k]);
   const [rules, setRules] = useState<Rule[]>([{ kind: 'global', from: '', to: '' }]);
   const [preview, setPreview] = useState<{ title: string; shots: PreviewShot[]; fidelity?: FidelityReport } | null>(null);
   const [edited, setEdited] = useState<Record<number, string>>({});
@@ -56,10 +65,10 @@ export function ReplicateWorkbench({ projectId, sheetSource = 'factory' }: { pro
         method: 'POST', headers: authHeaders(), body: body({ preview: true }),
       });
       const b = await res.json();
-      // 保留用户已编辑的 prompt(按 shotNumber 套用)—— 重复点预览不清空编辑(审查修复)
+      // Keep user-edited prompts (by shotNumber) — repeat preview does not wipe edits
       if (res.ok) setPreview(b);
-      else setNotice(b.message || '预览失败');
-    } catch { setNotice('预览失败'); }
+      else setNotice(b.message || t.projectPanels.previewFailed);
+    } catch { setNotice(t.projectPanels.previewFailed); }
     finally { setBusy(false); }
   };
 
@@ -70,9 +79,9 @@ export function ReplicateWorkbench({ projectId, sheetSource = 'factory' }: { pro
         method: 'POST', headers: authHeaders(), body: body({ editedPrompts: edited, title: preview?.title }),
       });
       const b = await res.json();
-      if (res.ok) setNotice(`复刻已起片 — 新项目 ${b.newProjectId}(${b.shots} 镜并行生成中,去「我的项目」查看)`);
-      else setNotice(b.message || '复刻失败');
-    } catch { setNotice('复刻失败'); }
+      if (res.ok) setNotice(t.projectPanels.replicateStarted.replace('{id}', String(b.newProjectId)).replace('{n}', String(b.shots)));
+      else setNotice(b.message || t.projectPanels.replicateFailed);
+    } catch { setNotice(t.projectPanels.replicateFailed); }
     finally { setBusy(false); }
   };
 
@@ -83,69 +92,69 @@ export function ReplicateWorkbench({ projectId, sheetSource = 'factory' }: { pro
         method: 'POST', headers: authHeaders(), body: JSON.stringify({ sheetSource, title: preview?.title }),
       });
       const b = await res.json();
-      if (res.ok) setNotice(`已存为私有模板「${b.title}」—— 去模板市场可一键复用结构`);
-      else setNotice(b.message || '存模板失败');
-    } catch { setNotice('存模板失败'); }
+      if (res.ok) setNotice(t.projectPanels.templateSaved.replace('{title}', String(b.title)));
+      else setNotice(b.message || t.projectPanels.saveTemplateFailed);
+    } catch { setNotice(t.projectPanels.saveTemplateFailed); }
     finally { setBusy(false); }
   };
 
   return (
     <div className="cinema-card-hi p-4 mt-6" data-testid="replicate-workbench">
-      <div className="cinema-eyebrow flex items-center gap-1.5 mb-1"><MagicWand className="w-3.5 h-3.5" />复刻 · 替换工作台</div>
+      <div className="cinema-eyebrow flex items-center gap-1.5 mb-1"><MagicWand className="w-3.5 h-3.5" />{t.projectPanels.replicateTitle}</div>
       <p className="cinema-mono text-[10px] opacity-50 mb-3">
-        换角色/场景/道具(全局指令如「老板→猫咪」一键全员换)→ 预览改写后逐镜 prompt(可编辑)→ 按原片结构并行起片新片。复刻 = 同结构新内容,不复制原片素材。
+        {t.projectPanels.replicateHint}
       </p>
 
       <div className="space-y-2">
         {rules.map((r, i) => (
           <div key={i} className="flex items-center gap-2 flex-wrap">
             <select value={r.kind} onChange={(e) => setRule(i, { kind: e.target.value as Kind })}
-              aria-label="替换类型"
+              aria-label={t.projectPanels.replaceKindAria}
               className="cinema-input !text-[11px] !py-1 w-24 shrink-0">
-              {(Object.keys(KIND_LABEL) as Kind[]).map((k) => <option key={k} value={k} className="bg-[#1a1a24]">{KIND_LABEL[k]}</option>)}
+              {(['global', 'character', 'scene', 'prop'] as Kind[]).map((k) => <option key={k} value={k} className="bg-[#1a1a24]">{kindLabel(k)}</option>)}
             </select>
             <input value={r.from} onChange={(e) => setRule(i, { from: e.target.value })}
-              placeholder={r.kind === 'global' ? '原词(如:老板)' : '原(空=整列)'}
-              aria-label="原词"
+              placeholder={r.kind === 'global' ? t.projectPanels.fromPlaceholderGlobal : t.projectPanels.fromPlaceholderOther}
+              aria-label={t.projectPanels.fromAria}
               className="cinema-input !text-[11px] !py-1 flex-1 min-w-[100px]" />
             <span className="opacity-40 text-[11px]">→</span>
             <input value={r.to} onChange={(e) => setRule(i, { to: e.target.value })}
-              placeholder="换成(如:一只橘猫)"
-              aria-label="替换为"
+              placeholder={t.projectPanels.toPlaceholder}
+              aria-label={t.projectPanels.toAria}
               className="cinema-input !text-[11px] !py-1 flex-1 min-w-[100px]" />
             <input value={r.refImage || ''} onChange={(e) => setRule(i, { refImage: e.target.value })}
-              placeholder="参考图 URL(可选)"
-              aria-label="参考图"
+              placeholder={t.projectPanels.refImagePlaceholder}
+              aria-label={t.projectPanels.refImageAria}
               className="cinema-input !text-[11px] !py-1 w-32" />
             <button onClick={() => setRules((rs) => rs.filter((_, idx) => idx !== i))}
-              aria-label="删除规则" className="text-white/40 hover:text-white shrink-0"><X className="w-3.5 h-3.5" /></button>
+              aria-label={t.projectPanels.deleteRuleAria} className="text-white/40 hover:text-white shrink-0"><X className="w-3.5 h-3.5" /></button>
           </div>
         ))}
         <button onClick={() => setRules((rs) => [...rs, { kind: 'global', from: '', to: '' }])}
-          className="cinema-btn !px-2 !py-1 !text-[10px] inline-flex items-center gap-1"><Plus className="w-3 h-3" />加规则</button>
+          className="cinema-btn !px-2 !py-1 !text-[10px] inline-flex items-center gap-1"><Plus className="w-3 h-3" />{t.projectPanels.addRule}</button>
       </div>
 
       <div className="flex items-center gap-2 mt-3">
         <button onClick={doPreview} disabled={busy} className="cinema-btn !px-2.5 !py-1.5 !text-[11px] inline-flex items-center gap-1.5 disabled:opacity-50">
-          {busy ? <CircleNotch className="w-3.5 h-3.5 animate-spin" /> : <MagicWand className="w-3.5 h-3.5" />}预览改写
+          {busy ? <CircleNotch className="w-3.5 h-3.5 animate-spin" /> : <MagicWand className="w-3.5 h-3.5" />}{t.projectPanels.previewRewrite}
         </button>
         {preview && (
           <button onClick={doReplicate} disabled={busy} className="cinema-btn cinema-btn-primary !px-2.5 !py-1.5 !text-[11px] inline-flex items-center gap-1.5 disabled:opacity-50">
-            <FilmSlate className="w-3.5 h-3.5" />复刻起片({preview.shots.length} 镜)
+            <FilmSlate className="w-3.5 h-3.5" />{t.projectPanels.replicateStart.replace('{n}', String(preview.shots.length))}
           </button>
         )}
-        <button onClick={doSaveTemplate} disabled={busy} title="把这张拉片表的镜头结构存成私有模板,复用爆款骨架"
+        <button onClick={doSaveTemplate} disabled={busy} title={t.projectPanels.saveTemplateHint}
           className="cinema-btn !px-2.5 !py-1.5 !text-[11px] inline-flex items-center gap-1.5 disabled:opacity-50">
-          <Bookmark className="w-3.5 h-3.5" />存为私有模板
+          <Bookmark className="w-3.5 h-3.5" />{t.projectPanels.savePrivateTemplate}
         </button>
       </div>
       {notice && <p className="mt-2 text-[11px] text-[var(--cinema-amber)]" role="status">{notice}</p>}
 
       {preview?.fidelity && (
         <div className="mt-4 rounded-md border border-[var(--cinema-border)] bg-black/20 px-3 py-2.5" data-testid="fidelity">
-          <div className="cinema-eyebrow !text-[9px] mb-2">复刻保真度(节奏 / 钩子贴合原片)</div>
+          <div className="cinema-eyebrow !text-[9px] mb-2">{t.projectPanels.fidelityTitle}</div>
           <div className="grid grid-cols-3 gap-3">
-            {([['总体', preview.fidelity.fidelity.overall], ['节奏', preview.fidelity.fidelity.pacing], ['钩子', preview.fidelity.fidelity.hook]] as Array<[string, number]>).map(([label, v]) => (
+            {([[t.projectPanels.fidOverall, preview.fidelity.fidelity.overall], [t.projectPanels.fidPacing, preview.fidelity.fidelity.pacing], [t.projectPanels.fidHook, preview.fidelity.fidelity.hook]] as Array<[string, number]>).map(([label, v]) => (
               <div key={label}>
                 <div className="cinema-mono text-[9px] opacity-50 mb-0.5">{label}</div>
                 <div className="flex items-baseline gap-1">
@@ -156,7 +165,13 @@ export function ReplicateWorkbench({ projectId, sheetSource = 'factory' }: { pro
             ))}
           </div>
           <div className="cinema-mono text-[9px] opacity-45 mt-2">
-            开场 {preview.fidelity.original.openingHook}→{preview.fidelity.replica.openingHook} · 集尾 {preview.fidelity.original.cliffhanger}→{preview.fidelity.replica.cliffhanger} · 反转 {preview.fidelity.original.reversalCount}→{preview.fidelity.replica.reversalCount}
+            {t.projectPanels.fidCompare
+              .replace('{a}', String(preview.fidelity.original.openingHook))
+              .replace('{b}', String(preview.fidelity.replica.openingHook))
+              .replace('{c}', String(preview.fidelity.original.cliffhanger))
+              .replace('{d}', String(preview.fidelity.replica.cliffhanger))
+              .replace('{e}', String(preview.fidelity.original.reversalCount))
+              .replace('{f}', String(preview.fidelity.replica.reversalCount))}
           </div>
           {preview.fidelity.notes.map((n, i) => (
             <p key={i} className="text-[10px] text-[var(--cinema-text-3)] mt-1">· {n}</p>
@@ -166,18 +181,18 @@ export function ReplicateWorkbench({ projectId, sheetSource = 'factory' }: { pro
 
       {preview && (
         <div className="mt-4 space-y-2">
-          <div className="cinema-mono text-[10px] opacity-50">「{preview.title}」逐镜复刻 prompt(可改):</div>
+          <div className="cinema-mono text-[10px] opacity-50">{t.projectPanels.promptListTitle.replace('{title}', preview.title)}</div>
           {preview.shots.map((s) => (
             <div key={s.shotNumber} className="rounded-md border border-[var(--cinema-border)] bg-black/20 px-3 py-2">
               <div className="flex items-center gap-2 mb-1">
-                <span className="cinema-mono text-[10px] opacity-50">镜 {s.shotNumber} · {s.durationSec}s</span>
-                {s.characters.length > 0 && <span className="text-[10px] text-[var(--cinema-text-3)]">{s.characters.join('、')}</span>}
-                {s.refImages.length > 0 && <span className="text-[9px] text-sky-300/70">{s.refImages.length} 参考图</span>}
+                <span className="cinema-mono text-[10px] opacity-50">{t.projectPanels.shotDur.replace('{n}', String(s.shotNumber)).replace('{sec}', String(s.durationSec))}</span>
+                {s.characters.length > 0 && <span className="text-[10px] text-[var(--cinema-text-3)]">{s.characters.join('\u3001')}</span>}
+                {s.refImages.length > 0 && <span className="text-[9px] text-sky-300/70">{t.projectPanels.refImageCount.replace('{n}', String(s.refImages.length))}</span>}
               </div>
               <textarea
                 value={edited[s.shotNumber] ?? s.prompt}
                 onChange={(e) => setEdited((m) => ({ ...m, [s.shotNumber]: e.target.value }))}
-                aria-label={`镜 ${s.shotNumber} 复刻 prompt`}
+                aria-label={t.projectPanels.shotPromptAria.replace('{n}', String(s.shotNumber))}
                 rows={2}
                 className="cinema-textarea w-full !text-[11px]" />
             </div>

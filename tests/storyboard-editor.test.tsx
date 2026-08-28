@@ -12,24 +12,24 @@ describe('StoryboardEditor', () => {
     render(<StoryboardEditor shots={mockShots} onChange={() => {}} />);
     expect(screen.getByText('城市远景')).toBeInTheDocument();
     expect(screen.getByText('角色特写')).toBeInTheDocument();
-    expect(screen.getByText('分镜编辑器')).toBeInTheDocument();
+    expect(screen.getByText('Storyboard editor')).toBeInTheDocument();
   });
 
   it('shows total duration', () => {
     render(<StoryboardEditor shots={mockShots} onChange={() => {}} />);
-    expect(screen.getByText('2 个镜头 · 总时长 8s')).toBeInTheDocument();
+    expect(screen.getByText('2 shots · 8s total')).toBeInTheDocument();
   });
 
   it('shows empty state', () => {
     render(<StoryboardEditor shots={[]} onChange={() => {}} />);
-    expect(screen.getByText(/还没有分镜/)).toBeInTheDocument();
+    expect(screen.getByText(/No shots yet/)).toBeInTheDocument();
   });
 
   it('adds a new shot', () => {
     let shots: StoryboardShot[] = [];
     const onChange = (s: StoryboardShot[]) => { shots = s; };
     render(<StoryboardEditor shots={shots} onChange={onChange} />);
-    fireEvent.click(screen.getByText('+ 添加镜头'));
+    fireEvent.click(screen.getByText('+ Add shot'));
     expect(shots.length).toBe(1);
     expect(shots[0].shotNumber).toBe(1);
   });
@@ -38,7 +38,7 @@ describe('StoryboardEditor', () => {
     let shots = [...mockShots];
     const onChange = (s: StoryboardShot[]) => { shots = s; };
     const { getAllByTitle } = render(<StoryboardEditor shots={shots} onChange={onChange} />);
-    const deleteButtons = getAllByTitle('删除');
+    const deleteButtons = getAllByTitle('Delete');
     fireEvent.click(deleteButtons[0]);
     expect(shots.length).toBe(1);
     expect(shots[0].shotNumber).toBe(1);
@@ -49,7 +49,7 @@ describe('StoryboardEditor', () => {
     let shots = [...mockShots];
     const onChange = (s: StoryboardShot[]) => { shots = s; };
     const { getAllByTitle } = render(<StoryboardEditor shots={shots} onChange={onChange} />);
-    const dupButtons = getAllByTitle('复制');
+    const dupButtons = getAllByTitle('Duplicate');
     fireEvent.click(dupButtons[0]);
     expect(shots.length).toBe(3);
     expect(shots[1].description).toBe('城市远景');
@@ -60,7 +60,7 @@ describe('StoryboardEditor', () => {
   it('enters edit mode on click', () => {
     render(<StoryboardEditor shots={mockShots} onChange={() => {}} />);
     fireEvent.click(screen.getByText('城市远景'));
-    expect(screen.getByText('完成')).toBeInTheDocument();
+    expect(screen.getByText('Done')).toBeInTheDocument();
   });
 
   it('displays dialogue', () => {
@@ -70,7 +70,7 @@ describe('StoryboardEditor', () => {
 
   it('displays camera angle tags', () => {
     render(<StoryboardEditor shots={mockShots} onChange={() => {}} />);
-    expect(screen.getByText('远景')).toBeInTheDocument();
-    expect(screen.getByText('特写')).toBeInTheDocument();
+    expect(screen.getByText('Wide')).toBeInTheDocument();
+    expect(screen.getByText('Close-up')).toBeInTheDocument();
   });
 });

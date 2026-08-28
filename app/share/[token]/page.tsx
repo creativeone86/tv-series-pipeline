@@ -1,16 +1,22 @@
 import { db } from '@/lib/db';
 import { notFound } from 'next/navigation';
+import { cookies } from 'next/headers';
+import { getTranslations, normalizeLocale } from '@/lib/i18n';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * 公开只读共享页。凭 shareToken 匿名访问,不需要登录。
- * 展示:标题 / 简介 / 封面 / 分镜视频合集(如有)。
+ * Public read-only share page. Anonymous access via shareToken; no login required.
+ * Shows: title / synopsis / cover / storyboard video set (when present).
  */
 export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   if (!token) return notFound();
+
+  const jar = await cookies();
+  const tRaw = getTranslations(normalizeLocale(jar.get('qfmj-locale')?.value));
+  const t = tRaw as typeof tRaw & { publicUi: Record<string, string> };
 
   let project: any;
   try {
@@ -26,14 +32,14 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
   const covers = safeJson<string[]>(project.cover_urls, []);
   const script = safeJson<any>(project.script_data, {});
 
-  // 获取成片
-  // v2.9: 分享页是用户把链接发给朋友的场景,CDN 过期最致命 —— 优先用持久化副本
+  // Final cut
+  // v2.9: share links go to friends — a dead CDN is the worst case, so prefer the persistent copy
   const finalRow = db.prepare(
     `SELECT media_urls, persistent_url FROM project_assets WHERE project_id = ? AND type IN ('final_video','timeline') ORDER BY updated_at DESC LIMIT 1`
   ).get(project.id) as { media_urls: string; persistent_url: string | null } | undefined;
   const finalUrl = finalRow ? (finalRow.persistent_url || safeJson<string[]>(finalRow.media_urls, [])[0] || '') : '';
 
-  // 获取所有视频片段
+  // All shot clips
   const videoRows = db.prepare(
     `SELECT shot_number, media_urls, persistent_url FROM project_assets WHERE project_id = ? AND type = 'video' ORDER BY shot_number`
   ).all(project.id) as Array<{ shot_number: number; media_urls: string; persistent_url: string | null }>;
@@ -44,7 +50,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
         <div className="text-[11px] text-white/30 mb-2 tracking-widest uppercase">
           Shared Project · Read Only
         </div>
-        <h1 className="text-3xl font-bold mb-3">{project.title || '未命名作品'}</h1>
+        <h1 className="text-3xl font-bold mb-3">{project.title || t.publicUi.untitledWork}</h1>
         {project.description && (
           <p className="text-white/60 mb-8 leading-relaxed">{project.description}</p>
         )}
@@ -61,14 +67,14 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
 
         {script?.synopsis && (
           <section className="mb-8 p-5 rounded-xl border border-white/[0.05] bg-white/[0.02]">
-            <h2 className="text-sm font-semibold text-[#E8C547] mb-2">简介</h2>
+            <h2 className="text-sm font-semibold text-[#E8C547] mb-2">{t.publicUi.synopsis}</h2>
             <p className="text-sm text-white/70 leading-relaxed">{script.synopsis}</p>
           </section>
         )}
 
         {videoRows.length > 0 && (
           <section className="mb-8">
-            <h2 className="text-sm font-semibold text-[#E8C547] mb-3">分镜 ({videoRows.length})</h2>
+            <h2 className="text-sm font-semibold text-[#E8C547] mb-3">{t.publicUi.storyboardsN.replace('{n}', String(videoRows.length))}</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {videoRows.map(v => {
                 const url = v.persistent_url || safeJson<string[]>(v.media_urls, [])[0];
@@ -76,7 +82,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
                 return (
                   <div key={v.shot_number} className="rounded-lg overflow-hidden border border-white/[0.05] bg-black">
                     <video src={url} controls muted className="w-full aspect-video" />
-                    <div className="text-[10px] text-white/40 px-2 py-1">镜头 {v.shot_number}</div>
+                    <div className="text-[10px] text-white/40 px-2 py-1">{t.product.shotN.replace('{n}', String(v.shot_number))}</div>
                   </div>
                 );
               })}
@@ -85,7 +91,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
         )}
 
         <footer className="text-center text-[11px] text-white/20 pt-8 border-t border-white/[0.04]">
-          由 AI Comic Studio 生成 · 仅作者可编辑
+          {t.publicUi.shareFooter}
         </footer>
       </div>
     </div>

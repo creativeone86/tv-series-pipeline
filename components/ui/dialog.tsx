@@ -4,6 +4,9 @@ import * as React from "react"
 import { createPortal } from "react-dom"
 import { X } from '@phosphor-icons/react';import { cn } from "@/lib/utils"
 import { useFocusTrap } from "@/hooks/use-focus-trap"
+import { useLocale } from '@/hooks/use-locale'
+
+type KitT = ReturnType<typeof useLocale>['t'] & { kitUi: Record<string, string> };
 
 interface DialogProps {
   open: boolean
@@ -48,20 +51,22 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
 export function DialogContent({ className, children }: DialogContentProps) {
   const context = React.useContext(DialogContext)
   const [mounted, setMounted] = React.useState(false)
+  const { t: loc } = useLocale()
+  const t = loc as KitT
 
   React.useEffect(() => {
     setMounted(true)
     return () => setMounted(false)
   }, [])
 
-  // v10.3.5 a11y: 焦点陷阱 + Escape(document 级)+ 焦点归还 —— hook 必须在任何 early-return 之前调用
+  // v10.3.5 a11y: focus trap + document-level Escape + restore focus — hook must run before any early return
   const dialogRef = useFocusTrap<HTMLDivElement>(!!context?.open && mounted, () => context?.onOpenChange(false))
 
   if (!context) return null
   const { open, onOpenChange } = context
   if (!open || !mounted) return null
 
-  // 使用 Portal 渲染到 body，避免 React Flow 的 CSS transform 破坏 fixed 定位
+  // Portal to body so React Flow CSS transforms cannot break position:fixed
   const content = (
     <div
       className="fixed inset-0 flex items-center justify-center"
@@ -69,7 +74,7 @@ export function DialogContent({ className, children }: DialogContentProps) {
       onMouseDown={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      {/* Backdrop —— 纯视觉 + 点击关闭,读屏忽略 */}
+      {/* Backdrop — visual only + click to close; ignored by screen readers */}
       <div
         aria-hidden="true"
         className="absolute inset-0 bg-black/85 backdrop-blur-md"
@@ -86,7 +91,7 @@ export function DialogContent({ className, children }: DialogContentProps) {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label="对话框"
+        aria-label={t.kitUi.dialogAria}
         tabIndex={-1}
         className={cn(
           "relative bg-neutral-900 border border-white/10 rounded-lg shadow-2xl outline-none",
@@ -102,7 +107,7 @@ export function DialogContent({ className, children }: DialogContentProps) {
             e.stopPropagation()
             onOpenChange(false)
           }}
-          aria-label="关闭"
+          aria-label={t.product.close}
           className="absolute right-4 top-4 rounded-md p-1.5 hover:bg-white/10 transition-colors z-[10]"
         >
           <X className="w-4 h-4 text-white" />

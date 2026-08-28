@@ -17,8 +17,8 @@ describe('ContinueCard(v10.5.4)', () => {
     ]);
     render(<ContinueCard />);
     await waitFor(() => expect(screen.getByText('雨夜信号')).toBeTruthy());
-    expect(screen.getByText(/已完成/)).toBeTruthy();
-    expect(screen.getByText('看成片 · 跑审计 · 导出')).toBeTruthy(); // CTA label(hint 里也含「导出」,用精确文本)
+    expect(screen.getByText(/Completed/)).toBeTruthy();
+    expect(screen.getByText('Watch · audit · export')).toBeTruthy();
     expect(screen.getByTestId('continue-card').getAttribute('href')).toBe('/projects/p1');
   });
 

@@ -2,18 +2,21 @@
 
 import { useState } from 'react';
 import { useToast } from '@/components/ui/toast-provider';
+import { useLocale } from '@/hooks/use-locale';
 
 interface Props {
   projectId: string;
-  /** 自愈完成后触发(可用于刷新体检报告) */
+  /** Fired after a successful heal (e.g. refresh health report) */
   onHealed?: () => void;
 }
 
 /**
- * 一键自愈按钮 — POST /api/projects/[id]/heal-shots { heal: true }
- * 适配成片体检面板(film-health-panel)中有降级/缺失镜时显示。
+ * One-click heal — POST /api/projects/[id]/heal-shots { heal: true }
+ * Shown on the film-health panel when shots are downgraded / missing.
  */
 export function HealShotsButton({ projectId, onHealed }: Props) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectMisc: Record<string, string> };
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
 
@@ -29,8 +32,8 @@ export function HealShotsButton({ projectId, onHealed }: Props) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         showToast({
-          title: '自愈失败',
-          description: data?.error || `服务器返回 ${res.status}`,
+          title: t.projectMisc.healFailed,
+          description: data?.error || t.projectMisc.serverReturned.replace('{status}', String(res.status)),
           type: 'error',
           duration: 6000,
         });
@@ -41,34 +44,34 @@ export function HealShotsButton({ projectId, onHealed }: Props) {
       const skipped: number = data?.skipped?.length ?? 0;
       if (healed > 0) {
         showToast({
-          title: `🩺 自愈完成：修复 ${healed} 镜`,
+          title: `🩺 ${t.projectMisc.healDoneTitle.replace('{n}', String(healed))}`,
           description: [
-            failed > 0 ? `${failed} 镜失败` : '',
-            skipped > 0 ? `${skipped} 镜无分镜图跳过` : '',
-          ].filter(Boolean).join('，') || '全部镜头已修复',
+            failed > 0 ? t.projectMisc.healFailedCount.replace('{n}', String(failed)) : '',
+            skipped > 0 ? t.projectMisc.healSkippedCount.replace('{n}', String(skipped)) : '',
+          ].filter(Boolean).join(', ') || t.projectMisc.healAllFixed,
           type: 'success',
           duration: 7000,
         });
         onHealed?.();
       } else if (failed > 0) {
         showToast({
-          title: '自愈未成功',
-          description: `${failed} 镜补拍失败，${skipped} 镜无分镜图跳过`,
+          title: t.projectMisc.healUnsuccessful,
+          description: t.projectMisc.healUnsuccessfulDesc.replace('{failed}', String(failed)).replace('{skipped}', String(skipped)),
           type: 'warning',
           duration: 6000,
         });
       } else {
         showToast({
-          title: '无可自愈镜',
-          description: skipped > 0 ? `${skipped} 镜无分镜图，无法锚定补拍` : '成片质量良好，无需自愈',
+          title: t.projectMisc.healNoneTitle,
+          description: skipped > 0 ? t.projectMisc.healNoneSkipped.replace('{n}', String(skipped)) : t.projectMisc.healNoneOk,
           type: 'info',
           duration: 5000,
         });
       }
     } catch (e) {
       showToast({
-        title: '自愈请求失败',
-        description: e instanceof Error ? e.message : '网络错误',
+        title: t.projectMisc.healRequestFailed,
+        description: e instanceof Error ? e.message : t.auth.waitlistNetworkError,
         type: 'error',
         duration: 6000,
       });
@@ -84,7 +87,7 @@ export function HealShotsButton({ projectId, onHealed }: Props) {
       disabled={busy}
       className="cinema-btn-ghost !text-[10px] !py-0.5 !px-2 disabled:opacity-40"
     >
-      {busy ? '自愈中…' : '🩺 一键自愈'}
+      {busy ? t.projectMisc.healing : `🩺 ${t.projectMisc.healButton}`}
     </button>
   );
 }

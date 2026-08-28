@@ -1,35 +1,46 @@
 'use client';
 
 /**
- * v3.5.1 — 平台导出下拉.
+ * v3.5.1 — Platform export dropdown.
  *
- * 一键把成片导出成抖音/快手/小红书/B站横屏等版本 (横竖屏 + 平台字幕风格).
- * 调 POST /api/projects/[id]/export-platform.
+ * One-click export of Douyin / Kuaishou / Xiaohongshu / Bilibili landscape
+ * versions (aspect + platform subtitle style).
+ * POST /api/projects/[id]/export-platform.
  */
 
 import { useState } from 'react';
 import { ShareNetwork as Share2, CircleNotch as Loader2, Check, CaretDown as ChevronDown } from '@phosphor-icons/react';
+import { useLocale } from '@/hooks/use-locale';
 
 interface Preset {
   key: string;
-  label: string;
   aspect: '9:16' | '16:9' | '1:1' | '4:5';
   subtitlePlatform?: 'douyin' | 'kuaishou' | 'xiaohongshu' | 'youtube';
 }
 
 const PRESETS: Preset[] = [
-  { key: 'douyin', label: '抖音竖屏 9:16', aspect: '9:16', subtitlePlatform: 'douyin' },
-  { key: 'kuaishou', label: '快手竖屏 9:16', aspect: '9:16', subtitlePlatform: 'kuaishou' },
-  { key: 'xhs', label: '小红书 4:5', aspect: '4:5', subtitlePlatform: 'xiaohongshu' },
-  { key: 'youtube', label: 'YouTube 横屏 16:9', aspect: '16:9', subtitlePlatform: 'youtube' },
-  { key: 'square', label: '方形 1:1', aspect: '1:1' },
+  { key: 'douyin', aspect: '9:16', subtitlePlatform: 'douyin' },
+  { key: 'kuaishou', aspect: '9:16', subtitlePlatform: 'kuaishou' },
+  { key: 'xhs', aspect: '4:5', subtitlePlatform: 'xiaohongshu' },
+  { key: 'youtube', aspect: '16:9', subtitlePlatform: 'youtube' },
+  { key: 'square', aspect: '1:1' },
 ];
 
 export function PlatformExportDropdown({ projectId }: { projectId: string }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectMisc: Record<string, string> };
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [doneUrl, setDoneUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const presetLabel = (key: string) => ({
+    douyin: t.projectMisc.presetDouyin,
+    kuaishou: t.projectMisc.presetKuaishou,
+    xhs: t.projectMisc.presetXhs,
+    youtube: t.projectMisc.presetYoutube,
+    square: t.projectMisc.presetSquare,
+  }[key] || key);
 
   const run = async (p: Preset) => {
     setBusy(p.key);
@@ -46,7 +57,7 @@ export function PlatformExportDropdown({ projectId }: { projectId: string }) {
       if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`);
       setDoneUrl(body.url);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '导出失败');
+      setError(e instanceof Error ? e.message : t.projectMisc.exportFailed);
     } finally {
       setBusy(null);
     }
@@ -57,10 +68,10 @@ export function PlatformExportDropdown({ projectId }: { projectId: string }) {
       <button
         onClick={() => setOpen((v) => !v)}
         className="cinema-btn !px-3 !py-1.5 !text-[11px] inline-flex items-center gap-1.5"
-        title="导出到抖音/快手/小红书等平台版本"
+        title={t.projectMisc.exportPlatformTitle}
       >
         <Share2 className="w-3.5 h-3.5" />
-        平台导出
+        {t.projectMisc.platformExport}
         <ChevronDown className="w-3 h-3 opacity-60" />
       </button>
 
@@ -73,7 +84,7 @@ export function PlatformExportDropdown({ projectId }: { projectId: string }) {
               disabled={!!busy}
               className="w-full text-left px-2.5 py-1.5 rounded-md text-[11px] text-white/80 hover:bg-white/10 inline-flex items-center justify-between gap-2 disabled:opacity-40"
             >
-              {p.label}
+              {presetLabel(p.key)}
               {busy === p.key && <Loader2 className="w-3 h-3 animate-spin" />}
             </button>
           ))}
@@ -84,7 +95,7 @@ export function PlatformExportDropdown({ projectId }: { projectId: string }) {
               rel="noopener noreferrer"
               className="block mt-1 px-2.5 py-1.5 rounded-md text-[11px] text-emerald-400 hover:bg-emerald-500/10 inline-flex items-center gap-1.5"
             >
-              <Check className="w-3 h-3" /> 导出完成 · 点击查看
+              <Check className="w-3 h-3" /> {t.projectMisc.exportDoneView}
             </a>
           )}
           {error && <div className="px-2.5 py-1.5 text-[11px] text-rose-400">✗ {error}</div>}

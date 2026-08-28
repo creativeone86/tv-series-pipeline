@@ -3,25 +3,26 @@
 /**
  * components/create/camera-language-picker (v2.14 P0.2)
  *
- * 12 镜头预设的 chip 单选器, 用 cinema-btn 风格. 选中后 onChange(id);
- * 再点同一个 = 清空(回到 undefined / 自动 push-in).
+ * Single-select chips for the 12 camera presets, cinema-btn style. onChange(id)
+ * on select; click the same chip again to clear (back to undefined / auto push-in).
  *
- * 用法:
+ * Usage:
  *   <CameraLanguagePicker value={cameraId} onChange={setCameraId} />
  *
- * 数据源: lib/prompt-templates#CAMERA_LANGUAGE_PRESETS — 改预设只需改那一处。
+ * Data: lib/prompt-templates#CAMERA_LANGUAGE_PRESETS — edit presets only there.
  */
 
 import { CAMERA_LANGUAGE_PRESETS } from '@/lib/prompt-templates';
+import { useLocale } from '@/hooks/use-locale';
 
 export interface CameraLanguagePickerProps {
   value?: string | null;
   onChange: (id: string | null) => void;
-  /** 默认 false; true 时禁用全部 chip (跑动中等场景) */
+  /** Default false; true disables every chip (e.g. while a run is in progress) */
   disabled?: boolean;
-  /** 额外 className 给外层容器 */
+  /** Extra className on the outer container */
   className?: string;
-  /** 是否显示标题 + 提示行, 默认 true */
+  /** Show the heading + hint row; default true */
   showHeading?: boolean;
 }
 
@@ -32,23 +33,27 @@ export function CameraLanguagePicker({
   className = '',
   showHeading = true,
 }: CameraLanguagePickerProps) {
+  const { locale, t: loc } = useLocale();
+  const t = loc as typeof loc & { workshopCreate: Record<string, string> };
   const active = CAMERA_LANGUAGE_PRESETS.find((p) => p.id === value);
+  const chipLabel = (p: (typeof CAMERA_LANGUAGE_PRESETS)[number]) =>
+    locale === 'en' ? p.en : p.label;
 
   return (
     <div className={className}>
       {showHeading && (
         <div className="flex items-center justify-between mb-2">
-          <span className="cinema-eyebrow">CAMERA · 镜头语言</span>
+          <span className="cinema-eyebrow">{t.workshopCreate.cameraLanguage}</span>
           {active ? (
             <span className="cinema-mono text-[10px] opacity-80 truncate max-w-[60%]" title={active.desc}>
-              {active.label} · {active.desc}
+              {chipLabel(active)} · {active.desc}
             </span>
           ) : (
-            <span className="cinema-mono text-[10px] opacity-70">默认 · 轻微推近</span>
+            <span className="cinema-mono text-[10px] opacity-70">{t.workshopCreate.cameraDefault}</span>
           )}
         </div>
       )}
-      <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="镜头语言预设">
+      <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={t.workshopCreate.cameraPresetsAria}>
         {CAMERA_LANGUAGE_PRESETS.map((p) => {
           const isActive = value === p.id;
           return (
@@ -59,12 +64,12 @@ export function CameraLanguagePicker({
               aria-checked={isActive}
               disabled={disabled}
               onClick={() => onChange(isActive ? null : p.id)}
-              title={`${p.label} (${p.en}) · ${p.desc}`}
+              title={`${chipLabel(p)} (${p.en}) · ${p.desc}`}
               className={`cinema-btn !px-2.5 !py-1 !text-[11px] cinema-mono transition-all ${
                 isActive ? 'cinema-btn-primary' : ''
               }`}
             >
-              {p.label}
+              {chipLabel(p)}
               <span className="opacity-50 ml-1 text-[9px] tracking-wide">{p.en}</span>
             </button>
           );

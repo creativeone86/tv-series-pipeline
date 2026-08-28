@@ -24,20 +24,20 @@ describe('CameoBadge — score → color band', () => {
 
   it('renders score 90 in green band', () => {
     render(<CameoBadge data={{ cameoScore: 90 }} />);
-    const btn = screen.getByRole('button', { name: /Cameo 一致性: 90\/100/ });
+    const btn = screen.getByRole('button', { name: /Cameo consistency: 90\/100/ });
     expect(btn).toHaveClass(/emerald|green/i);
     expect(btn.textContent).toContain('90');
   });
 
   it('renders score 75 in amber band (between 70 and 84)', () => {
     render(<CameoBadge data={{ cameoScore: 75 }} />);
-    const btn = screen.getByRole('button', { name: /Cameo 一致性: 75\/100/ });
+    const btn = screen.getByRole('button', { name: /Cameo consistency: 75\/100/ });
     expect(btn).toHaveClass(/amber/i);
   });
 
   it('renders score 60 in red band', () => {
     render(<CameoBadge data={{ cameoScore: 60 }} />);
-    const btn = screen.getByRole('button', { name: /Cameo 一致性: 60\/100/ });
+    const btn = screen.getByRole('button', { name: /Cameo consistency: 60\/100/ });
     expect(btn).toHaveClass(/rose|red/i);
   });
 });
@@ -48,24 +48,24 @@ describe('CameoBadge popover — single-character baseline', () => {
       cameoScore: 80,
       cameoPerCharacterScores: [{ name: '李长安', score: 80, reasoning: 'fine' }],
     }} />);
-    fireEvent.click(screen.getByRole('button', { name: /Cameo 一致性/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Cameo consistency/ }));
     // popover open
-    expect(screen.getByText(/首次生成达标|已自动重生/)).toBeInTheDocument();
+    expect(screen.getByText(/First pass passed|Auto-retried/)).toBeInTheDocument();
     // per-char header should NOT appear (single char doesn't need breakdown)
     expect(screen.queryByText(/per-character/i)).toBeNull();
   });
 
   it('shows reasoning quote when present', () => {
     render(<CameoBadge data={{ cameoScore: 60, cameoReason: '左脸偏离参考 15%' }} />);
-    fireEvent.click(screen.getByRole('button', { name: /Cameo 一致性/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Cameo consistency/ }));
     expect(screen.getByText(/左脸偏离参考 15%/)).toBeInTheDocument();
   });
 
   it('shows retry summary line when retried', () => {
     render(<CameoBadge data={{ cameoScore: 88, cameoRetried: true, cameoAttempts: 2, cameoFinalCw: 125 }} />);
-    fireEvent.click(screen.getByRole('button', { name: /Cameo 一致性/ }));
-    expect(screen.getByText(/已自动重生 2 次/)).toBeInTheDocument();
-    expect(screen.getByText(/最终 cw = 125/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Cameo consistency/ }));
+    expect(screen.getByText(/Auto-retried 2 times/)).toBeInTheDocument();
+    expect(screen.getByText(/Final cw = 125/)).toBeInTheDocument();
   });
 });
 
@@ -79,7 +79,7 @@ describe('CameoBadge popover — multi-character (Phase 3 → A.4)', () => {
         { name: '混混',   score: 75 },
       ],
     }} />);
-    fireEvent.click(screen.getByRole('button', { name: /Cameo 一致性/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Cameo consistency/ }));
     expect(screen.getByText(/per-character \(3\)/i)).toBeInTheDocument();
     expect(screen.getByText('李长安')).toBeInTheDocument();
     expect(screen.getByText('柳如烟')).toBeInTheDocument();
@@ -97,7 +97,7 @@ describe('CameoBadge popover — multi-character (Phase 3 → A.4)', () => {
         { name: 'B', score: null },
       ],
     }} />);
-    fireEvent.click(screen.getByRole('button', { name: /Cameo 一致性/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Cameo consistency/ }));
     // Dash for null
     expect(screen.getByText('B')).toBeInTheDocument();
     // The score column for B should be a long dash; we can find it inside the per-char list
@@ -109,7 +109,7 @@ describe('CameoBadge popover — multi-character (Phase 3 → A.4)', () => {
       cameoScore: 70,
       cameoPerCharacterScores: [{ score: 80 }, { score: 70 }],
     }} />);
-    fireEvent.click(screen.getByRole('button', { name: /Cameo 一致性/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Cameo consistency/ }));
     expect(screen.getByText('#1')).toBeInTheDocument();
     expect(screen.getByText('#2')).toBeInTheDocument();
   });
@@ -132,7 +132,7 @@ describe('CameoSummary — stats + batch retry button', () => {
       onBatchRetry={() => {}}
       batchRetrying={false}
     />);
-    expect(screen.getByText(/暂无 Cameo 一致性评分/)).toBeInTheDocument();
+    expect(screen.getByText(/no Cameo consistency scores/)).toBeInTheDocument();
   });
 
   it('computes avg + lowCount + retriedCount correctly', () => {
@@ -148,8 +148,8 @@ describe('CameoSummary — stats + batch retry button', () => {
     />);
     // avg = (90+70+60+88)/4 = 77
     expect(screen.getByText('77')).toBeInTheDocument();
-    expect(screen.getByText(/镜需重生/)).toBeInTheDocument();
-    expect(screen.getByText(/已自动重生 2 镜/)).toBeInTheDocument();
+    expect(screen.getByText(/shots need regen/)).toBeInTheDocument();
+    expect(screen.getByText(/Auto-retried 2 shots this run/)).toBeInTheDocument();
   });
 
   it('fires onBatchRetry with low-score shot numbers when button clicked', () => {
@@ -159,7 +159,7 @@ describe('CameoSummary — stats + batch retry button', () => {
       onBatchRetry={onBatchRetry}
       batchRetrying={false}
     />);
-    const btn = screen.getByRole('button', { name: /批量重生/ });
+    const btn = screen.getByRole('button', { name: /Batch retry/ });
     fireEvent.click(btn);
     expect(onBatchRetry).toHaveBeenCalledWith([1, 3]);
   });
@@ -170,8 +170,8 @@ describe('CameoSummary — stats + batch retry button', () => {
       onBatchRetry={() => {}}
       batchRetrying={false}
     />);
-    expect(screen.getByText(/所有镜头已达标/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /批量重生/ })).toBeNull();
+    expect(screen.getByText(/All shots passed/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Batch retry/ })).toBeNull();
   });
 
   it('disables button + shows spinning state when batchRetrying', () => {
@@ -180,7 +180,7 @@ describe('CameoSummary — stats + batch retry button', () => {
       onBatchRetry={() => {}}
       batchRetrying={true}
     />);
-    const btn = screen.getByRole('button', { name: /重生中/ });
+    const btn = screen.getByRole('button', { name: /Retrying/ });
     expect(btn).toBeDisabled();
   });
 });

@@ -52,13 +52,24 @@ import { ParamLinkagePanel } from '@/components/project/param-linkage-panel';
 import { useToast } from '@/components/ui/toast-provider';
 import { useLocale } from '@/hooks/use-locale';
 
-// 代码分割:时间线是 projects 详情页里最重的组件(~1182 行 + 拖拽/音频依赖),
-// 且仅在 activeTab==='timeline' 时渲染 → 动态懒加载,移出首屏 bundle。
-// ssr:false:纯客户端组件,无需服务端渲染。
+// Code-split: the timeline is the heaviest widget on the project page (~1182 lines + drag/audio),
+// and only renders when activeTab==='timeline' → lazy-load it out of the first-paint bundle.
+// ssr:false: client-only, no server render needed.
+function TimelineLoadingFallback() {
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { projectView: Record<string, string> };
+  return <div className="p-8 text-center text-sm opacity-60">{t.projectView.loadingTimeline}</div>;
+}
 const CinemaTimeline = dynamic(
   () => import('@/components/project/cinema-timeline').then((m) => m.CinemaTimeline),
-  { ssr: false, loading: () => <div className="p-8 text-center text-sm opacity-60">加载时间线…</div> },
+  { ssr: false, loading: () => <TimelineLoadingFallback /> },
 );
+
+function displayName(item: any, locale: string, fallback?: string) {
+  const fb = fallback ?? item?.name ?? item?.title ?? '';
+  if (locale === 'en') return item?.nameEn || item?.en || item?.titleEn || fb;
+  return fb;
+}
 
 function isVideoUrl(url: string): boolean {
   if (!url) return false;
@@ -70,13 +81,14 @@ function isVideoUrl(url: string): boolean {
 }
 
 export default function ProjectDetailPage() {
-  const { t } = useLocale();
+  const { t: tRaw, locale } = useLocale();
+  const t = tRaw as typeof tRaw & { projectView: Record<string, string> };
   const params = useParams();
   const id = params.id as string;
   const { user } = useAuth();
-  const { showToast } = useToast();   // v12.300:失败要让用户看见,不能只进 console
+  const { showToast } = useToast();   // v12.300: failures must be visible, not console-only
   const [project, setProject] = useState<any>(null);
-  // v10.6.0 竖屏优先:项目级画幅驱动预览框(旧项目无列值 → 16:9 零回归);字幕安全区可开关
+  // v10.6.0 vertical-first: project aspect drives the preview (legacy rows without a column → 16:9); subtitle safe-area toggle
   const [showSafeArea, setShowSafeArea] = useState(false);
   const isVertical = project?.aspect === '9:16';
   const frameClass = isVertical ? 'aspect-[9/16]' : 'aspect-video';
@@ -84,8 +96,8 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>('script');
   const [playingIndex, setPlayingIndex] = useState<number>(-1);
-  // 完整播放:点击全屏。全屏套在「外层容器」上(而非 <video>),这样切下一镜
-  // <video> 重挂载时全屏不掉,整段连播都在全屏里。
+  // Full playback: click for fullscreen. Fullscreen is on the outer wrap (not <video>), so swapping
+  // the next shot remounts <video> without dropping fullscreen; the whole playlist stays fullscreen.
   const playerWrapRef = useRef<HTMLDivElement | null>(null);
   const [isPlayerFs, setIsPlayerFs] = useState(false);
   useEffect(() => {
@@ -99,42 +111,43 @@ export default function ProjectDetailPage() {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     else el.requestFullscreen?.().catch(() => {});
   };
-  // v12.13.2:按「视频/图片真实比例」显示 —— 裸 <video> 默认 object-fit:fill 会把不同比例的源
-  // 拉伸进固定框(竖屏框塞横屏片=变形)。从加载到的真实尺寸探测比例,预览+全屏都按真实比例 + object-contain。
+  // v12.13.2: display at the video/image's real aspect — a bare <video> defaults to object-fit:fill and
+  // stretches mixed-ratio sources into a fixed box (portrait box + landscape clip = distortion). Probe real
+  // size on load; preview + fullscreen both use the real ratio + object-contain.
   const [playerRatio, setPlayerRatio] = useState<number | null>(null);
-  // 切镜重新探测(不同镜可能比例不同),onLoadedMetadata/onLoad 会立刻回填
+  // Re-probe on shot change (ratios may differ); onLoadedMetadata/onLoad refill immediately
   useEffect(() => { setPlayerRatio(null); }, [playingIndex]);
-  // 给定是否全屏,返回主播放媒体的 className/style:真实比例已知则按其显示,否则回退项目设定比例。
+  // Given fullscreen or not, return main-player className/style: real ratio if known, else project aspect.
   const mediaPresentation = (isFs: boolean): { className: string; style?: CSSProperties } => {
     if (isFs) return { className: 'max-h-screen max-w-full object-contain' };
     if (playerRatio) {
       return playerRatio < 1
-        ? { className: 'object-contain bg-black mx-auto block h-auto', style: { aspectRatio: String(playerRatio), maxHeight: '72vh', width: 'auto' } } // 竖屏:限高居中
-        : { className: 'w-full object-contain bg-black block', style: { aspectRatio: String(playerRatio) } };                                          // 横屏/方:撑满宽
+        ? { className: 'object-contain bg-black mx-auto block h-auto', style: { aspectRatio: String(playerRatio), maxHeight: '72vh', width: 'auto' } } // portrait: cap height, center
+        : { className: 'w-full object-contain bg-black block', style: { aspectRatio: String(playerRatio) } };                                          // landscape/square: fill width
     }
-    return { className: `w-full object-contain bg-black ${mainFrameClass}` }; // 回退:项目比例框,但 object-contain 不变形
+    return { className: `w-full object-contain bg-black ${mainFrameClass}` }; // fallback: project aspect box, object-contain so it does not stretch
   };
-  // v12.153 成片全维体检(ffprobe:画幅/时长/帧率/码率/音轨/镜头完整度/降级镜)
+  // v12.153 full-film health (ffprobe: aspect/duration/fps/bitrate/audio/shot completeness/downgraded shots)
   const [healthReport, setHealthReport] = useState<{ overall: string; items: Array<{ key: string; label: string; status: string; detail: string }>; animaticShots?: number[] } | null>(null);
   const [healthOpen, setHealthOpen] = useState(false);
   const loadHealth = async () => {
     try {
       const d = await fetch(`/api/projects/${id}/health`).then((r) => r.json());
       if (Array.isArray(d.items)) setHealthReport(d);
-    } catch { /* 拉不到不打扰 */ }
+    } catch { /* silent if fetch fails */ }
   };
-  // v12.190:项目成本下钻(cost_log × rollupByEngine)
+  // v12.190: project cost drill-down (cost_log × rollupByEngine)
   const [costReport, setCostReport] = useState<{ totalCny: number; entries: number; byEngine: Array<{ engine: string; costCny: number; count: number }> } | null>(null);
   const [costOpen, setCostOpen] = useState(false);
   const loadCost = async () => {
     try {
       const d = await fetch(`/api/projects/${id}/cost`).then((r) => r.json());
       if (typeof d.totalCny === 'number') setCostReport(d);
-    } catch { /* 静默 */ }
+    } catch { /* silent */ }
   };
-  // v12.1.1 成片音频体检
+  // v12.1.1 final-film audio check
   const [audioCheck, setAudioCheck] = useState<{ audible: boolean; label: string; hasAudioStream: boolean | null; healed: boolean } | null>(null);
-  // v12.153:videos tab 激活拉体检(降级镜识别权威来源;play tab 面板也复用)
+  // v12.153: fetch health when the videos tab is active (authoritative downgrade source; play tab reuses it)
   useEffect(() => {
     if ((activeTab === 'videos' || activeTab === 'play') && !healthReport) void loadHealth();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -153,18 +166,18 @@ export default function ProjectDetailPage() {
   const [shotDraft, setShotDraft] = useState<{ sceneDescription: string; dialogue: string; emotion: string }>({ sceneDescription: '', dialogue: '', emotion: '' });
   const [characterDraft, setCharacterDraft] = useState<string>('');
   const [saving, setSaving] = useState(false);
-  // AI 助手侧栏开关 — alt+/ 也能呼出
+  // AI assistant sidebar — alt+/ also opens it
   const [chatOpen, setChatOpen] = useState(false);
-  // Sprint A.4 批量重生进行中标记
+  // Sprint A.4 batch-retry in-progress flag
   const [batchRetrying, setBatchRetrying] = useState(false);
   const [batchRetryMsg, setBatchRetryMsg] = useState<string>('');
-  // v7.2 单镜头摄影台: 当前打开的分镜 + 本地已保存机位覆盖 (省一次全量刷新)
+  // v7.2 single-shot cine desk: open board + locally saved camera overrides (skip a full refresh)
   const [cinemaShot, setCinemaShot] = useState<{ shotNumber: number; title?: string; spec: ShotSpec; emotion?: string } | null>(null);
   const [inspectShot, setInspectShot] = useState<InspectShot | null>(null);
   const [specOverrides, setSpecOverrides] = useState<Record<number, ShotSpec>>({});
-  // v12.318 导演台:当前打开的镜 + 已摆过位的镜号(chip 高亮用,省一次全量刷新)
+  // v12.318 director stage: open shot + already-blocked shot numbers (chip highlight, skip a full refresh)
   const [stageShot, setStageShot] = useState<{ shotNumber: number; title?: string; scene?: StageScene | null; characters?: string[] } | null>(null);
-  // v12.330:逐帧检视 —— v12.315 的片段重拍与 v12.328 的逐帧检视此前都只有 API、没有入口
+  // v12.330: frame inspect — v12.315 segment retake + v12.328 frame inspect previously had APIs only, no entry
   const [frameShot, setFrameShot] = useState<{ shotNumber: number; title?: string } | null>(null);
   const [stagedShots, setStagedShots] = useState<Record<number, true>>({});
 
@@ -176,13 +189,13 @@ export default function ProjectDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  // v12.150:失败/降级镜头批量补渲(SSE 进度;完成后重拉项目刷新资产)
+  // v12.150: batch re-render failed/downgraded shots (SSE progress; refetch project assets when done)
   const [rerenderBusy, setRerenderBusy] = useState(false);
   const [rerenderMsg, setRerenderMsg] = useState('');
   const rerenderFailedShots = async () => {
     if (rerenderBusy) return;
     setRerenderBusy(true);
-    setRerenderMsg('启动批量补渲…');
+    setRerenderMsg(t.projectView.rerenderStarting);
     try {
       const res = await fetch('/api/regenerate-shot', {
         method: 'POST',
@@ -203,17 +216,17 @@ export default function ProjectDetailPage() {
           try {
             const ev = JSON.parse(line.slice(6));
             if (ev.type === 'status') setRerenderMsg(ev.data?.message || '');
-            if (ev.type === 'regenerateComplete') setRerenderMsg(`镜头 ${ev.data?.shotNumber} 补渲完成 ✅`);
-            if (ev.type === 'regenerateError') setRerenderMsg(`镜头 ${ev.data?.shotNumber} 失败:${ev.data?.error || ''}`);
-            if (ev.type === 'batchDone') setRerenderMsg(`补渲完成:成功 ${ev.data?.ok}/${ev.data?.total}${ev.data?.fail ? `,失败 ${ev.data.fail}(引擎仍不可用?看创作页引擎天气)` : ''}`);
-          } catch { /* 跳过坏行 */ }
+            if (ev.type === 'regenerateComplete') setRerenderMsg(t.projectView.rerenderShotDone.replace('{n}', String(ev.data?.shotNumber)));
+            if (ev.type === 'regenerateError') setRerenderMsg(t.projectView.rerenderShotFail.replace('{n}', String(ev.data?.shotNumber)).replace('{error}', ev.data?.error || ''));
+            if (ev.type === 'batchDone') setRerenderMsg(t.projectView.rerenderBatchDone.replace('{ok}', String(ev.data?.ok)).replace('{total}', String(ev.data?.total)) + (ev.data?.fail ? t.projectView.rerenderBatchFailSuffix.replace('{n}', String(ev.data.fail)) : ''));
+          } catch { /* skip bad lines */ }
         }
       }
-      // 重拉项目,刷新视频资产与成片
+      // Refetch project to refresh video assets and the final film
       const d = await fetch(`/api/projects/${id}`).then((r) => r.json());
       if (d.id) setProject(d);
     } catch (e) {
-      setRerenderMsg('批量补渲请求失败,稍后再试');
+      setRerenderMsg(t.projectView.rerenderRequestFail);
     } finally {
       setRerenderBusy(false);
     }
@@ -267,10 +280,10 @@ export default function ProjectDetailPage() {
         setEditingShot(null);
       }
     } catch (e) {
-      // v12.300:此前只 console.error —— 弹框保持打开、loading 消失、零提示,
-      // 用户不知道该重试还是放弃,也不确定内容有没有存进去。
+      // v12.300: previously console.error only — modal stayed open, loading cleared, zero feedback,
+      // so the user could not tell whether to retry or if anything was saved.
       console.error('Failed to save shot:', e);
-      showToast({ title: '保存失败', description: (e instanceof Error ? e.message : '请检查网络后重试').slice(0, 120), type: 'error', duration: 4000 });
+      showToast({ title: t.projectView.saveFailed, description: (e instanceof Error ? e.message : t.projectView.checkNetwork).slice(0, 120), type: 'error', duration: 4000 });
     } finally {
       setSaving(false);
     }
@@ -323,13 +336,13 @@ export default function ProjectDetailPage() {
         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E8C547] to-[#D4A830] grid place-items-center animate-pulse">
           <Film className="w-5 h-5 text-white" />
         </div>
-        <div className="text-sm text-[var(--cinema-text-3)]">加载项目中...</div>
+        <div className="text-sm text-[var(--cinema-text-3)]">{t.projectView.loadingProject}</div>
       </div>
     </div>
   );
   if (!project) return (
     <div className="min-h-screen bg-[var(--background)] text-white grid place-items-center">
-      <div className="text-[var(--cinema-text-3)]">项目不存在</div>
+      <div className="text-[var(--cinema-text-3)]">{t.projectView.projectNotFound}</div>
     </div>
   );
 
@@ -338,13 +351,13 @@ export default function ProjectDetailPage() {
   const characters = assets.filter((a: any) => a.type === 'character');
   const scenes = assets.filter((a: any) => a.type === 'scene');
   const storyboards = assets.filter((a: any) => a.type === 'storyboard').sort((a: any, b: any) => (a.shotNumber || 0) - (b.shotNumber || 0));
-  // v9.4.6: 一键成片闭环要用的「镜号→分镜 prompt」(防御式取, 取不到的镜面板会跳过)
+  // v9.4.6: one-click film loop needs shotNumber → board prompt (defensive; panel skips missing shots)
   const shotPrompts = storyboards.map((s: any) => ({
     shotNumber: s.shotNumber || 0,
     prompt: s.prompt || (s.data && typeof s.data === 'object' ? s.data.prompt : '') || '',
   }));
   const videos = assets.filter((a: any) => a.type === 'video').sort((a: any, b: any) => (a.shotNumber || 0) - (b.shotNumber || 0));
-  // v12.1.0 片段预览叠播配音:镜号 → shot-audio(TTS 配音)URL
+  // v12.1.0 clip preview overlays VO: shotNumber → shot-audio (TTS) URL
   const shotAudioByShot: Record<number, string> = {};
   for (const a of assets as any[]) {
     if (a.type === 'shot-audio' && typeof a.shotNumber === 'number' && a.mediaUrls?.[0]) shotAudioByShot[a.shotNumber] = a.mediaUrls[0];
@@ -354,7 +367,7 @@ export default function ProjectDetailPage() {
   const script = project.scriptData || scriptAsset?.data;
 
   const tabs = [
-    // v6.4: 导演台 — 全链路环节总览 + 跳转编辑
+    // v6.4: director console — full-pipeline overview + jump to edit
     { key: 'director', label: t.product.tabDirector, icon: MonitorPlay, count: 0 },
     { key: 'script', label: t.product.tabScript, icon: FileText, count: script?.shots?.length || 0 },
     { key: 'characters', label: t.product.tabCharacters, icon: Users, count: characters.length },
@@ -375,8 +388,8 @@ export default function ProjectDetailPage() {
     { key: 'play', label: t.product.tabPlay, icon: Play, count: 0 },
   ];
 
-  // v12.42 工作流主轴:把 18 个平铺 Tab 收成两级 IA(创作 → 精修 → 审校 → 交付)。
-  // activeGroup 纯派生自 activeTab(含程序化 setActiveTab,如导演台跳转),无需额外状态。
+  // v12.42 workflow spine: fold 18 flat tabs into two-level IA (create → refine → review → deliver).
+  // activeGroup is derived from activeTab (including programmatic setActiveTab, e.g. director jumps); no extra state.
   const TAB_GROUPS: { key: string; label: string; en: string; tabKeys: string[] }[] = [
     { key: 'create',  label: t.product.groupCreate, en: 'CREATE',  tabKeys: ['director', 'script', 'characters', 'scenes', 'storyboard', 'videos', 'oneclick'] },
     { key: 'refine',  label: t.product.groupRefine, en: 'REFINE',  tabKeys: ['workshop', 'continuity', 'timeline', 'param-linkage'] },
@@ -389,7 +402,7 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="cinema-page min-h-screen text-white">
-      {/* Nav — 影院风:左侧返回 + 项目"场记板"标题 + 右侧综合评分仪表 */}
+      {/* Nav — cinema: back on the left + project slate title + score meter on the right */}
       <nav className="sticky top-0 z-50 bg-[var(--cinema-surface)]/85 backdrop-blur-xl border-b border-[var(--cinema-border)]">
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -401,12 +414,12 @@ export default function ProjectDetailPage() {
                 <span className="cinema-eyebrow">PROJECT</span>
                 <span className="cinema-mono text-[10px] opacity-50">· {project.id?.slice(-8) || '——'}</span>
               </div>
-              <div className="cinema-headline text-lg truncate">{project.title}</div>
+              <div className="cinema-headline text-lg truncate">{displayName(project, locale, project.title)}</div>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            {/* v3.0 P0.2: presence — 现在谁在看这个项目 (Yjs awareness)
-                v3.1.3 P3: 透传 activeTab → 别人头像下方显示"在 镜头工坊"等 chip */}
+            {/* v3.0 P0.2: presence — who is viewing this project (Yjs awareness)
+                v3.1.3 P3: pass activeTab → chip under others' avatars e.g. "in Shot Workshop" */}
             {user && (
               <PresenceAvatars
                 projectId={id}
@@ -414,9 +427,9 @@ export default function ProjectDetailPage() {
                 activeTab={activeTab}
               />
             )}
-            {/* v3.x P0.3 E.3: 审批状态 badge */}
+            {/* v3.x P0.3 E.3: review-status badge */}
             <ReviewStatusBadge projectId={id} currentUserId={user?.id} />
-            {/* v3.x: 邀请协作者 (仅 owner 显示) */}
+            {/* v3.x: invite collaborators (owner only) */}
             <InviteProjectButton
               projectId={id}
               isOwner={!!user && (project?.userId === user.id || project?.user_id === user.id)}
@@ -431,16 +444,16 @@ export default function ProjectDetailPage() {
                 <span className="cinema-mono">{review.overallScore}<span className="opacity-50">/100</span></span>
               </div>
             )}
-            {/* v2.16 P0.2: 4K 导出 dropdown — 点开选分辨率, plan-gate 在 route 层最终校验 */}
+            {/* v2.16 P0.2: 4K export dropdown — pick resolution; plan-gate is enforced on the route */}
             <ExportResolutionDropdown projectId={id} />
-            {/* v3.5.1: 平台导出 — 抖音/快手/小红书 横竖屏 + 平台字幕 */}
+            {/* v3.5.1: platform export — Douyin/Kuaishou/Xiaohongshu portrait/landscape + platform captions */}
             <PlatformExportDropdown projectId={id} />
           </div>
         </div>
       </nav>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
-        {/* v9.2.3 P4.1: editorial split 头部 — 杂志感非对称双栏 (宽标题栏 + 竖线分隔的 meta deck) */}
+        {/* v9.2.3 P4.1: editorial-split header — magazine-style asymmetric two-col (wide title + ruled meta deck) */}
         <motion.header
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
           className="mb-8 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-6 lg:gap-10 items-start"
@@ -450,12 +463,12 @@ export default function ProjectDetailPage() {
               <span className="cinema-eyebrow">PROJECT</span>
               <span className="cinema-mono text-[10px] opacity-50">· {project.id?.slice(-8) || '——'}</span>
             </div>
-            <h1 className="cinema-headline text-3xl sm:text-4xl leading-[1.1] tracking-tight">{project.title}</h1>
+            <h1 className="cinema-headline text-3xl sm:text-4xl leading-[1.1] tracking-tight">{displayName(project, locale, project.title)}</h1>
             {script?.synopsis && (
               <p className="mt-3 text-sm text-[var(--cinema-text-3)] leading-relaxed max-w-2xl">{script.synopsis}</p>
             )}
             {script?.theme && (
-              <p className="mt-2 text-xs text-[var(--cinema-amber)]">主题 · {script.theme}</p>
+              <p className="mt-2 text-xs text-[var(--cinema-amber)]">{t.projectView.themeLabel.replace('{theme}', script.theme)}</p>
             )}
           </div>
           <dl className="lg:border-l lg:border-[var(--cinema-border)] lg:pl-8 grid grid-cols-2 lg:grid-cols-1 gap-x-8 gap-y-3 shrink-0">
@@ -473,17 +486,17 @@ export default function ProjectDetailPage() {
           </dl>
         </motion.header>
 
-        {/* v2.11: 最近一次润色的行业体检单 (如果有) */}
+        {/* v2.11: latest polish industry checklist (when present) */}
         {scriptAsset?.data?.latestPolish ? (
           <LatestPolishBanner entry={scriptAsset.data.latestPolish} projectId={id} />
         ) : null}
 
-        {/* v2.12 Phase 1: 多角色锁脸预览 — cinema redesign */}
+        {/* v2.12 Phase 1: multi-cast face-lock preview — cinema redesign */}
         {Array.isArray(project.lockedCharacters) && project.lockedCharacters.length > 0 && (
           <div className="cinema-card-hi p-4 mb-4">
             <div className="flex items-center justify-between mb-3">
-              <Eyebrow>Cast Lock · 已锁定 {project.lockedCharacters.length} 角色</Eyebrow>
-              <span className="cinema-mono text-[10px] opacity-50">全片脸部一致性</span>
+              <Eyebrow>{t.projectView.castLocked.replace('{n}', String(project.lockedCharacters.length))}</Eyebrow>
+              <span className="cinema-mono text-[10px] opacity-50">{t.projectView.faceConsistency}</span>
             </div>
             <div className="flex gap-2 flex-wrap">
               {project.lockedCharacters.map((c: any, idx: number) => {
@@ -491,9 +504,9 @@ export default function ProjectDetailPage() {
                 return (
                   <div key={idx} className="flex items-center gap-2 px-2 py-1.5 cinema-card border border-[var(--cinema-border-hi)]">
                     <span className="cinema-mono text-[10px] opacity-60 w-5 text-center">{String.fromCharCode(65 + idx)}</span>
-                    <img src={c.imageUrl} alt={c.name} className="w-9 h-9 object-cover" style={{ borderRadius: 3 }} loading="lazy" />
+                    <img src={c.imageUrl} alt={displayName(c, locale, c.name)} className="w-9 h-9 object-cover" style={{ borderRadius: 3 }} loading="lazy" />
                     <div className="text-xs leading-tight">
-                      <div className="cinema-headline text-[12px]">{c.name}</div>
+                      <div className="cinema-headline text-[12px]">{displayName(c, locale, c.name)}</div>
                       <div className="cinema-mono text-[9px] opacity-60">{roleLabel} · cw={c.cw}</div>
                     </div>
                   </div>
@@ -503,22 +516,22 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        {/* v2.10 A: Cameo 主角脸锁定闭环 (单角色 — 兜底入口,Phase 1 先与多角色并存) */}
+        {/* v2.10 A: Cameo lead-face lock (single-cast fallback; Phase 1 still sits next to multi-cast) */}
         <CameoPanel
           projectId={id}
           initialUrl={project.primaryCharacterRef}
           onChange={(nextUrl) => setProject((prev: any) => ({ ...prev, primaryCharacterRef: nextUrl }))}
         />
 
-        {/* v12.198:多角色档案(建成后补/改配角人脸,写 locked_characters → 每镜注入 subject_reference) */}
+        {/* v12.198: multi-cast dossier (add/edit supporting faces after build; writes locked_characters → subject_reference per shot) */}
         <CharacterCastPanel projectId={id} />
 
-        {/* Tabs — v12.42 两级工作流主轴(创作 → 精修 → 审校 → 交付),收敛 18 个平铺 Tab */}
+        {/* Tabs — v12.42 two-level workflow spine (create → refine → review → deliver), folding 18 flat tabs */}
         <div className="mb-6 flex flex-col gap-2">
-          {/* 主轴:工作流分组 */}
+          {/* Spine: workflow groups */}
           <div
             role="tablist"
-            aria-label="工作流分组"
+            aria-label={t.projectView.workflowGroupsAria}
             className="flex items-center gap-1 cinema-card p-1 w-fit"
             onKeyDown={(e) => {
               if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
@@ -550,10 +563,10 @@ export default function ProjectDetailPage() {
               );
             })}
           </div>
-          {/* 当前组的环节 */}
+          {/* Stages in the current group */}
           <div
             role="tablist"
-            aria-label={`${TAB_GROUPS.find(g => g.key === activeGroup)?.label || ''} 环节`}
+            aria-label={t.projectView.stagesAria.replace('{group}', TAB_GROUPS.find(g => g.key === activeGroup)?.label || '')}
             className="flex items-center gap-0.5 cinema-card overflow-x-auto p-1 w-fit"
             onKeyDown={(e) => {
               if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
@@ -591,7 +604,7 @@ export default function ProjectDetailPage() {
 
         {/* Content */}
         <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          {/* v6.4: 导演台 — 全链路环节总览 */}
+          {/* v6.4: director console — full-pipeline overview */}
           {activeTab === 'director' && (
             <DirectorConsole
               assets={assets}
@@ -603,7 +616,7 @@ export default function ProjectDetailPage() {
             />
           )}
 
-          {/* 剧本 */}
+          {/* Script */}
           {activeTab === 'script' && script && (
             <div className="space-y-2.5">
               {(script.shots || []).map((shot: any, i: number) => (
@@ -617,15 +630,15 @@ export default function ProjectDetailPage() {
                       {editingShot === i ? (
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => saveShot(i)} disabled={saving} className="cinema-btn-primary !text-xs !py-1 disabled:opacity-50">
-                            <Save className="w-3 h-3" /> 保存
+                            <Save className="w-3 h-3" /> {t.common.save}
                           </button>
                           <button onClick={cancelEditShot} className="cinema-btn-ghost !text-xs !py-1">
-                            <X className="w-3 h-3" /> 取消
+                            <X className="w-3 h-3" /> {t.common.cancel}
                           </button>
                         </div>
                       ) : (
                         <button onClick={() => startEditShot(i, shot)} className="cinema-btn-ghost !text-xs !py-1">
-                          <Pencil className="w-3 h-3" /> 编辑
+                          <Pencil className="w-3 h-3" /> {t.common.edit}
                         </button>
                       )}
                     </div>
@@ -634,7 +647,7 @@ export default function ProjectDetailPage() {
                   {editingShot === i ? (
                     <div className="space-y-2.5 mt-2">
                       <div>
-                        <label className="cinema-eyebrow !text-[9px] opacity-60 block mb-1">场景描述</label>
+                        <label className="cinema-eyebrow !text-[9px] opacity-60 block mb-1">{t.projectView.sceneDescription}</label>
                         <textarea
                           value={shotDraft.sceneDescription}
                           onChange={e => setShotDraft(d => ({ ...d, sceneDescription: e.target.value }))}
@@ -643,7 +656,7 @@ export default function ProjectDetailPage() {
                         />
                       </div>
                       <div>
-                        <label className="cinema-eyebrow !text-[9px] opacity-60 block mb-1">对白</label>
+                        <label className="cinema-eyebrow !text-[9px] opacity-60 block mb-1">{t.projectView.dialogue}</label>
                         <textarea
                           value={shotDraft.dialogue}
                           onChange={e => setShotDraft(d => ({ ...d, dialogue: e.target.value }))}
@@ -652,7 +665,7 @@ export default function ProjectDetailPage() {
                         />
                       </div>
                       <div>
-                        <label className="cinema-eyebrow !text-[9px] opacity-60 block mb-1">情绪</label>
+                        <label className="cinema-eyebrow !text-[9px] opacity-60 block mb-1">{t.visionAudit.dimMood}</label>
                         <input
                           type="text"
                           value={shotDraft.emotion}
@@ -665,7 +678,7 @@ export default function ProjectDetailPage() {
                     <>
                       <p className="cinema-subhead text-sm opacity-90">{shot.sceneDescription}</p>
                       {shot.dialogue && <p className="text-xs text-[var(--cinema-blue)] mt-1.5 italic">「{shot.dialogue}」</p>}
-                      {shot.beat && <p className="cinema-mono text-[10px] opacity-50 mt-1">节拍 · {shot.beat}</p>}
+                      {shot.beat && <p className="cinema-mono text-[10px] opacity-50 mt-1">{t.projectView.beatLabel.replace('{beat}', shot.beat)}</p>}
                     </>
                   )}
                 </div>
@@ -673,17 +686,17 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
-          {/* 角色 */}
+          {/* Cast */}
           {activeTab === 'characters' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {characters.length === 0 && <div className="col-span-full"><EmptyState icon={Users} title={t.product.emptyCharacters} hint="生成剧本后,AI 角色设计师会自动产出角色设定与立绘" /></div>}
+              {characters.length === 0 && <div className="col-span-full"><EmptyState icon={Users} title={t.product.emptyCharacters} hint={t.projectView.emptyCharactersHint} /></div>}
               {characters.map((c: any) => (
                 <div key={c.id} className="cinema-card overflow-hidden">
                   {c.mediaUrls?.[0] && (
-                    <img loading="lazy" decoding="async" src={c.mediaUrls[0]} alt={c.name} className="w-full h-[200px] object-cover" />
+                    <img loading="lazy" decoding="async" src={c.mediaUrls[0]} alt={displayName(c, locale, c.name)} className="w-full h-[200px] object-cover" />
                   )}
                   <div className="p-4">
-                    <h3 className="cinema-headline text-sm mb-1.5">{c.name}</h3>
+                    <h3 className="cinema-headline text-sm mb-1.5">{displayName(c, locale, c.name)}</h3>
                     {editingCharacter === c.id ? (
                       <div className="space-y-2 mt-2">
                         <textarea
@@ -694,10 +707,10 @@ export default function ProjectDetailPage() {
                         />
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => saveCharacter(c.id)} disabled={saving} className="cinema-btn-primary !text-xs !py-1 disabled:opacity-50">
-                            <Save className="w-3 h-3" /> 保存
+                            <Save className="w-3 h-3" /> {t.common.save}
                           </button>
                           <button onClick={cancelEditCharacter} className="cinema-btn-ghost !text-xs !py-1">
-                            <X className="w-3 h-3" /> 取消
+                            <X className="w-3 h-3" /> {t.common.cancel}
                           </button>
                         </div>
                       </div>
@@ -705,7 +718,7 @@ export default function ProjectDetailPage() {
                       <>
                         <p className="cinema-subhead text-xs opacity-80 leading-relaxed">{c.data?.description}</p>
                         <button onClick={() => startEditCharacter(c.id, c.data?.description || '')} className="cinema-btn-ghost !text-xs !py-1 mt-3">
-                          <Pencil className="w-3 h-3" /> 编辑描述
+                          <Pencil className="w-3 h-3" /> {t.projectView.editDescription}
                         </button>
                       </>
                     )}
@@ -715,17 +728,17 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
-          {/* 场景 */}
+          {/* Scenes */}
           {activeTab === 'scenes' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {scenes.length === 0 && <div className="col-span-full"><EmptyState icon={Mountain} title={t.product.emptyScenes} hint="生成剧本后,AI 场景设计师会自动产出场景视觉方案" /></div>}
+              {scenes.length === 0 && <div className="col-span-full"><EmptyState icon={Mountain} title={t.product.emptyScenes} hint={t.projectView.emptyScenesHint} /></div>}
               {scenes.map((s: any) => (
                 <div key={s.id} className="cinema-card overflow-hidden">
                   {s.mediaUrls?.[0] && (
-                    <img loading="lazy" decoding="async" src={s.mediaUrls[0]} alt={s.name} className="w-full h-[180px] object-cover" />
+                    <img loading="lazy" decoding="async" src={s.mediaUrls[0]} alt={displayName(s, locale, s.name)} className="w-full h-[180px] object-cover" />
                   )}
                   <div className="p-4">
-                    <h3 className="cinema-headline text-sm mb-1.5">{s.name}</h3>
+                    <h3 className="cinema-headline text-sm mb-1.5">{displayName(s, locale, s.name)}</h3>
                     <p className="cinema-subhead text-xs opacity-80 leading-relaxed">{s.data?.description}</p>
                   </div>
                 </div>
@@ -733,12 +746,12 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
-          {/* 分镜 */}
+          {/* Storyboard */}
           {activeTab === 'storyboard' && (
             <div>
-              {/* v7.4 项目级格式条 (画幅/色彩/帧率/安全框) */}
+              {/* v7.4 project format bar (aspect / color / fps / safe frame) */}
               <ProjectFormatBar projectId={id} initialFormat={assets.find((a: any) => a.type === 'project-format')?.data} />
-              {/* Sprint A.4 · 顶部 Cameo 一致性汇总条 + 批量重生按钮 */}
+              {/* Sprint A.4 · Cameo consistency summary + batch-retry button */}
               <CameoSummary
                 storyboards={storyboards}
                 batchRetrying={batchRetrying}
@@ -754,17 +767,17 @@ export default function ProjectDetailPage() {
                     });
                     const json = await res.json().catch(() => ({}));
                     if (!res.ok) {
-                      setBatchRetryMsg(json?.error || `重生失败 (${res.status})`);
+                      setBatchRetryMsg(json?.error || t.projectView.cameoRetryFail.replace('{status}', String(res.status)));
                     } else {
                       setBatchRetryMsg(
-                        `批量重生完成: ${json.upgraded ?? 0} 镜提升, ${json.unchanged ?? 0} 镜未变, ${json.failed ?? 0} 镜失败`
+                        t.projectView.cameoRetryDone.replace('{upgraded}', String(json.upgraded ?? 0)).replace('{unchanged}', String(json.unchanged ?? 0)).replace('{failed}', String(json.failed ?? 0))
                       );
-                      // 拉一遍最新数据以刷新页面
+                      // Refetch latest data to refresh the page
                       const fresh = await fetch(`/api/projects/${id}`).then((r) => r.json()).catch(() => null);
                       if (fresh?.id) setProject(fresh);
                     }
                   } catch (e: any) {
-                    setBatchRetryMsg(e?.message || '网络异常');
+                    setBatchRetryMsg(e?.message || t.projectView.networkError);
                   } finally {
                     setBatchRetrying(false);
                     setTimeout(() => setBatchRetryMsg(''), 8000);
@@ -789,7 +802,7 @@ export default function ProjectDetailPage() {
                       data-shot={sb.shotNumber}
                       className="cinema-card relative overflow-hidden hover:border-[var(--cinema-amber-deep)] transition-colors scroll-mt-24"
                     >
-                      {/* Sprint A.4 · 右上角 Cameo 徽章 (没分数时不渲染) */}
+                      {/* Sprint A.4 · Cameo badge top-right (hidden when there is no score) */}
                       <CameoBadge data={sb.data || {}} />
                       {sb.mediaUrls?.[0] ? (
                         <div
@@ -799,7 +812,7 @@ export default function ProjectDetailPage() {
                           <img loading="lazy" decoding="async" src={sb.mediaUrls[0]} alt={sb.name} className={`w-full ${frameClass} object-cover`} />
                           {isVertical && showSafeArea && <SafeAreaOverlay />}
                           <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/insp:bg-black/35 opacity-0 group-hover/insp:opacity-100 transition-all">
-                            <span className="cinema-chip cinema-chip-amber">检查器</span>
+                            <span className="cinema-chip cinema-chip-amber">{t.projectView.inspector}</span>
                           </div>
                         </div>
                       ) : (
@@ -815,10 +828,10 @@ export default function ProjectDetailPage() {
                         <p className="cinema-subhead text-[11px] line-clamp-2 opacity-85 leading-snug">
                           {sb.data?.description?.slice(0, 60) || '——'}
                         </p>
-                        {/* v7.2 单镜头摄影台 — 机位摘要 chip + 入口 */}
+                        {/* v7.2 single-shot cine desk — camera-summary chip + entry */}
                         <button
                           onClick={() => setCinemaShot({ shotNumber: sb.shotNumber, title: sb.data?.description?.slice(0, 60), spec: curSpec, emotion: scriptShot?.emotion })}
-                          title="单镜头摄影台 — 景别/机位/镜头/运镜/焦点/氛围"
+                          title={t.projectView.cineDeskTitle}
                           className="mt-1.5 w-full flex items-center gap-1.5 px-1.5 py-1 rounded-md border border-[var(--cinema-border)] hover:border-[var(--cinema-amber)] transition group/cine"
                         >
                           <Clapperboard size={11} className={hasSaved ? 'text-[var(--cinema-amber)]' : 'text-[var(--cinema-text-3)]'} />
@@ -826,14 +839,14 @@ export default function ProjectDetailPage() {
                             {describeShotSpec(curSpec)}
                           </span>
                         </button>
-                        {/* v12.318 导演台 — 摆位/机位/构图体检 */}
+                        {/* v12.318 director stage — blocking / camera / composition check */}
                         <button
                           onClick={async () => {
                             let scene: StageScene | null = null;
                             try {
                               const r = await fetch(`/api/projects/${id}/stage?shot=${sb.shotNumber}`);
                               if (r.ok) scene = (await r.json())?.scene ?? null;
-                            } catch { /* 读不到就当没摆过,不拦开台 */ }
+                            } catch { /* treat as unblocked if we cannot read; do not block opening the stage */ }
                             setStageShot({
                               shotNumber: sb.shotNumber,
                               title: sb.data?.description?.slice(0, 60),
@@ -841,12 +854,12 @@ export default function ProjectDetailPage() {
                               characters: scriptShot?.characters,
                             });
                           }}
-                          title="导演台 — 拖人摆位、定机位、实时构图体检"
+                          title={t.projectView.directorStageTitle}
                           className="mt-1 w-full flex items-center gap-1.5 px-1.5 py-1 rounded-md border border-[var(--cinema-border)] hover:border-[var(--cinema-amber)] transition"
                         >
                           <UsersThree size={11} className={stagedShots[sb.shotNumber] ? 'text-[var(--cinema-amber)]' : 'text-[var(--cinema-text-3)]'} />
                           <span className="cinema-mono text-[9px] truncate opacity-75">
-                            {stagedShots[sb.shotNumber] ? '已摆位 · 导演台' : '导演台 · 摆位'}
+                            {stagedShots[sb.shotNumber] ? t.projectView.stagedOn : t.projectView.stagedOff}
                           </span>
                         </button>
                       </div>
@@ -857,7 +870,7 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
-          {/* v7.3 连贯性 + 种子锁控制台 */}
+          {/* v7.3 continuity + seed-lock console */}
           {activeTab === 'continuity' && (
             <>
               <ContinuityConsole
@@ -867,12 +880,12 @@ export default function ProjectDetailPage() {
                 storyboards={storyboards}
                 initialSettings={assets.find((a: any) => a.type === 'continuity')?.data}
               />
-              {/* v10.6.1: 资产级连续性台账 — 服装/场景/道具 × 引用镜号,改描述列受影响镜头 */}
+              {/* v10.6.1: asset-level continuity ledger — wardrobe/scene/props × citing shots; edit description lists impacted shots */}
               <AssetLedgerPanel projectId={id} />
             </>
           )}
 
-          {/* 视频 */}
+          {/* Videos */}
           {activeTab === 'videos' && (
             <>
             {isVertical && (
@@ -882,13 +895,13 @@ export default function ProjectDetailPage() {
                   aria-pressed={showSafeArea}
                   className={`cinema-btn-ghost !text-[11px] !py-1 ${showSafeArea ? '!text-[var(--cinema-amber)] !border-[var(--cinema-amber-deep)]' : ''}`}
                 >
-                  字幕安全区 {showSafeArea ? 'ON' : 'OFF'}
+                  {t.projectView.subtitleSafeArea.replace('{state}', showSafeArea ? 'ON' : 'OFF')}
                 </button>
               </div>
             )}
-            {/* v12.150:失败/降级镜头批量补渲(isAnimatic 降级或无视频的镜;余额恢复后一键补) */}
+            {/* v12.150: batch re-render failed/downgraded shots (animatic or missing video; one-click after balance recovers) */}
             {(() => {
-              // 本地识别 ∪ 体检报告(persistent_url 洗成 ?key=hash 后本地正则失效,服务端 health 才是权威)
+              // Local detect ∪ health report (persistent_url washed to ?key=hash breaks local regex; server health is authoritative)
               const healthAnimatic = new Set(healthReport?.animaticShots || []);
               const degraded = videos.filter((v: any) => v?.data?.isAnimatic === true || !v?.mediaUrls?.[0] || /animatic-\d+\.mp4/.test(String(v?.mediaUrls?.[0] || '')) || healthAnimatic.has(v?.shotNumber));
               if (degraded.length === 0 && !rerenderMsg) return null;
@@ -901,7 +914,7 @@ export default function ProjectDetailPage() {
                       disabled={rerenderBusy}
                       className="cinema-btn-ghost !text-[11px] !py-1 !text-[var(--cinema-amber)] !border-[var(--cinema-amber-deep)] disabled:opacity-50"
                     >
-                      {rerenderBusy ? '⏳ 补渲中…' : `⚡ 批量补渲 ${degraded.length} 个失败/降级镜头`}
+                      {rerenderBusy ? t.projectView.rerenderBusy : t.projectView.rerenderBatchBtn.replace('{n}', String(degraded.length))}
                     </button>
                   )}
                   {rerenderMsg && <span className="cinema-mono text-[10px] opacity-70">{rerenderMsg}</span>}
@@ -909,7 +922,7 @@ export default function ProjectDetailPage() {
               );
             })()}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {videos.length === 0 && <div className="col-span-full"><EmptyState icon={Video} title={t.product.emptyVideos} hint="完成分镜后,在镜头工坊或主管线生成每镜视频" /></div>}
+              {videos.length === 0 && <div className="col-span-full"><EmptyState icon={Video} title={t.product.emptyVideos} hint={t.projectView.emptyVideosHint} /></div>}
               {videos.map((v: any) => {
                 const url = v.mediaUrls?.[0];
                 const isVid = url && isVideoUrl(url);
@@ -929,7 +942,7 @@ export default function ProjectDetailPage() {
                           <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                             <div className="text-center">
                               <AlertTriangle className="w-7 h-7 text-[var(--cinema-amber)] mx-auto mb-2" />
-                              <p className="cinema-mono text-[10px] opacity-80">视频生成失败 · 显示分镜图</p>
+                              <p className="cinema-mono text-[10px] opacity-80">{t.projectView.videoGenFailed}</p>
                             </div>
                           </div>
                         </div>
@@ -946,7 +959,7 @@ export default function ProjectDetailPage() {
             </>
           )}
 
-          {/* v2.16 P1.4: 镜头工坊 — 4K 重渲 / 多分辨率导出 / 跳到 U2V 工具 */}
+          {/* v2.16 P1.4: Shot Workshop — 4K re-render / multi-res export / jump to U2V */}
           {activeTab === 'workshop' && (
             <ShotWorkshopTab
               projectId={id}
@@ -963,7 +976,7 @@ export default function ProjectDetailPage() {
             />
           )}
 
-          {/* v3.1 F: Cinema 时间线 MVP */}
+          {/* v3.1 F: Cinema Timeline MVP */}
           {activeTab === 'timeline' && (
             <CinemaTimeline
               projectId={id}
@@ -971,12 +984,12 @@ export default function ProjectDetailPage() {
             />
           )}
 
-          {/* v2.21 P1.4: 节奏分析 — 每镜冲突分 + 反转标记 + 警告/建议 */}
+          {/* v2.21 P1.4: pacing — per-shot conflict + reversal marks + warnings/suggestions */}
           {activeTab === 'pullsheet' && <PullSheetTable projectId={id} />}
 
           {activeTab === 'pacing' && (
             <div className="flex flex-col gap-4">
-              {/* v7.5 情感曲线 + 多轨节奏热力图 */}
+              {/* v7.5 emotion curve + multi-track pacing heatmap */}
               <EmotionRhythmChart
                 curve={computeEmotionCurve(
                   (script?.shots || []).map((sh: any, i: number) => {
@@ -1006,30 +1019,30 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
-          {/* v3.4.1: 成片质检 — Vision 看画面对不对得上剧本 */}
+          {/* v3.4.1: film QC — Vision checks whether the picture matches the script */}
           {activeTab === 'vision-audit' && (
             <VisionAuditTab projectId={id} onJumpToWorkshop={() => setActiveTab('workshop')} />
           )}
 
-          {/* v9.4.6: 一键成片自愈闭环(对标可灵, 我们多自检+自动重拍) */}
+          {/* v9.4.6: one-click film self-heal loop (vs Kling; we add self-check + auto-reshoot) */}
           {activeTab === 'oneclick' && (
             <OneClickFilmPanel projectId={id} shotPrompts={shotPrompts} />
           )}
 
-          {/* v8.0 技术监看台 — 视频示波器 + EDL/XML 出片对接 */}
+          {/* v8.0 technical monitor — video scopes + EDL/XML delivery */}
           {activeTab === 'monitor' && (
             <div className="space-y-4">
               <MonitorTab projectId={id} storyboards={storyboards} />
-              {/* v9.6.5 T3 性能成本:项目级成本归因 */}
+              {/* v9.6.5 T3 cost: project-level cost attribution */}
               <CostAttributionPanel projectId={id} />
-              {/* v12.199:逐镜决策日志(decision-log API 此前无前端入口) */}
+              {/* v12.199: per-shot decision log (decision-log API had no UI entry) */}
               <DecisionLogPanel projectId={id} />
-              {/* v9.6.8 T2 模板市场:把这个项目存为可复用模板 */}
+              {/* v9.6.8 T2 template market: save this project as a reusable template */}
               <SaveTemplateButton projectId={id} />
             </div>
           )}
 
-          {/* v8.2 参数联动 — JSON ↔ 可视化同步 */}
+          {/* v8.2 param linkage — JSON ↔ visual sync */}
           {activeTab === 'param-linkage' && (
             <ParamLinkagePanel
               projectId={id}
@@ -1044,7 +1057,7 @@ export default function ProjectDetailPage() {
             />
           )}
 
-          {/* v3.0 P0.1: 评论协作 — 项目级讨论 + 每个镜头独立线程 */}
+          {/* v3.0 P0.1: comment collab — project discussion + a thread per shot */}
           {activeTab === 'comments' && (
             <div className="space-y-4">
               <CommentThread
@@ -1054,7 +1067,7 @@ export default function ProjectDetailPage() {
                 contextLabel="PROJECT"
                 currentUserId={(project?.userId || project?.user_id) || null}
               />
-              {/* 每个分镜独立评论线程 — 用 collapsible 列表展现 */}
+              {/* Per-shot comment threads — collapsible list */}
               {script?.shots && script.shots.length > 0 && (
                 <div className="space-y-2">
                   <div className="cinema-eyebrow opacity-60">PER-SHOT COMMENTS</div>
@@ -1067,9 +1080,9 @@ export default function ProjectDetailPage() {
                         <summary className="cursor-pointer flex items-center justify-between gap-2 select-none">
                           <span className="cinema-mono text-[11px]">
                             <span className="opacity-50">SHOT</span> #{sh.shotNumber}
-                            <span className="opacity-50 ml-2">· {sh.sceneDescription?.slice(0, 40) || '(无场景描述)'}</span>
+                            <span className="opacity-50 ml-2">· {sh.sceneDescription?.slice(0, 40) || t.projectView.noSceneDesc}</span>
                           </span>
-                          <span className="cinema-mono text-[10px] opacity-50 group-open:hidden">展开评论 →</span>
+                          <span className="cinema-mono text-[10px] opacity-50 group-open:hidden">{t.projectView.expandComments}</span>
                         </summary>
                         <div className="mt-3">
                           <CommentThread
@@ -1089,46 +1102,46 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
-          {/* v9.1.2 多平台分发 + v9.1.3 AI 竖屏封面候选 (发布前置: 文案 + 封面) */}
+          {/* v9.1.2 multi-platform distribute + v9.1.3 AI portrait cover candidates (pre-publish: copy + cover) */}
           {activeTab === 'distribution' && (
             <div className="flex flex-col gap-4">
               <MusicGenPanel projectId={id} />
               <LocalizePanel projectId={id} />
               <DistributionPanel projectId={id} />
-              <CoverCandidatesPanel projectId={id} title={project.title} />
+              <CoverCandidatesPanel projectId={id} title={displayName(project, locale, project.title)} />
             </div>
           )}
 
-          {/* 完整播放 */}
+          {/* Full playback */}
           {activeTab === 'play' && (
             <div>
-              {/* v12.190:成本下钻(点开才查;引擎逐项 + 总额) */}
+              {/* v12.190: cost drill-down (fetch on open; per-engine + total) */}
               <div className="mb-3" data-testid="cost-panel">
                 <button type="button" onClick={() => { const o = !costOpen; setCostOpen(o); if (o && !costReport) void loadCost(); }} className="cinema-btn-ghost !text-[11px] !py-1">
-                  💰 成本明细{costReport ? `(¥${costReport.totalCny})` : ''}{costOpen ? ' ▲' : ' ▼'}
+                  {t.projectView.costDetails}{costReport ? `(¥${costReport.totalCny})` : ''}{costOpen ? ' ▲' : ' ▼'}
                 </button>
                 {costOpen && costReport && (
                   <div className="mt-2 cinema-card p-3 space-y-1">
                     {costReport.byEngine.map((e) => (
-                      <div key={e.engine} className="flex justify-between text-[11px]"><span className="opacity-70">{e.engine}</span><span className="cinema-mono">¥{e.costCny}({e.count} 次)</span></div>
+                      <div key={e.engine} className="flex justify-between text-[11px]"><span className="opacity-70">{e.engine}</span><span className="cinema-mono">¥{e.costCny}({t.projectView.costTimes.replace('{n}', String(e.count))})</span></div>
                     ))}
-                    <div className="flex justify-between text-[11px] border-t border-white/10 pt-1 font-medium"><span>合计({costReport.entries} 条)</span><span className="cinema-mono">¥{costReport.totalCny}</span></div>
+                    <div className="flex justify-between text-[11px] border-t border-white/10 pt-1 font-medium"><span>{t.projectView.costTotal.replace('{n}', String(costReport.entries))}</span><span className="cinema-mono">¥{costReport.totalCny}</span></div>
                   </div>
                 )}
-                {costOpen && !costReport && <div className="mt-2 cinema-mono text-[10px] opacity-60">查询中…</div>}
+                {costOpen && !costReport && <div className="mt-2 cinema-mono text-[10px] opacity-60">{t.projectView.querying}</div>}
               </div>
-              {/* v12.153:成片全维体检(点开才 ffprobe,红黄绿逐维) */}
+              {/* v12.153: full-film health (ffprobe on open, red/yellow/green per dimension) */}
               <div className="mb-3" data-testid="film-health-panel">
                 <button
                   type="button"
                   onClick={() => { const opening = !healthOpen; setHealthOpen(opening); if (opening && !healthReport) void loadHealth(); }}
                   className="cinema-btn-ghost !text-[11px] !py-1"
                 >
-                  🩺 成片体检 {healthReport ? ({ ok: '🟢', warn: '🟡', fail: '🔴', unknown: '⚪' } as any)[healthReport.overall] || '' : ''}{healthOpen ? ' ▲' : ' ▼'}
+                  {t.projectView.filmHealth} {healthReport ? ({ ok: '🟢', warn: '🟡', fail: '🔴', unknown: '⚪' } as any)[healthReport.overall] || '' : ''}{healthOpen ? ' ▲' : ' ▼'}
                 </button>
                 {healthOpen && (
                   <div className="mt-2 cinema-card p-3 space-y-1.5">
-                    {!healthReport && <div className="cinema-mono text-[10px] opacity-60">探测中…</div>}
+                    {!healthReport && <div className="cinema-mono text-[10px] opacity-60">{t.projectView.probing}</div>}
                     {healthReport?.items.map((it) => (
                       <div key={it.key} className="flex items-start gap-2 text-[11px]">
                         <span className="shrink-0">{({ ok: '🟢', warn: '🟡', fail: '🔴', unknown: '⚪' } as any)[it.status] || '⚪'}</span>
@@ -1138,7 +1151,7 @@ export default function ProjectDetailPage() {
                     ))}
                     {healthReport && (
                       <div className="flex items-center gap-2 pt-0.5">
-                        <button type="button" onClick={() => void loadHealth()} className="cinema-mono text-[10px] opacity-50 hover:opacity-90">↻ 重新体检</button>
+                        <button type="button" onClick={() => void loadHealth()} className="cinema-mono text-[10px] opacity-50 hover:opacity-90">{t.projectView.recheckHealth}</button>
                         {healthReport.overall !== 'ok' && (
                           <HealShotsButton projectId={id} onHealed={() => void loadHealth()} />
                         )}
@@ -1152,8 +1165,8 @@ export default function ProjectDetailPage() {
                   <span className={`cinema-chip ${audioCheck.audible ? 'cinema-chip-green' : 'cinema-chip-amber'}`}>
                     <SpeakerHigh className="w-3 h-3" weight="fill" /> {audioCheck.label}
                   </span>
-                  {audioCheck.healed && <span className="cinema-mono text-[10px] opacity-40">已自愈补音轨</span>}
-                  {!audioCheck.audible && <span className="cinema-mono text-[10px] opacity-45">— 缺配乐/配音?去「镜头工坊」合成配音或重生成片补音</span>}
+                  {audioCheck.healed && <span className="cinema-mono text-[10px] opacity-40">{t.projectView.audioHealed}</span>}
+                  {!audioCheck.audible && <span className="cinema-mono text-[10px] opacity-45">{t.projectView.audioMissingHint}</span>}
                 </div>
               )}
               <div className="cinema-card overflow-hidden mb-4">
@@ -1184,37 +1197,37 @@ export default function ProjectDetailPage() {
                               onLoad={(e) => { const im = e.currentTarget; if (im.naturalWidth && im.naturalHeight) setPlayerRatio(im.naturalWidth / im.naturalHeight); }}
                               className={mp.className} style={mp.style} />
                             <div className="absolute top-3 right-3 cinema-chip cinema-chip-amber !text-[10px]">
-                              分镜图（视频生成失败）
+                              {t.projectView.boardFallback}
                             </div>
                           </div>
                         );
                       })()
                     ) : (
-                      <div className={`w-full ${mainFrameClass} bg-black grid place-items-center cinema-mono text-[11px] opacity-40`}>无视频</div>
+                      <div className={`w-full ${mainFrameClass} bg-black grid place-items-center cinema-mono text-[11px] opacity-40`}>{t.projectView.noVideo}</div>
                     )}
                     <div className="absolute bottom-3 left-3 px-3 py-1 rounded-full bg-black/70 text-xs text-white">
-                      镜头 {playingIndex >= 0 ? videos[playingIndex]?.shotNumber : '-'} / {videos.length}
+                      {t.projectView.shotOf.replace('{n}', String(playingIndex >= 0 ? videos[playingIndex]?.shotNumber : '-')).replace('{total}', String(videos.length))}
                     </div>
-                    {/* 点击全屏(套外层容器 → 连播不掉全屏);双击画面亦可 */}
+                    {/* Click for fullscreen (outer wrap so playlist does not drop FS); double-click the picture also works */}
                     <button
                       type="button"
                       onClick={togglePlayerFullscreen}
-                      title={isPlayerFs ? '退出全屏' : '全屏观看'}
-                      aria-label={isPlayerFs ? '退出全屏' : '全屏观看'}
+                      title={isPlayerFs ? t.projectView.exitFullscreen : t.projectView.watchFullscreen}
+                      aria-label={isPlayerFs ? t.projectView.exitFullscreen : t.projectView.watchFullscreen}
                       className="absolute top-3 left-3 z-10 flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-black/60 hover:bg-black/80 border border-white/15 text-white/90 text-xs transition-colors">
                       {isPlayerFs ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-                      <span>{isPlayerFs ? '退出全屏' : '全屏'}</span>
+                      <span>{isPlayerFs ? t.projectView.exitFullscreen : t.projectView.fullscreen}</span>
                     </button>
                   </div>
                 ) : (
-                  <div className={`w-full ${mainFrameClass} grid place-items-center cinema-mono text-[11px] opacity-40`}>暂无视频</div>
+                  <div className={`w-full ${mainFrameClass} grid place-items-center cinema-mono text-[11px] opacity-40`}>{t.projectView.noVideosYet}</div>
                 )}
               </div>
 
-              {/* 播放控制 */}
+              {/* Playback controls */}
               <div className="flex items-center gap-2 mb-4">
                 <button onClick={() => setPlayingIndex(0)} className="cinema-btn-primary !text-sm">
-                  <Play className="w-4 h-4" />从头播放
+                  <Play className="w-4 h-4" />{t.projectView.playFromStart}
                 </button>
                 <div className="flex gap-1 overflow-x-auto">
                   {videos.map((v: any, i: number) => (
@@ -1226,7 +1239,7 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
 
-              {/* 导演审核结果 */}
+              {/* Director review */}
               {review && (
                 <div className="cinema-card-hi p-5">
                   <div className="flex items-center gap-3 mb-4">
@@ -1234,7 +1247,7 @@ export default function ProjectDetailPage() {
                     <span className="cinema-headline text-lg text-[var(--cinema-amber)]">{review.overallScore}<span className="cinema-mono text-sm opacity-50"> /100</span></span>
                     <span className={`cinema-chip ${review.passed ? 'cinema-chip-green' : 'cinema-chip-amber'}`}>
                       {review.passed ? <CheckCircle2 className="w-3 h-3" weight="fill" /> : <AlertTriangle className="w-3 h-3" />}
-                      {review.passed ? '审核通过' : '需要优化'}
+                      {review.passed ? t.projectView.reviewPassed : t.projectView.needsWork}
                     </span>
                   </div>
                   <p className="cinema-subhead text-sm opacity-90 mb-4">{review.summary}</p>
@@ -1245,7 +1258,7 @@ export default function ProjectDetailPage() {
                         <div key={key} className="rounded-[3px] p-2.5 bg-[var(--cinema-surface-2)] border border-[var(--cinema-border)]">
                           <div className="flex items-center justify-between mb-1">
                             <span className="cinema-mono text-[10px] opacity-60">{
-                              { narrative: '叙事', visualConsistency: '画风', pacing: '节奏', characterPerformance: '角色', visualQuality: '视觉', audio: '音频' }[key] || key
+                              { narrative: t.projectView.dimNarrative, visualConsistency: t.projectView.dimVisualConsistency, pacing: t.projectView.dimPacing, characterPerformance: t.projectView.dimPerformance, visualQuality: t.projectView.dimVisualQuality, audio: t.projectView.dimAudio }[key] || key
                             }</span>
                             <span className="cinema-mono text-xs text-[var(--cinema-amber)] tabular-nums">{dim.score}</span>
                           </div>
@@ -1280,11 +1293,11 @@ export default function ProjectDetailPage() {
         </motion.div>
       </main>
 
-      {/* AI 助手浮动入口 + 侧栏 (alt+/ 也可呼出) */}
+      {/* AI assistant launcher + sidebar (alt+/ also opens it) */}
       <ChatLauncherButton open={chatOpen} onClick={() => setChatOpen(true)} />
       <ProjectChatSidebar projectId={id} open={chatOpen} onClose={() => setChatOpen(false)} />
 
-      {/* v7.2 单镜头摄影台弹窗 */}
+      {/* v7.2 single-shot cine desk modal */}
       {cinemaShot && (
         <ShotCinematographyModal
           projectId={id}
@@ -1297,7 +1310,7 @@ export default function ProjectDetailPage() {
         />
       )}
 
-      {/* v12.318 导演台弹窗 */}
+      {/* v12.318 director stage modal */}
       {stageShot && (
         <DirectorStageModal
           projectId={id}
@@ -1310,7 +1323,7 @@ export default function ProjectDetailPage() {
         />
       )}
 
-      {/* v12.330 逐帧检视弹窗 —— 选中的帧区间直接交给片段重拍 */}
+      {/* v12.330 frame-inspect modal — selected frame range is handed to segment retake */}
       {frameShot && (
         <FrameInspectModal
           projectId={id}
@@ -1318,8 +1331,8 @@ export default function ProjectDetailPage() {
           shotTitle={frameShot.title}
           onClose={() => setFrameShot(null)}
           onRetake={async ({ fromS, toS }) => {
-            // 区间由服务端算好(与 planSegmentRetake 同一帧吸附口径),前端只负责转交。
-            // 先 dryRun 预演:计划不通过就把人话原因显示出来,不去花钱调引擎。
+            // Range is computed on the server (same frame-snap as planSegmentRetake); the client only forwards it.
+            // dryRun first: if the plan fails, show the human-readable reason instead of spending engine quota.
             try {
               const r = await fetch(`/api/projects/${id}/segment-retake`, {
                 method: 'POST',
@@ -1328,22 +1341,22 @@ export default function ProjectDetailPage() {
               });
               const j = await r.json();
               if (!r.ok || j?.plan?.ok === false) {
-                showToast({ title: '这段不能单独重拍', description: String(j?.error || j?.plan?.reason || '').slice(0, 140), type: 'error', duration: 5000 });
+                showToast({ title: t.projectView.cannotRetakeSegment, description: String(j?.error || j?.plan?.reason || '').slice(0, 140), type: 'error', duration: 5000 });
                 return;
               }
               showToast({
-                title: '可以重拍',
-                description: `生成 ${Number(j.plan?.generateDurationS ?? 0).toFixed(3)}s、补 ${(toS - fromS).toFixed(3)}s,该镜总时长不变`,
+                title: t.projectView.canRetake,
+                description: t.projectView.retakePlanDesc.replace('{gen}', Number(j.plan?.generateDurationS ?? 0).toFixed(3)).replace('{patch}', (toS - fromS).toFixed(3)),
                 type: 'success', duration: 5000,
               });
             } catch (e) {
-              showToast({ title: '预演失败', description: (e instanceof Error ? e.message : '请检查网络后重试').slice(0, 120), type: 'error', duration: 4000 });
+              showToast({ title: t.projectView.dryRunFailed, description: (e instanceof Error ? e.message : t.projectView.checkNetwork).slice(0, 120), type: 'error', duration: 4000 });
             }
           }}
         />
       )}
 
-      {/* v12.44 统一镜头检查器 — 点分镜图弹出,聚合单镜预览/元数据/操作 */}
+      {/* v12.44 unified shot inspector — click a board to open preview / metadata / actions */}
       {inspectShot && (
         <ShotInspector
           shot={inspectShot}

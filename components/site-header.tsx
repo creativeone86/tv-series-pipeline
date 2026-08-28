@@ -9,7 +9,7 @@ export function SiteHeader({ variant = 'default' }: { variant?: 'default' | 'com
   const { user } = useAuth();
   const { t } = useLocale();
 
-  // overlay: 叠在全屏英雄图上,无底色,文字靠 text-shadow 维持可读
+  // overlay: sits on the full-bleed hero, no chrome; text-shadow keeps type readable
   const wrapperClass =
     variant === 'default'
       ? 'sticky top-0 z-40 backdrop-blur-[48px] bg-gradient-to-b from-[rgba(10,10,11,0.85)] to-[rgba(10,10,11,0.3)] border-b border-[var(--border)]'
@@ -21,7 +21,7 @@ export function SiteHeader({ variant = 'default' }: { variant?: 'default' | 'com
     <header className={`${wrapperClass} px-[5vw] py-[18px]`}>
       <div className="flex items-center justify-between gap-6">
         <Link href="/" className="flex flex-col font-bold">
-          <span className="text-[22px] tracking-wide brand-gradient">青枫</span>
+          <span className="text-[22px] tracking-wide brand-gradient">{t.sharedUi.brandShort}</span>
           <span className="text-xs text-[var(--soft)]">QingFeng Manju</span>
         </Link>
 

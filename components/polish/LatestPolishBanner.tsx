@@ -1,16 +1,16 @@
 'use client';
 
 /**
- * LatestPolishBanner — 项目详情页顶部"最近一次润色体检"横幅。
+ * LatestPolishBanner — project-detail header strip for the most recent polish audit.
  *
- * 消费的是 polish page 回写到 script asset.data.latestPolish 里的那条记录,
- * 形成闭环:
- *   润色 → 回写 → 项目页看到就绪度 → 决定是否重跑
+ * Consumes the record polish page writes to script asset.data.latestPolish,
+ * closing the loop:
+ *   polish → write-back → project page shows readiness → decide whether to re-run
  *
- * 默认状态: 折叠, 只显示 AIGC 就绪度 + 摘要 + 改动点数量。
- * 点"展开体检单"会嵌入完整的 IndustryAuditCard。
+ * Default: collapsed; shows AIGC readiness + summary + note count.
+ * "Expand audit" embeds the full IndustryAuditCard.
  *
- * 如果 latestPolish 不存在或结构不对, 组件自动不渲染, 不污染页面。
+ * If latestPolish is missing or malformed, the component renders nothing.
  */
 
 import { useMemo, useState } from 'react';
@@ -19,6 +19,7 @@ import { Stethoscope, CaretDown as ChevronDown, CaretUp as ChevronUp, Pulse as A
 import IndustryAuditCard, { type PolishAudit } from './IndustryAuditCard';
 import { readinessLevel } from '@/lib/polish-prompts';
 import { timeAgoZh } from '@/lib/relative-time';
+import { useLocale } from '@/hooks/use-locale';
 
 interface LatestPolishEntry {
   at?: string;
@@ -39,21 +40,24 @@ export default function LatestPolishBanner({
   entry: LatestPolishEntry | null | undefined;
   projectId: string;
 }) {
+  const { locale, t: loc } = useLocale();
+  const t = loc as typeof loc & { polishUi: Record<string, string> };
   const [expanded, setExpanded] = useState(false);
 
-  // Hook 在 early return 前先跑完 (React hooks 规则),
-  // entry 不存在时 useMemo 拿 undefined 也没问题
+  // Hooks must run before any early return (React rules of hooks).
+  // Missing entry: useMemo still receives undefined — that's fine.
   const when = useMemo(() => {
     if (!entry?.at) return '';
     try {
-      // v12.301:收口到 lib/relative-time
+      // v12.301: shared lib/relative-time (zh). English uses locale date.
+      if (locale === 'en') return new Date(entry.at).toLocaleString('en');
       return timeAgoZh(entry.at);
     } catch {
       return '';
     }
-  }, [entry?.at]);
+  }, [entry?.at, locale]);
 
-  // 容错: 没有 polished 就当没跑过, 组件静默消失
+  // No polished text → treat as never run; stay silent
   if (!entry || typeof entry.polished !== 'string') return null;
 
   const score = entry.audit?.aigcReadiness?.score;
@@ -69,24 +73,30 @@ export default function LatestPolishBanner({
       : lvl?.level === 'amber' ? 'text-amber-300'
         : 'text-rose-300';
 
+  const readinessLabel =
+    lvl?.level === 'green' ? t.polishUi.readinessGreen
+      : lvl?.level === 'amber' ? t.polishUi.readinessAmber
+        : lvl ? t.polishUi.readinessRed
+          : '';
+
   return (
     <div className="mb-6 rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-500/[0.08] to-rose-500/[0.05] overflow-hidden">
-      {/* 主横幅行 */}
+      {/* Main banner row */}
       <div className="px-5 py-4 flex items-center gap-4 flex-wrap">
         <div className="flex items-center gap-2 shrink-0">
           <Stethoscope className="w-5 h-5 text-violet-300" />
           <div>
             <p className="text-[11px] text-violet-300 tracking-widest uppercase leading-none">
-              最近一次润色
+              {t.polishUi.latestPolish}
             </p>
             <p className="text-[10px] text-white/40 mt-1">
-              {entry.mode === 'pro' ? 'Pro · 行业级诊断' : 'Basic'}
+              {entry.mode === 'pro' ? t.polishUi.proIndustry : 'Basic'}
               {when ? ` · ${when}` : ''}
             </p>
           </div>
         </div>
 
-        {/* 就绪度分数 + 进度条 (仅 Pro) */}
+        {/* Readiness score + bar (Pro only) */}
         {hasScore && lvl ? (
           <div className="flex items-center gap-2 min-w-[200px] flex-1">
             <Activity className={`w-4 h-4 ${labelColor}`} />
@@ -95,42 +105,42 @@ export default function LatestPolishBanner({
             <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden ml-2 min-w-[80px]">
               <div className={`h-full rounded-full ${barColor}`} style={{ width: `${score}%` }} />
             </div>
-            <span className={`text-[11px] ${labelColor}`}>{lvl.label}</span>
+            <span className={`text-[11px] ${labelColor}`}>{readinessLabel}</span>
           </div>
         ) : null}
 
-        {/* 改动点数 */}
+        {/* Note count */}
         {Array.isArray(entry.notes) && entry.notes.length > 0 ? (
           <span className="text-[11px] text-white/55 bg-white/5 px-2 py-0.5 rounded-full">
-            {entry.notes.length} 处调整
+            {t.polishUi.notesCount.replace('{n}', String(entry.notes.length))}
           </span>
         ) : null}
 
-        {/* 动作按钮 */}
+        {/* Actions */}
         <div className="flex items-center gap-1.5 ml-auto">
           {entry.audit ? (
             <button
               onClick={() => setExpanded((v) => !v)}
               className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[12px] text-white/80 transition-colors flex items-center gap-1"
-              title={expanded ? '折叠体检单' : '展开完整体检单'}
+              title={expanded ? t.polishUi.collapseAuditTitle : t.polishUi.expandAuditTitle}
             >
               {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              {expanded ? '收起' : '查看体检单'}
+              {expanded ? t.polishUi.collapse : t.polishUi.viewAudit}
             </button>
           ) : null}
           <Link
             href={`/dashboard/polish?projectId=${encodeURIComponent(projectId)}`}
             className="px-3 py-1.5 rounded-lg bg-violet-500/20 hover:bg-violet-500/30 text-[12px] text-violet-100 border border-violet-500/30 transition-colors flex items-center gap-1"
-            title="去 Polish Studio 再润色一次"
+            title={t.polishUi.polishAgainTitle}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            再润色
+            {t.polishUi.polishAgain}
             <ExternalLink className="w-3 h-3 opacity-60" />
           </Link>
         </div>
       </div>
 
-      {/* 摘要条 */}
+      {/* Summary strip */}
       {entry.summary ? (
         <div className="px-5 pb-3 -mt-1 text-[12.5px] text-white/75 leading-relaxed flex gap-2">
           <Clock className="w-3.5 h-3.5 text-white/35 shrink-0 mt-0.5" />
@@ -138,7 +148,7 @@ export default function LatestPolishBanner({
         </div>
       ) : null}
 
-      {/* 展开区: 完整 audit */}
+      {/* Expanded: full audit */}
       {expanded && entry.audit ? (
         <div className="px-5 pb-5 pt-2 border-t border-white/5 bg-black/15">
           <IndustryAuditCard audit={entry.audit} />

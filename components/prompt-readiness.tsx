@@ -1,9 +1,10 @@
 'use client';
 
 /**
- * v6.1.3 — 生成前就绪度预览. 实时(随创意/参考变化)算一个就绪度分 + 检查清单,
- * 让用户按"开始创作"前先补齐. 纯逻辑在 lib/prompt-readiness (已单测), 这里组装数据 + 展示.
- * 复用: lib/prompt-ide compilePrompt (解析 @引用) + cameo-vision 试穿评分 (cameoScore 透传).
+ * v6.1.3 — pre-generate readiness preview. Live score + checklist as idea / refs
+ * change, so the user can fill gaps before "Start creating". Pure logic lives in
+ * lib/prompt-readiness (unit-tested); this file assembles data + UI.
+ * Reuses: lib/prompt-ide compilePrompt (@ mentions) + cameo-vision try-on score.
  */
 
 import { useEffect, useState } from 'react';
@@ -11,6 +12,7 @@ import { CheckCircle as CheckCircle2, Circle, Gauge } from '@phosphor-icons/reac
 import { compilePrompt, type MentionableAsset } from '@/lib/prompt-ide';
 import { summarizeRefs, type ReferenceAsset } from '@/lib/multimodal-ref';
 import { assessPromptReadiness } from '@/lib/prompt-readiness';
+import { useLocale } from '@/hooks/use-locale';
 
 export function PromptReadiness({
   idea,
@@ -23,6 +25,7 @@ export function PromptReadiness({
   cameoScore?: number | null;
   refs: ReferenceAsset[];
 }) {
+  const { t } = useLocale();
   const [assets, setAssets] = useState<MentionableAsset[]>([]);
   useEffect(() => {
     let cancelled = false;
@@ -33,7 +36,7 @@ export function PromptReadiness({
     return () => { cancelled = true; };
   }, []);
 
-  if (!(idea || '').trim()) return null; // 空创意不显示
+  if (!(idea || '').trim()) return null; // hide when the idea is empty
 
   const compiled = compilePrompt(idea, assets);
   const report = assessPromptReadiness({
@@ -47,7 +50,7 @@ export function PromptReadiness({
 
   const color = report.level === 'high' ? 'text-emerald-400' : report.level === 'mid' ? 'text-amber-400' : 'text-rose-400';
   const ring = report.level === 'high' ? 'border-emerald-500/40' : report.level === 'mid' ? 'border-amber-500/40' : 'border-rose-500/40';
-  const blurb = report.level === 'high' ? '已就绪,可以开始创作' : report.level === 'mid' ? '基本就绪,补齐下面几项更稳' : '建议先补齐关键项再生成';
+  const blurb = report.level === 'high' ? t.sharedUi.readinessHigh : report.level === 'mid' ? t.sharedUi.readinessMid : t.sharedUi.readinessLow;
 
   return (
     <div className={`rounded-2xl border ${ring} bg-white/[0.03] p-4`}>
@@ -56,7 +59,7 @@ export function PromptReadiness({
           {report.score}
         </div>
         <div>
-          <p className="text-sm font-medium text-white flex items-center gap-1.5"><Gauge className="w-4 h-4" />生成就绪度</p>
+          <p className="text-sm font-medium text-white flex items-center gap-1.5"><Gauge className="w-4 h-4" />{t.sharedUi.genReadiness}</p>
           <p className="text-[11px] text-gray-500 mt-0.5">{blurb}</p>
         </div>
       </div>

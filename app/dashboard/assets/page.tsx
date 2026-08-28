@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { Users, Mountains as Mountain, FilmStrip as Film, Video, MusicNotes as Music, FileText, Package, Play, Trash as Trash2 } from '@phosphor-icons/react';
 import { getToken } from '@/lib/auth';
 import { VideoModal } from '@/components/ui/video-modal';
 import { ImageLightboxModal } from '@/components/ui/image-lightbox';
 import { AudioPlayerModal } from '@/components/ui/audio-player-modal';
 import { ScriptViewerModal } from '@/components/ui/script-viewer-modal';
+import { useLocale } from '@/hooks/use-locale';
 
 interface AssetItem {
   id: string;
@@ -23,15 +23,15 @@ interface AssetItem {
   updatedAt: string;
 }
 
-const TYPE_META: Record<string, { label: string; icon: any; color: string }> = {
-  character: { label: '角色', icon: Users, color: 'text-amber-400 bg-amber-500/15' },
-  scene: { label: '场景', icon: Mountain, color: 'text-emerald-400 bg-emerald-500/15' },
-  storyboard: { label: '分镜', icon: Film, color: 'text-cyan-400 bg-cyan-500/15' },
-  video: { label: '视频', icon: Video, color: 'text-pink-400 bg-pink-500/15' },
-  script: { label: '剧本', icon: FileText, color: 'text-purple-400 bg-purple-500/15' },
-  music: { label: '配乐', icon: Music, color: 'text-indigo-400 bg-indigo-500/15' },
-  final_video: { label: '成片', icon: Play, color: 'text-rose-400 bg-rose-500/15' },
-  timeline: { label: '时间线', icon: Film, color: 'text-blue-400 bg-blue-500/15' },
+const TYPE_META: Record<string, { icon: any; color: string }> = {
+  character: { icon: Users, color: 'text-amber-400 bg-amber-500/15' },
+  scene: { icon: Mountain, color: 'text-emerald-400 bg-emerald-500/15' },
+  storyboard: { icon: Film, color: 'text-cyan-400 bg-cyan-500/15' },
+  video: { icon: Video, color: 'text-pink-400 bg-pink-500/15' },
+  script: { icon: FileText, color: 'text-purple-400 bg-purple-500/15' },
+  music: { icon: Music, color: 'text-indigo-400 bg-indigo-500/15' },
+  final_video: { icon: Play, color: 'text-rose-400 bg-rose-500/15' },
+  timeline: { icon: Film, color: 'text-blue-400 bg-blue-500/15' },
 };
 
 const TYPE_FILTERS = ['all', 'character', 'scene', 'storyboard', 'video', 'music', 'script'];
@@ -45,11 +45,23 @@ function isImageAsset(asset: AssetItem): boolean {
   return false;
 }
 
-// ImagePreviewModal 已抽成共享组件 @/components/ui/image-lightbox#ImageLightboxModal
-// 见 components/nodes/character-node/scene-node 也复用同一个 modal
+// ImagePreviewModal extracted to shared @/components/ui/image-lightbox#ImageLightboxModal
+// See components/nodes/character-node / scene-node — same modal
 
 
 export default function AssetsPage() {
+  const { t: tRaw } = useLocale();
+  const t = tRaw as typeof tRaw & { dashMore: Record<string, string> };
+  const typeLabel: Record<string, string> = {
+    character: t.product.tabCharacters,
+    scene: t.product.tabScenes,
+    storyboard: t.product.tabStoryboard,
+    video: t.product.tabVideos,
+    script: t.product.tabScript,
+    music: t.dashMore.music,
+    final_video: t.dashMore.finalFilm,
+    timeline: t.product.timeline,
+  };
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
@@ -77,15 +89,15 @@ export default function AssetsPage() {
   };
 
   const removeAsset = async (id: string, name: string) => {
-    if (!confirm(`确定删除资产「${name || id}」?此操作不可恢复。`)) return;
+    if (!confirm(t.dashMore.deleteAssetConfirm.replace('{name}', name || id))) return;
     try {
-      const t = getToken();
+      const tok = getToken();
       const res = await fetch(`/api/assets?id=${encodeURIComponent(id)}`, {
-        method: 'DELETE', headers: t ? { Authorization: `Bearer ${t}` } : {},
+        method: 'DELETE', headers: tok ? { Authorization: `Bearer ${tok}` } : {},
       });
       if (res.ok) setAssets((as) => as.filter((a) => a.id !== id));
-      else { const b = await res.json().catch(() => ({})); alert(b.message || '删除失败'); }
-    } catch { alert('删除失败'); }
+      else { const b = await res.json().catch(() => ({})); alert(b.message || t.dashMore.deleteFailed); }
+    } catch { alert(t.dashMore.deleteFailed); }
   };
 
   const filtered = filter === 'all' ? assets : assets.filter(a => a.type === filter);
@@ -100,7 +112,7 @@ export default function AssetsPage() {
       setVideoTitle(asset.name);
       setVideoModalOpen(true);
     } else if (asset.type === 'music') {
-      // v2.11: 用带进度条的 AudioPlayerModal 替代裸 new Audio().play()
+      // v2.11: use AudioPlayerModal with a progress bar instead of a bare new Audio().play()
       const subtitle = [asset.data?.mood, asset.data?.bpm ? `${asset.data.bpm}bpm` : null]
         .filter(Boolean).join(' · ') || undefined;
       setAudioModal({ open: true, src: url, title: asset.name, subtitle });
@@ -111,7 +123,7 @@ export default function AssetsPage() {
   };
 
   const openAsset = (asset: AssetItem) => {
-    // 剧本资产没有 mediaUrls, 不走 handleMediaClick
+    // Script assets have no mediaUrls, so they skip handleMediaClick
     if (asset.type === 'script') {
       setScriptModal({ open: true, name: asset.name, data: asset.data || {}, projectId: asset.projectId });
       return;
@@ -133,47 +145,46 @@ export default function AssetsPage() {
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <Package className="w-6 h-6 text-[#E8C547]" />
-            素材库
+            {t.sidebar.assets}
           </h2>
           <p className="text-sm text-[var(--muted)] mt-1">
-            创作产生的数字资产 · 共 {assets.length} 个
+            {t.dashMore.assetsSubtitle.replace('{n}', String(assets.length))}
           </p>
         </div>
       </div>
 
-      {/* 类型筛选 */}
+      {/* Type filters */}
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-        {TYPE_FILTERS.map(t => {
-          const meta = TYPE_META[t];
-          const count = t === 'all' ? assets.length : assets.filter(a => a.type === t).length;
+        {TYPE_FILTERS.map(ft => {
+          const count = ft === 'all' ? assets.length : assets.filter(a => a.type === ft).length;
           return (
             <button
-              key={t}
-              onClick={() => setFilter(t)}
+              key={ft}
+              onClick={() => setFilter(ft)}
               className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                filter === t
+                filter === ft
                   ? 'bg-[#E8C547]/20 text-[#E8C547] border border-[#E8C547]/30'
                   : 'bg-white/5 text-gray-400 border border-transparent hover:bg-white/10'
               }`}
             >
-              {t === 'all' ? '全部' : meta?.label || t}
+              {ft === 'all' ? t.dashProjects.filterAll : typeLabel[ft] || ft}
               <span className="text-[10px] opacity-60">({count})</span>
             </button>
           );
         })}
       </div>
 
-      {/* 资产网格 */}
+      {/* Asset grid */}
       {loading ? (
         <div className="text-center py-20 text-gray-500">
           <div className="w-8 h-8 border-2 border-[#E8C547] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          加载中...
+          {t.common.loading}
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-20 text-gray-500">
           <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">{filter === 'all' ? '暂无素材' : '该类型暂无素材'}</p>
-          <p className="text-xs mt-1 text-gray-600">完成一次创作后，生成的角色、场景、分镜等素材会自动入库</p>
+          <p className="text-sm">{filter === 'all' ? t.dashMore.noAssets : t.dashMore.noAssetsOfType}</p>
+          <p className="text-xs mt-1 text-gray-600">{t.dashMore.assetsEmptyHint}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -183,6 +194,7 @@ export default function AssetsPage() {
             const hasMedia = asset.mediaUrls?.length > 0;
             const isImg = isImageAsset(asset);
             const isVid = hasMedia && ['video', 'final_video'].includes(asset.type);
+            const label = typeLabel[asset.type] || typeLabel.script;
 
             return (
               <div
@@ -190,7 +202,7 @@ export default function AssetsPage() {
                 className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden group hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,0,0,0.4)] transition-all duration-300 cursor-pointer"
                 onClick={() => openAsset(asset)}
               >
-                {/* 媒体预览 — v8.3 P5: object-contain 完整显示 (不再裁切, 免点开才能看全) */}
+                {/* Media preview — v8.3 P5: object-contain shows the full frame (no crop; no need to click to see all) */}
                 <div className="h-[180px] bg-black/40 relative overflow-hidden grid place-items-center">
                   {isImg && asset.mediaUrls[0] ? (
                     <img loading="lazy" decoding="async" src={asset.mediaUrls[0]} alt={asset.name} className="w-full h-full object-contain group-hover:scale-[1.03] transition-transform duration-300" />
@@ -207,20 +219,20 @@ export default function AssetsPage() {
                     </div>
                   )}
 
-                  {/* 类型标签 */}
+                  {/* Type badge */}
                   <div className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-medium ${meta.color}`}>
-                    {meta.label}
+                    {label}
                   </div>
 
-                  {/* v11.2.0 删除按钮(hover) */}
+                  {/* v11.2.0 delete button (hover) */}
                   <button type="button"
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeAsset(asset.id, asset.name); }}
-                    title="删除资产(不可恢复)"
+                    title={t.dashMore.deleteAssetTitle}
                     className="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-black/60 hover:bg-rose-600/80 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white opacity-0 group-hover:opacity-100 transition-all z-10">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
 
-                  {/* 版本标签 */}
+                  {/* Version badge */}
                   {asset.version > 1 && (
                     <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-black/60 text-[9px] text-white">
                       v{asset.version}
@@ -228,7 +240,7 @@ export default function AssetsPage() {
                   )}
                 </div>
 
-                {/* 信息 — v8.3 P5: 名称允许 2 行, 描述展开到 3 行, 减少"必须点开" */}
+                {/* Info — v8.3 P5: name up to 2 lines, description up to 3, less "must click to read" */}
                 <div className="p-3">
                   <h4 className="text-sm font-medium text-white line-clamp-2 leading-snug">{asset.name}</h4>
                   {asset.data?.description && (
@@ -239,7 +251,7 @@ export default function AssetsPage() {
                       {new Date(asset.createdAt).toLocaleDateString('zh-CN')}
                     </span>
                     {asset.shotNumber && (
-                      <span className="text-[10px] text-cyan-500">镜头 {asset.shotNumber}</span>
+                      <span className="text-[10px] text-cyan-500">{t.product.shotN.replace('{n}', String(asset.shotNumber))}</span>
                     )}
                   </div>
                 </div>

@@ -3,46 +3,48 @@
 /**
  * ConsistencyPanel (v2.11 #1)
  *
- * 实时显示本次 run 的"角色锁得住 / 镜头接得顺"可感知指标,聚合
- * orchestrator emit 过来的 `consistencyStatus` 事件。
+ * Live "face lock / shot continuity" meters for this run, aggregating
+ * `consistencyStatus` events emitted by the orchestrator.
  *
- * 为什么要给用户看这个:
- *   Cameo 和 Keyframes 的价值都是"连续性",但用户肉眼很难在生成过程中
- *   判断"它真的接上了么?"。把后端已经在做的信号直接可视化,让用户当场
- *   感受到差异化 —— 这是国内同类竞品没有的可视反馈。
+ * Why surface this:
+ *   Cameo and keyframes are about continuity, but users cannot tell mid-generation
+ *   whether shots actually connect. Visualizing signals the backend already computes
+ *   is a differentiator vs. local competitors.
  *
- * 两条进度条:
- *   - 已锁脸 X/N:说明有几个 shot 把用户上传的 Cameo 脸塞进了 subject_reference
- *   - 已衔接 X/N:说明有几个 shot 从前一条 clip 的末帧做视觉锚定
+ * Two bars:
+ *   - Face-locked X/N: shots that stuffed the uploaded Cameo face into subject_reference
+ *   - Chained X/N: shots visually anchored to the previous clip's last frame
  *
- * 数据源 zustand.useAgentStore,在 /api/create-stream 的 SSE 回调里
- * 逐条 addConsistencyEvent(ev) 入栈。
+ * Source: zustand.useAgentStore; SSE callbacks in /api/create-stream push
+ * addConsistencyEvent(ev) one by one.
  */
 
 import { useMemo } from 'react';
 import { UserCircle as UserCircle2, LinkSimple as Link2, Sparkle as Sparkles, Anchor } from '@phosphor-icons/react';
 import { useAgentStore, type ConsistencyEvent } from '@/lib/store';
+import { useLocale } from '@/hooks/use-locale';
 
 interface Props {
-  /** 可选:当 totalShots 未被上报时,父组件传进来的估算值(例如从已生成的 storyboard 数来) */
+  /** Optional estimate when totalShots has not been reported (e.g. storyboard count) */
   fallbackTotal?: number;
-  /** 紧凑模式:用于侧边栏窄版展示 */
+  /** Compact mode for the narrow sidebar */
   compact?: boolean;
 }
 
 export function ConsistencyPanel({ fallbackTotal = 0, compact = false }: Props) {
+  const { t } = useLocale();
   const events = useAgentStore((s) => s.consistencyEvents);
   const totalShots = useAgentStore((s) => s.totalShots);
 
   const { cameoShots, keyframeShots, globalAnchorShots, total } = useMemo(() => computeStats(events, totalShots, fallbackTotal), [events, totalShots, fallbackTotal]);
 
-  // 一条事件都没有 —— 可能 Cameo 没锁 + 第一个 shot 还没跑完
+  // No events yet — Cameo may be unlocked and the first shot has not finished
   if (events.length === 0) {
     return (
       <div className={`${compact ? 'p-3' : 'p-4'} bg-white/5 border border-white/10 rounded-xl`}>
         <div className="flex items-center gap-2 text-xs text-gray-500">
           <Sparkles className="w-3.5 h-3.5" />
-          连续性检测将在镜头生成中逐条上报…
+          {t.sharedUi.continuityPending}
         </div>
       </div>
     );
@@ -55,46 +57,46 @@ export function ConsistencyPanel({ fallbackTotal = 0, compact = false }: Props) 
     <div className={`${compact ? 'p-3' : 'p-4'} bg-gradient-to-br from-[#E8C547]/5 to-white/5 border border-[#E8C547]/20 rounded-xl space-y-3`}>
       <div className="flex items-center gap-2">
         <Sparkles className="w-4 h-4 text-[#E8C547]" />
-        <h4 className="text-sm font-semibold text-[#E8C547]">连续性监控</h4>
+        <h4 className="text-sm font-semibold text-[#E8C547]">{t.sharedUi.continuityMonitor}</h4>
       </div>
 
-      {/* Cameo 锁脸 */}
+      {/* Cameo face lock */}
       <StatRow
         icon={<UserCircle2 className="w-3.5 h-3.5" />}
-        label="主角脸锁定"
+        label={t.sharedUi.cameoLocked}
         value={cameoShots}
         total={total}
         pct={cameoPct}
         color="from-[#E8C547] to-[#D4A830]"
-        tooltip={cameoShots === 0 ? '本次未使用 Cameo(可在项目详情页上传主角脸锁死全片 IP)' : `${cameoShots} 个镜头使用了同一张主角脸参考`}
+        tooltip={cameoShots === 0 ? t.sharedUi.cameoUnusedTip : t.sharedUi.cameoUsedTip.replace('{n}', String(cameoShots))}
       />
 
-      {/* Keyframe 衔接 */}
+      {/* Keyframe chain */}
       <StatRow
         icon={<Link2 className="w-3.5 h-3.5" />}
-        label="镜头间衔接"
+        label={t.sharedUi.shotChain}
         value={keyframeShots}
-        total={Math.max(1, total - 1)}  // 第一个 shot 没有前帧,分母扣 1
+        total={Math.max(1, total - 1)}  // first shot has no prior frame; denominator - 1
         pct={total > 1 ? Math.round((keyframeShots / (total - 1)) * 100) : 0}
         color="from-blue-400 to-cyan-400"
-        tooltip={`${keyframeShots} 个镜头从上一条 clip 末帧做了视觉锚定`}
+        tooltip={t.sharedUi.shotChainTip.replace('{n}', String(keyframeShots))}
       />
 
-      {/* v2.11 #3 智能插帧:全局风格锚点 */}
+      {/* v2.11 #3 smart interp: global style anchor */}
       <StatRow
         icon={<Anchor className="w-3.5 h-3.5" />}
-        label="全局风格锚"
+        label={t.sharedUi.globalAnchor}
         value={globalAnchorShots}
         total={Math.max(1, total - 1)}
         pct={total > 1 ? Math.round((globalAnchorShots / (total - 1)) * 100) : 0}
         color="from-purple-400 to-pink-400"
-        tooltip={`${globalAnchorShots} 个镜头引用了全局风格锚点,抗链式漂移`}
+        tooltip={t.sharedUi.globalAnchorTip.replace('{n}', String(globalAnchorShots))}
       />
     </div>
   );
 }
 
-/** 把事件列表折算成统计 */
+/** Fold the event list into counts */
 function computeStats(events: ConsistencyEvent[], totalShots: number, fallbackTotal: number) {
   const cameoSet = new Set<number>();
   const keyframeSet = new Set<number>();
@@ -106,7 +108,7 @@ function computeStats(events: ConsistencyEvent[], totalShots: number, fallbackTo
     if (e.type === 'keyframeChained') keyframeSet.add(e.shotNumber);
     if (e.type === 'globalAnchorApplied') globalAnchorSet.add(e.shotNumber);
   }
-  // total 优先用 orchestrator 上报,没报就用观察到的最大 shot 号,再 fallback 到 estimate
+  // Prefer orchestrator total; else max observed shot number; else estimate
   const total = totalShots || maxShot || fallbackTotal || 0;
   return {
     cameoShots: cameoSet.size,

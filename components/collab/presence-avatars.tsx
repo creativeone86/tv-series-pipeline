@@ -1,21 +1,23 @@
 'use client';
 
 /**
- * v3.0 P0.2 — PresenceAvatars: "现在谁在看这个项目".
+ * v3.0 P0.2 — PresenceAvatars: who is viewing this project right now.
  *
- * 走 Yjs awareness:
- *   - 本地 setLocalStateField('user', {id, name, avatarUrl, color})
- *   - 接收 awareness change → 列出所有 state.user
- *   - 用户离开 (close tab / network) → 30s 后 awareness 自动 timeout, 头像消失
+ * Uses Yjs awareness:
+ *   - local setLocalStateField('user', {id, name, avatarUrl, color})
+ *   - on awareness change → list all state.user
+ *   - user leaves (close tab / network) → awareness times out after 30s, avatar gone
  *
- * 显示规则:
- *   - 最多 5 个头像并排, 超出显示 "+N"
- *   - 自己用蓝边框标识
- *   - hover 显示名字
+ * Display:
+ *   - at most 5 avatars in a row, then "+N"
+ *   - self gets a blue border
+ *   - hover shows the name
  */
 
 import { useEffect, useState } from 'react';
 import { useYjs } from '@/hooks/use-yjs';
+import { useLocale } from '@/hooks/use-locale';
+import type { Translations } from '@/lib/i18n';
 
 interface PresenceUser {
   clientId: number;
@@ -23,7 +25,7 @@ interface PresenceUser {
   name: string;
   avatarUrl: string | null;
   color: string;
-  /** v3.1.3 P3: 用户当前所在 tab (script/characters/.../comments). 未设时 undefined. */
+  /** v3.1.3 P3: tab the user is on (script/characters/.../comments). Undefined if unset. */
   activeTab?: string;
 }
 
@@ -41,29 +43,33 @@ function pickColor(seed: string): string {
 export interface PresenceAvatarsProps {
   projectId: string;
   currentUser: { id: string; name: string; avatarUrl: string | null };
-  /** v3.1.3 P3: 当前用户激活的 tab key — 写入 awareness 让别人看到 */
+  /** v3.1.3 P3: current user's active tab key — written to awareness so others can see */
   activeTab?: string;
   maxVisible?: number;
 }
 
-const TAB_LABEL: Record<string, string> = {
-  script: '剧本',
-  characters: '角色',
-  scenes: '场景',
-  storyboard: '分镜',
-  videos: '视频',
-  workshop: '镜头工坊',
-  pacing: '节奏',
-  comments: '评论',
-  play: '完整播放',
-  timeline: '时间线',
-};
+function tabLabelOf(tab: string, t: Translations): string {
+  const map: Record<string, string> = {
+    script: t.product.tabScript,
+    characters: t.product.tabCharacters,
+    scenes: t.product.tabScenes,
+    storyboard: t.product.tabStoryboard,
+    videos: t.product.tabVideos,
+    workshop: t.product.tabWorkshop,
+    pacing: t.product.tabPacing,
+    comments: t.product.tabComments,
+    play: t.product.tabPlay,
+    timeline: t.product.timeline,
+  };
+  return map[tab] || tab;
+}
 
 export function PresenceAvatars({ projectId, currentUser, activeTab, maxVisible = 5 }: PresenceAvatarsProps) {
+  const { t } = useLocale();
   const yjs = useYjs(`project-${projectId}`);
   const [users, setUsers] = useState<PresenceUser[]>([]);
 
-  // 设本地状态
+  // Set local awareness state
   useEffect(() => {
     if (!yjs) return;
     const aw = yjs.provider.awareness;
@@ -74,19 +80,19 @@ export function PresenceAvatars({ projectId, currentUser, activeTab, maxVisible 
       color: pickColor(currentUser.id),
     });
     return () => {
-      // unmount 时清掉自己 (避免幽灵头像挂 30s)
+      // Clear self on unmount (avoid a ghost avatar hanging for 30s)
       aw.setLocalState(null);
     };
   }, [yjs, currentUser.id, currentUser.name, currentUser.avatarUrl]);
 
-  // v3.1.3 P3: 切 tab 时更新 awareness — 别人看到"alice 在 镜头工坊"
+  // v3.1.3 P3: update awareness on tab change — others see "alice in Shot Workshop"
   useEffect(() => {
     if (!yjs || !activeTab) return;
     const aw = yjs.provider.awareness;
     aw.setLocalStateField('activeTab', activeTab);
   }, [yjs, activeTab]);
 
-  // 监听 awareness 变化
+  // Listen for awareness changes
   useEffect(() => {
     if (!yjs) return;
     const aw = yjs.provider.awareness;
@@ -100,13 +106,13 @@ export function PresenceAvatars({ projectId, currentUser, activeTab, maxVisible 
         arr.push({
           clientId,
           id: String(user.id),
-          name: String(user.name || '匿名'),
+          name: String(user.name || t.sharedUi.anonymous),
           avatarUrl: typeof user.avatarUrl === 'string' ? user.avatarUrl : null,
           color: String(user.color || '#999'),
           activeTab: typeof tabFromState === 'string' ? tabFromState : undefined,
         });
       }
-      // 同一 user 多端 (例如多 tab) 都算 1 个 — 按 id dedupe
+      // Same user on multiple clients (e.g. many tabs) counts as 1 — dedupe by id
       const seen = new Set<string>();
       const dedupe: PresenceUser[] = [];
       for (const u of arr) {
@@ -119,20 +125,20 @@ export function PresenceAvatars({ projectId, currentUser, activeTab, maxVisible 
     aw.on('change', onChange);
     onChange();
     return () => aw.off('change', onChange);
-  }, [yjs]);
+  }, [yjs, t]);
 
   if (users.length === 0) return null;
   const visible = users.slice(0, maxVisible);
   const overflow = users.length - visible.length;
 
   return (
-    <div className="flex items-center -space-x-2" title={`${users.length} 人在线`}>
+    <div className="flex items-center -space-x-2" title={t.sharedUi.onlineN.replace('{n}', String(users.length))}>
       {visible.map((u) => {
         const isSelf = u.id === currentUser.id;
-        const tabLabel = u.activeTab ? TAB_LABEL[u.activeTab] || u.activeTab : null;
+        const tabLabel = u.activeTab ? tabLabelOf(u.activeTab, t) : null;
         const tooltip = isSelf
-          ? `${u.name} (你)${tabLabel ? ` · ${tabLabel}` : ''}`
-          : `${u.name}${tabLabel ? ` · 在 ${tabLabel}` : ''}`;
+          ? t.sharedUi.youTab.replace('{name}', u.name).replace('{tab}', tabLabel ? ` · ${tabLabel}` : '')
+          : t.sharedUi.otherTab.replace('{name}', u.name).replace('{tab}', tabLabel ? ` · ${tabLabel}` : '');
         return (
           <div key={u.clientId} className="relative">
             <div
@@ -151,7 +157,7 @@ export function PresenceAvatars({ projectId, currentUser, activeTab, maxVisible 
                 </span>
               )}
             </div>
-            {/* v3.1.3 P3: 头像底下 mini tab chip 显示对方在哪 — 自己不显示 */}
+            {/* v3.1.3 P3: mini tab chip under the avatar — hide for self */}
             {!isSelf && tabLabel && (
               <div
                 className="absolute -bottom-1 left-1/2 -translate-x-1/2 cinema-mono text-[8px] px-1 py-0.5 rounded whitespace-nowrap pointer-events-none"
@@ -166,7 +172,7 @@ export function PresenceAvatars({ projectId, currentUser, activeTab, maxVisible 
       {overflow > 0 && (
         <div
           className="w-7 h-7 rounded-full border-2 border-[var(--cinema-surface)] bg-black/60 grid place-items-center cinema-mono text-[10px]"
-          title={`还有 ${overflow} 人`}
+          title={t.sharedUi.morePeople.replace('{n}', String(overflow))}
         >
           +{overflow}
         </div>

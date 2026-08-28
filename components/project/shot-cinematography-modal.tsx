@@ -3,10 +3,11 @@
 /**
  * components/project/shot-cinematography-modal (v7.2)
  *
- * 项目页每个分镜的"镜头摄影台"弹窗: 包 ShotCinematographyPanel + 实时编译提示词 + 保存/复制。
- *   - 编辑 ShotSpec → 实时显示编译后的英文摄影 prompt 片段 + 中文摘要 chip
- *   - 保存机位 → POST /api/projects/[id]/shot-spec (落进 storyboard 资产 data.cameraSpec)
- *   - 复制提示词 → 可直接贴进任意生成框
+ * Per-board "shot cinematography" dialog on the project page: ShotCinematographyPanel
+ * + live compiled prompt + save/copy.
+ *   - Edit ShotSpec → live English photo-prompt fragment + summary chip
+ *   - Save camera → POST /api/projects/[id]/shot-spec (into storyboard asset data.cameraSpec)
+ *   - Copy prompt → paste into any generate box
  */
 
 import { useState } from 'react';
@@ -18,6 +19,7 @@ import {
   compileShotSpecToPrompt, describeShotSpec, normalizeShotSpec, type ShotSpec,
 } from '@/lib/cinematography';
 import { buildRuleContext, applyRulesToSpec } from '@/lib/auto-rules';
+import { useLocale } from '@/hooks/use-locale';
 
 export function ShotCinematographyModal({
   projectId, shotNumber, shotTitle, initialSpec, emotion, onClose, onSaved,
@@ -26,11 +28,13 @@ export function ShotCinematographyModal({
   shotNumber: number;
   shotTitle?: string;
   initialSpec: ShotSpec;
-  /** v8.1: 该镜情绪标签, 供智能联动规则 */
+  /** v8.1: this shot's emotion tag, for smart linkage rules */
   emotion?: string;
   onClose: () => void;
   onSaved?: (spec: ShotSpec) => void;
 }) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectMisc: Record<string, string> };
   const [spec, setSpec] = useState<ShotSpec>(() => normalizeShotSpec(initialSpec));
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -41,7 +45,7 @@ export function ShotCinematographyModal({
     const ctx = buildRuleContext({ emotion, spec });
     const { spec: next, firedLabels } = applyRulesToSpec(spec, ctx);
     setSpec(next);
-    setRuleMsg(firedLabels.length ? `已应用: ${firedLabels.join('、')}` : '当前镜头(情绪/景别)无匹配联动规则');
+    setRuleMsg(firedLabels.length ? t.projectMisc.cineRulesApplied.replace('{list}', firedLabels.join('、')) : t.projectMisc.cineNoRules);
     setTimeout(() => setRuleMsg(''), 4000);
   }
 
@@ -56,10 +60,10 @@ export function ShotCinematographyModal({
         body: JSON.stringify({ shotNumber, cameraSpec: spec }),
       });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) { setMsg(j?.error || `保存失败 (${r.status})`); }
-      else { setMsg('已保存机位'); onSaved?.(spec); setTimeout(onClose, 600); }
+      if (!r.ok) { setMsg(j?.error || t.projectMisc.saveFailedStatus.replace('{status}', String(r.status))); }
+      else { setMsg(t.projectMisc.cineSaved); onSaved?.(spec); setTimeout(onClose, 600); }
     } catch (e: any) {
-      setMsg(e?.message || '网络错误');
+      setMsg(e?.message || t.auth.waitlistNetworkError);
     } finally { setSaving(false); }
   }
 
@@ -74,7 +78,7 @@ export function ShotCinematographyModal({
           <DialogTitle>
             <span className="flex items-center gap-2">
               <Clapperboard size={16} className="text-[var(--primary)]" />
-              镜头摄影台 · <span className="cinema-mono">SHOT {String(shotNumber).padStart(2, '0')}</span>
+              {t.projectMisc.cineModalTitle} <span className="cinema-mono">SHOT {String(shotNumber).padStart(2, '0')}</span>
             </span>
           </DialogTitle>
         </DialogHeader>
@@ -83,24 +87,24 @@ export function ShotCinematographyModal({
 
         <ShotCinematographyPanel value={spec} onChange={setSpec} />
 
-        {/* v8.1 智能联动: 按情绪/景别一键套用机位规则 */}
+        {/* v8.1 smart linkage: one-click camera rules from mood / shot size */}
         <div className="mt-2 flex items-center gap-2 flex-wrap">
           <button onClick={applyAutoRules} className="cinema-btn-ghost !text-[11px]">
-            <Wand2 size={13} className="text-[var(--primary)]" /> 智能建议机位
+            <Wand2 size={13} className="text-[var(--primary)]" /> {t.projectMisc.cineAutoSuggest}
           </button>
-          {emotion && <span className="cinema-mono text-[10px] opacity-50">情绪: {emotion}</span>}
+          {emotion && <span className="cinema-mono text-[10px] opacity-50">{t.projectMisc.cineEmotionPrefix.replace('{emotion}', emotion)}</span>}
           {ruleMsg && <span className="cinema-mono text-[10px] text-[var(--accent-green)]">{ruleMsg}</span>}
         </div>
 
-        {/* v7.5 构图引导 + 运镜路径 (随景别/机位/运镜实时更新) */}
+        {/* v7.5 composition guide + camera path (live with size / angle / move) */}
         <div className="mt-3 pt-3 border-t border-[var(--border)]">
           <CompositionGuide shotSize={spec.shotSize} angle={spec.angle} movement={spec.movement} />
         </div>
 
-        {/* 中文摘要 + 编译后的英文 prompt 片段 */}
+        {/* Summary + compiled English prompt fragment */}
         <div className="mt-3 pt-3 border-t border-[var(--border)]">
           <div className="flex items-center justify-between mb-1">
-            <span className="cinema-eyebrow">机位摘要</span>
+            <span className="cinema-eyebrow">{t.projectMisc.cineSummary}</span>
             <span className="cinema-mono text-[10px] text-[var(--primary)]">{describeShotSpec(spec)}</span>
           </div>
           <code className="block cinema-mono text-[10px] leading-relaxed text-[var(--accent-green)] bg-[var(--surface)] rounded-md p-2 max-h-24 overflow-auto custom-scrollbar">
@@ -110,12 +114,12 @@ export function ShotCinematographyModal({
 
         <div className="flex items-center gap-2 mt-3">
           <button onClick={copy} className="cinema-btn-ghost !text-[11px]">
-            {copied ? <Check size={13} className="text-[var(--accent-green)]" /> : <Copy size={13} />} 复制提示词
+            {copied ? <Check size={13} className="text-[var(--accent-green)]" /> : <Copy size={13} />} {t.projectMisc.copyPrompt}
           </button>
           <button onClick={save} disabled={saving} className="cinema-btn-primary !text-[11px] ml-auto disabled:opacity-50">
-            {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} 保存机位
+            {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} {t.projectMisc.saveCamera}
           </button>
-          <button onClick={onClose} className="cinema-btn-ghost !text-[11px]"><X size={13} /> 关闭</button>
+          <button onClick={onClose} className="cinema-btn-ghost !text-[11px]"><X size={13} /> {t.product.close}</button>
         </div>
         {msg && <p className="cinema-mono text-[10px] mt-1.5 text-[var(--muted)]">{msg}</p>}
       </DialogContent>

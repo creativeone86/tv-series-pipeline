@@ -1,31 +1,45 @@
 'use client';
 
 /**
- * ProjectChatSidebar — 项目详情页右侧滑出的"AI 助手聊天侧栏"。
+ * ProjectChatSidebar — slide-out AI assistant on the project detail page.
  *
- * 为什么独立做一个 (而不是复用 components/agent-chat.tsx):
- *   原 AgentChat 强依赖 useProjectWorkspaceStore 的 currentProject / chatMessages,
- *   是给 CreationWorkspace 节点画布用的。在项目详情页 /projects/[id] 上,
- *   store 里通常没有当前 project, 直接复用要么得改 store, 要么得做空 store fallback,
- *   不如独立一份只接 `projectId: string` 的瘦身版。
+ * Why a separate component (instead of reusing components/agent-chat.tsx):
+ *   AgentChat depends on useProjectWorkspaceStore currentProject / chatMessages
+ *   for the CreationWorkspace canvas. On /projects/[id] the store usually has
+ *   no current project, so reuse would force a store change or empty fallback.
+ *   A slim projectId-only copy is cleaner.
  *
- * 复用的部分:
- *   · 后端 /api/projects/[id]/chat 的 SSE 协议 (一致)
- *   · agent 角色枚举 (从 @/types/agents 直接 import)
- *   · 视觉语言 (相同的暗色 / 圆角风)
+ * Shared:
+ *   · SSE protocol of /api/projects/[id]/chat
+ *   · agent role enum from @/types/agents
+ *   · same dark / rounded visual language
  *
- * 形态:
- *   · 右侧滑出 drawer, 宽 380px, 全高
- *   · 顶部 agent 切换 (默认 WRITER), 中间消息流, 底部输入
- *   · 关闭时不卸载, 只透明度 / 位移过渡, 保留对话上下文
+ * Shape:
+ *   · right drawer, 380px, full height
+ *   · agent switcher (default WRITER), message stream, input
+ *   · close does not unmount — opacity / translate only, so context stays
  *
- * roadmap §3.2 "AI 助手侧栏改稿 — 后续 Sprint(chat 已支持,只缺 UI)" 这里就把它接上了。
+ * roadmap §3.2 "AI assistant sidebar" — chat existed; this wires the UI.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { AgentRole } from '@/types/agents';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { PaperPlaneTilt as Send, X, CircleNotch as Loader2, FileText, Users, Mountains as Mountain, FilmStrip as Film, Megaphone, Scissors, FilmSlate as Clapperboard, Sparkle as Sparkles, ChatCircle as MessageCircle, Trash as Trash2 } from '@phosphor-icons/react';
+import { useLocale } from '@/hooks/use-locale';
+import type { Translations } from '@/lib/i18n';
+
+function sidebarAgents(t: Translations) {
+  return [
+    { role: AgentRole.WRITER,             label: t.product.writer,            icon: FileText,     color: 'text-[#E8C547]',  hint: t.sharedUi.hintWriter },
+    { role: AgentRole.CHARACTER_DESIGNER, label: t.product.characterDesign,    icon: Users,        color: 'text-amber-300',  hint: t.sharedUi.hintChar },
+    { role: AgentRole.SCENE_DESIGNER,     label: t.product.sceneDesign,        icon: Mountain,     color: 'text-emerald-300', hint: t.sharedUi.hintScene },
+    { role: AgentRole.STORYBOARD,         label: t.product.storyboard,         icon: Film,         color: 'text-sky-300',     hint: t.sharedUi.hintBoard },
+    { role: AgentRole.DIRECTOR,           label: t.product.director,           icon: Megaphone,    color: 'text-[#E8C547]',  hint: t.sharedUi.hintDirector },
+    { role: AgentRole.EDITOR,             label: t.product.editor,             icon: Scissors,     color: 'text-blue-300',   hint: t.sharedUi.hintEditor },
+    { role: AgentRole.PRODUCER,           label: t.product.producer,           icon: Clapperboard, color: 'text-orange-300', hint: t.sharedUi.hintProducer },
+  ];
+}
 
 interface Msg {
   id: string;
@@ -33,16 +47,6 @@ interface Msg {
   content: string;
   at: string;
 }
-
-const AGENTS: Array<{ role: AgentRole; label: string; icon: any; color: string; hint: string }> = [
-  { role: AgentRole.WRITER,            label: '编剧',     icon: FileText,    color: 'text-[#E8C547]',  hint: '剧本 · 对白' },
-  { role: AgentRole.CHARACTER_DESIGNER,label: '角色设计', icon: Users,       color: 'text-amber-300',  hint: '人物 · 锁脸' },
-  { role: AgentRole.SCENE_DESIGNER,    label: '场景设计', icon: Mountain,    color: 'text-emerald-300', hint: '场景 · 美术' },
-  { role: AgentRole.STORYBOARD,        label: '分镜',     icon: Film,        color: 'text-sky-300',     hint: '镜头规划' },
-  { role: AgentRole.DIRECTOR,          label: '导演',     icon: Megaphone,   color: 'text-[#E8C547]',  hint: '全局把控' },
-  { role: AgentRole.EDITOR,            label: '剪辑',     icon: Scissors,    color: 'text-blue-300',   hint: '剪辑 · 配乐' },
-  { role: AgentRole.PRODUCER,          label: '制片',     icon: Clapperboard,color: 'text-orange-300', hint: '审核 · 成片' },
-];
 
 export default function ProjectChatSidebar({
   projectId,
@@ -53,8 +57,10 @@ export default function ProjectChatSidebar({
   open: boolean;
   onClose: () => void;
 }) {
+  const { t } = useLocale();
+  const AGENTS = sidebarAgents(t);
   const [agentRole, setAgentRole] = useState<AgentRole>(AgentRole.WRITER);
-  // 每个 agent 维持自己的消息流, 用 Record 索引
+  // Each agent keeps its own message list, keyed in a Record
   const [messagesMap, setMessagesMap] = useState<Record<string, Msg[]>>({});
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
@@ -64,13 +70,13 @@ export default function ProjectChatSidebar({
   const cfg = AGENTS.find((a) => a.role === agentRole) || AGENTS[0];
   const Icon = cfg.icon;
 
-  // 自动滚到底部 — 只在新消息或 agent 切换时
+  // Auto-scroll to bottom — only on new messages or agent switch
   useEffect(() => {
     if (!scrollRef.current) return;
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages.length, agentRole]);
 
-  // v10.3.6 a11y: Escape + 焦点陷阱 + 焦点归还(替代原 window Escape 监听);只在打开时生效
+  // v10.3.6 a11y: Escape + focus trap + restore focus (replaces window Escape); only while open
   const dialogRef = useFocusTrap<HTMLElement>(open, onClose);
 
   const pushMsg = (role: AgentRole, msg: Msg) => {
@@ -100,7 +106,7 @@ export default function ProjectChatSidebar({
     setInput('');
     setStreaming(true);
 
-    // 占位 assistant 消息, 流式更新它
+    // Placeholder assistant message, updated as the stream arrives
     pushMsg(agentRole, { id: `a-${Date.now()}`, role: 'assistant', content: '', at: now });
 
     try {
@@ -127,16 +133,16 @@ export default function ProjectChatSidebar({
               acc += data.content;
               updateLastAssistant(agentRole, acc);
             }
-            // thinking / action 暂忽略, 后续可加 thinking 折叠
+            // thinking / action ignored for now; a thinking fold can be added later
           } catch { /* malformed line, skip */ }
         }
       }
 
       if (!acc) {
-        updateLastAssistant(agentRole, '_(无回应, 可能是后端配置缺 OPENAI_API_KEY)_');
+        updateLastAssistant(agentRole, t.sharedUi.noReply);
       }
     } catch (e: any) {
-      updateLastAssistant(agentRole, `❌ 出错了: ${e?.message || '未知错误'}`);
+      updateLastAssistant(agentRole, `❌ ${t.sharedUi.somethingWentWrong}: ${e?.message || t.errors.unknown}`);
     } finally {
       setStreaming(false);
     }
@@ -151,13 +157,13 @@ export default function ProjectChatSidebar({
 
   const handleClearCurrent = () => {
     if (messages.length === 0) return;
-    if (typeof window !== 'undefined' && !window.confirm(`清空与「${cfg.label}」的本地对话? (服务端历史不受影响)`)) return;
+    if (typeof window !== 'undefined' && !window.confirm(t.sharedUi.clearChatConfirm.replace('{name}', cfg.label))) return;
     setMessagesMap((prev) => ({ ...prev, [agentRole]: [] }));
   };
 
   return (
     <>
-      {/* 背景遮罩 */}
+      {/* Backdrop */}
       {open ? (
         <div
           className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-150"
@@ -166,7 +172,7 @@ export default function ProjectChatSidebar({
         />
       ) : null}
 
-      {/* 抽屉 */}
+      {/* Drawer */}
       <aside
         ref={dialogRef}
         className={`fixed top-0 right-0 z-50 h-screen w-[380px] max-w-[100vw] bg-[var(--surface)] border-l border-[var(--border)] shadow-2xl flex flex-col transform transition-transform duration-200 outline-none ${
@@ -174,35 +180,35 @@ export default function ProjectChatSidebar({
         }`}
         role="dialog"
         aria-modal="true"
-        aria-label="AI 助手侧栏"
+        aria-label={t.sharedUi.aiAssistantSidebar}
         tabIndex={-1}
-        // 关着时只是平移出屏,内容仍可被 Tab 到 —— inert 把它整体移出 tab 序和读屏树
+        // Closed = translated off-screen; inert drops it from tab order and the a11y tree
         inert={!open}
       >
         {/* header */}
         <div className="shrink-0 px-4 py-3 border-b border-[var(--border)] bg-black/30 flex items-center gap-3">
           <Sparkles className="w-4 h-4 text-violet-300" />
           <div className="flex-1 leading-tight">
-            <p className="text-sm font-semibold text-white">AI 助手</p>
-            <p className="text-[10px] text-white/40">基于本项目上下文 · 与 {cfg.label} 对话</p>
+            <p className="text-sm font-semibold text-white">{t.sharedUi.aiAssistant}</p>
+            <p className="text-[10px] text-white/40">{t.sharedUi.chatWithContext.replace('{name}', cfg.label)}</p>
           </div>
           <button
             onClick={handleClearCurrent}
             className="p-1.5 rounded-md hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
-            title="清空本地视图(不影响服务端历史)"
+            title={t.sharedUi.clearLocalView}
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={onClose}
             className="p-1.5 rounded-md hover:bg-white/10 text-white/60 hover:text-white transition-colors"
-            title="关闭 (Esc)"
+            title={t.product.close + ' (Esc)'}
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* agent 切换 */}
+        {/* Agent switcher */}
         <div className="shrink-0 px-2 py-2 border-b border-[var(--border)] bg-black/20 overflow-x-auto">
           <div className="flex gap-1.5 min-w-max">
             {AGENTS.map((a) => {
@@ -232,13 +238,13 @@ export default function ProjectChatSidebar({
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center gap-3 py-8 text-center">
               <Icon className={`w-10 h-10 ${cfg.color} opacity-40`} />
-              <p className="text-[12px] text-white/55">开始和「{cfg.label}」对话</p>
+              <p className="text-[12px] text-white/55">{t.sharedUi.startChatWith.replace('{name}', cfg.label)}</p>
               <div className="text-[10.5px] text-white/35 leading-relaxed max-w-[260px]">
-                这里的回复会基于该项目的剧本/角色/分镜上下文。试试:
+                {t.sharedUi.chatEmptyHint}
                 <br />
-                <span className="text-white/45 italic">"把第 3 镜的对白改得更克制一点"</span>
+                <span className="text-white/45 italic">{t.sharedUi.chatExample1}</span>
                 <br />
-                <span className="text-white/45 italic">"林小满的服装该怎么定?"</span>
+                <span className="text-white/45 italic">{t.sharedUi.chatExample2}</span>
               </div>
             </div>
           ) : (
@@ -248,7 +254,7 @@ export default function ProjectChatSidebar({
           {streaming ? (
             <div className="flex items-center gap-2 text-[11px] text-white/45">
               <Loader2 className="w-3 h-3 animate-spin" />
-              <span>{cfg.label}思考中...</span>
+              <span>{t.sharedUi.agentThinking.replace('{name}', cfg.label)}</span>
             </div>
           ) : null}
         </div>
@@ -261,20 +267,20 @@ export default function ProjectChatSidebar({
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               rows={2}
-              placeholder={`Enter 发送 · Shift+Enter 换行`}
+              placeholder={t.sharedUi.enterToSend}
               className="flex-1 bg-black/30 border border-[var(--border)] rounded-xl px-3 py-2 text-[13px] text-white placeholder:text-white/25 resize-none outline-none focus:border-violet-500/40"
             />
             <button
               onClick={handleSend}
               disabled={!input.trim() || streaming}
               className="p-2.5 rounded-xl bg-gradient-to-br from-violet-500 to-rose-500 text-white disabled:opacity-30 disabled:cursor-not-allowed hover:brightness-110 transition-all shrink-0"
-              title="发送"
+              title={t.collab.send}
             >
               {streaming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </button>
           </div>
           <p className="mt-1.5 text-[10px] text-white/30">
-            服务端会保留最近 10 条对话作为上下文 · 切换 agent 是不同的话题线
+            {t.sharedUi.chatContextHint}
           </p>
         </div>
       </aside>
@@ -282,7 +288,7 @@ export default function ProjectChatSidebar({
   );
 }
 
-/** 项目详情页右下角的浮动入口按钮 (受控可见性, 默认渲染) */
+/** Floating launcher on the project detail page (controlled visibility; rendered by default) */
 export function ChatLauncherButton({
   open, onClick, hasUnread,
 }: {
@@ -290,13 +296,14 @@ export function ChatLauncherButton({
   onClick: () => void;
   hasUnread?: boolean;
 }) {
+  const { t } = useLocale();
   if (open) return null;
   return (
     <button
       onClick={onClick}
       className="fixed bottom-6 right-6 z-30 w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-rose-500 text-white shadow-xl shadow-violet-500/30 hover:scale-105 active:scale-95 transition-transform flex items-center justify-center"
-      title="打开 AI 助手 (alt+/)"
-      aria-label="打开 AI 助手聊天"
+      title={t.sharedUi.openAssistantHotkey}
+      aria-label={t.sharedUi.openAssistantChat}
     >
       <MessageCircle className="w-5 h-5" />
       {hasUnread ? (

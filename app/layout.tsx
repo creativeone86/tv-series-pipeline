@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
-// v8.3 P1: Plus Jakarta Sans (Taste Skill 推荐, 非 Inter) 自托管, 0 运行时 Google Fonts 请求
-// v12.321: 改 next/font/local —— `next/font/google` 运行时确实不请求 Google,但它在
-// **构建期**下载字体。CI 的 Build job 因此连红两次(v12.316、v12.319),报的是
-// `internal/font/google … Module not found`,长得和模块解析回归一模一样,极易误判成
-// 代码问题(这两次我都先怀疑了自己)。字体文件进仓后,构建不再依赖外网。
+// v8.3 P1: Plus Jakarta Sans (Taste Skill pick, not Inter) self-hosted — 0 runtime Google Fonts requests
+// v12.321: switched to next/font/local — `next/font/google` does not hit Google at runtime, but it
+// **downloads fonts at build**. CI Build went red twice (v12.316, v12.319) with
+// `internal/font/google … Module not found`, which looks exactly like a module-resolve regression
+// and is easy to misread as an app bug. With the files in-repo, the build no longer needs the network.
 import localFont from "next/font/local";
+import { cookies } from "next/headers";
 import "./globals.css";
-// v2.13: cinema theme — opt-in via .cinema-page className,不影响其他页
+// v2.13: cinema theme — opt-in via .cinema-page className, does not affect other pages
 import "./cinema-theme.css";
 import { ToastProvider } from "@/components/ui/toast-provider";
 import { IconProvider } from "@/components/icon-provider";
@@ -14,9 +15,10 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { AuthProvider } from "@/components/auth-provider";
 import { MotionProvider } from "@/components/motion-provider";
 import { SkipLink } from "@/components/skip-link";
+import { getTranslations, normalizeLocale } from "@/lib/i18n";
 
-// 可变字体各一个文件(latin 子集),覆盖原先逐字重下载的全部档位:
-// Jakarta 400–800、Mono 400–600 都在 wght 轴范围内,合计 67KB。
+// One variable-font file each (latin subset), covering every weight we used to download separately:
+// Jakarta 400–800 and Mono 400–600 sit on the wght axis — 67KB combined.
 const jakarta = localFont({
   src: "./fonts/plus-jakarta-sans.woff2",
   weight: "200 800",
@@ -31,10 +33,15 @@ const jetbrainsMono = localFont({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: "青枫漫剧 · AI Animation Agent Studio",
-  description: "你的 AI 动画/漫剧团队，从灵感到成片一步到位",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const jar = await cookies();
+  const tRaw = getTranslations(normalizeLocale(jar.get("qfmj-locale")?.value));
+  const t = tRaw as typeof tRaw & { publicUi: Record<string, string> };
+  return {
+    title: `${t.auth.brand} · AI Animation Agent Studio`,
+    description: t.publicUi.metaDesc,
+  };
+}
 
 export default function RootLayout({
   children,
@@ -42,11 +49,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${jakarta.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" data-scroll-behavior="smooth" className={`${jakarta.variable} ${jetbrainsMono.variable}`}>
       <body className="antialiased">
-        {/* v10.3.5 a11y: 跳到主内容 —— 键盘第一个可聚焦元素,平时 sr-only,聚焦才显形 */}
+        {/* v10.3.5 a11y: skip to main — first keyboard focus target; sr-only until focused */}
         <SkipLink />
-        {/* v8.3 P1: 全局 film grain 遮罩 (固定, 不接触指针, 与暖墨黑底叠出印刷质感) */}
+        {/* v8.3 P1: global film-grain overlay (fixed, pointer-events none, print texture on warm ink black) */}
         <div aria-hidden className="film-grain" />
         <ErrorBoundary>
           <IconProvider>

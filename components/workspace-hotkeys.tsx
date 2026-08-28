@@ -7,12 +7,12 @@ import { useProjectWorkspaceStore } from '@/lib/store';
 import { useLocale } from '@/hooks/use-locale';
 
 /**
- * 全局工作区快捷键绑定。挂载在 CreationWorkspace 内，不渲染 UI。
+ * Global workspace hotkeys. Mounted inside CreationWorkspace; renders no UI.
  *
- *   Ctrl/Cmd + S  → 保存当前项目（触发 /api/projects/:id 持久化 — 实际已自动保存，这里只做确认提示）
- *   Ctrl/Cmd + Z  → 撤销最近一次节点数据修改（store.undo()，仅当 store 实现了撤销栈）
- *   Space         → 播放/暂停当前选中的视频（video-modal 监听全局 playRequested 事件）
- *   ?             → 弹出快捷键帮助
+ *   Ctrl/Cmd + S  → save current project (persist /api/projects/:id — already auto-saved; toast only)
+ *   Ctrl/Cmd + Z  → undo last node edit (store.undo(), only if an undo stack exists)
+ *   Space         → play/pause the selected video (video-modal listens for playRequested)
+ *   ?             → shortcut help toast
  */
 export function WorkspaceHotkeys() {
   const { t } = useLocale();
@@ -20,13 +20,13 @@ export function WorkspaceHotkeys() {
   const router = useRouter();
   const currentProject = useProjectWorkspaceStore(s => s.currentProject);
 
-  // Ctrl/Cmd + S — 保存提示（自动保存已由 store 负责）
+  // Ctrl/Cmd + S — save toast (auto-save is already handled by the store)
   useHotkeys('mod+s', (e) => {
     e.preventDefault();
     showToast({ title: t.product.saved, type: 'success', duration: 2000 });
   }, { enableOnFormTags: false });
 
-  // Ctrl/Cmd + Z — 尝试撤销
+  // Ctrl/Cmd + Z — try undo
   useHotkeys('mod+z', (e) => {
     e.preventDefault();
     const store: any = useProjectWorkspaceStore.getState();
@@ -38,17 +38,17 @@ export function WorkspaceHotkeys() {
     }
   }, { enableOnFormTags: false });
 
-  // Space — 广播播放/暂停事件，由 VideoModal 等组件监听
+  // Space — broadcast play/pause; VideoModal and others listen
   useHotkeys('space', (e) => {
     const target = e.target as HTMLElement | null;
-    // 输入框里按空格不拦截
+    // Do not intercept Space inside form fields
     if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
     if (target?.isContentEditable) return;
     e.preventDefault();
     window.dispatchEvent(new CustomEvent('workspace:togglePlay'));
   }, { enableOnFormTags: false });
 
-  // ? — 快捷键帮助
+  // ? — shortcut help
   useHotkeys('shift+/', (e) => {
     e.preventDefault();
     showToast({
@@ -58,14 +58,14 @@ export function WorkspaceHotkeys() {
     });
   });
 
-  // Ctrl/Cmd + E — 打开导出
+  // Ctrl/Cmd + E — open export
   useHotkeys('mod+e', (e) => {
     e.preventDefault();
     if (!currentProject) return;
     window.open(`/api/projects/${currentProject.id}/export?type=mp4`, '_blank');
   }, { enableOnFormTags: false });
 
-  // 无视 unused router — 预留后续"Ctrl+P 切换项目"等导航快捷键用
+  // Keep unused router — reserved for later nav shortcuts (e.g. Ctrl+P switch project)
   void router;
 
   return null;

@@ -8,11 +8,12 @@ import { Video, CircleNotch as Loader2, CheckCircle as CheckCircle2, ArrowsClock
 import { VideoModal } from '@/components/ui/video-modal';
 import { CAMERA_LANGUAGE_PRESETS } from '@/lib/prompt-templates';
 import { useProjectWorkspaceStore } from '@/lib/store';
+import { useLocale } from '@/hooks/use-locale';
 
-// 更宽松的视频URL检测：只要不是明确的图片格式，都尝试作为视频播放
+// Looser video-URL detect: try as video unless it is clearly an image
 function isLikelyVideoUrl(url: string): boolean {
   if (!url || url.startsWith('data:image')) return false;
-  // 本地 API 文件服务（FFmpeg 合成视频）
+  // Local API file service (FFmpeg mux)
   if (url.startsWith('/api/serve-file')) return true;
   if (/\.(mp4|webm|mov|m3u8|avi|mkv)([\?#]|$)/i.test(url)) return true;
   if (/oss.*aliyuncs\.com|cos\..+myqcloud\.com|vod\.|video\.|cdn\./i.test(url)) return true;
@@ -21,6 +22,8 @@ function isLikelyVideoUrl(url: string): boolean {
 }
 
 function VideoNodeComponent({ data }: NodeProps) {
+  const { locale, t: loc } = useLocale();
+  const t = loc as typeof loc & { projectMisc: Record<string, string> };
   const d = data as unknown as PipelineNodeData;
   const videos = d.assets?.filter(a => a.type === 'video') || [];
   const [modalOpen, setModalOpen] = useState(false);
@@ -29,19 +32,19 @@ function VideoNodeComponent({ data }: NodeProps) {
 
   const handleVideoClick = (url: string, shotNumber: number) => {
     if (url && !url.startsWith('data:image')) {
-      setSelectedVideo({ url, title: `镜头 ${shotNumber}` });
+      setSelectedVideo({ url, title: t.product.shotN.replace('{n}', String(shotNumber)) });
       setModalOpen(true);
     }
   };
 
-  // v12.141(P0-1):每镜运镜选择(auto=跟随剧本);重生时传给 regenerate-shot
+  // v12.141(P0-1): per-shot camera (auto = follow script); sent on regenerate-shot
   const [shotCamera, setShotCamera] = useState<Record<number, string>>({});
-  // v12.197:每镜尾帧参考(可灵首尾帧融合,锁切镜构图);重生时传给 regenerate-shot
+  // v12.197: per-shot tail-frame ref (Kling first/last-frame); sent on regenerate-shot
   const [shotTail, setShotTail] = useState<Record<number, string>>({});
 
-  // ═══ 重新生成单个镜头视频 ═══
+  // === Regenerate a single shot video ===
   const handleRegenerateShot = useCallback(async (shotNumber: number, e: React.MouseEvent) => {
-    e.stopPropagation(); // 阻止触发视频播放
+    e.stopPropagation(); // do not open the player
     if (regeneratingShots.has(shotNumber)) return;
 
     const s = useProjectWorkspaceStore.getState();
@@ -50,7 +53,7 @@ function VideoNodeComponent({ data }: NodeProps) {
 
     setRegeneratingShots(prev => new Set(prev).add(shotNumber));
 
-    // 更新对应资产状态为 generating
+    // Mark matching asset generating
     const va = s.assets.find(a => a.type === 'video' && a.shotNumber === shotNumber);
     if (va) {
       s.updateAsset(va.id, { data: { ...va.data, status: 'generating', progress: 0 } });
@@ -63,11 +66,11 @@ function VideoNodeComponent({ data }: NodeProps) {
         body: JSON.stringify({ projectId, shotNumber, cameraMovement: shotCamera[shotNumber] || undefined, tailFrameUrl: (shotTail[shotNumber] || '').trim() || undefined }),
       });
 
-      if (!response.ok) throw new Error('请求失败');
+      if (!response.ok) throw new Error(t.seriesDetail.requestFailed);
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      if (!reader) throw new Error('无法读取响应流');
+      if (!reader) throw new Error(t.workshop.streamReadFailed);
 
       while (true) {
         const { done, value } = await reader.read();
@@ -78,7 +81,7 @@ function VideoNodeComponent({ data }: NodeProps) {
           try {
             const event = JSON.parse(line.slice(6));
             if (event.type === 'regenerateComplete') {
-              // 更新视频资产
+              // Update video asset
               const st = useProjectWorkspaceStore.getState();
               const videoAsset = st.assets.find(a => a.type === 'video' && a.shotNumber === shotNumber);
               if (videoAsset) {
@@ -88,7 +91,7 @@ function VideoNodeComponent({ data }: NodeProps) {
                   version: videoAsset.version + 1,
                 });
               }
-              // 同步刷新节点资产
+              // Refresh node assets
               const allAssets = useProjectWorkspaceStore.getState().assets;
               st.updateNodeData('node-video', { assets: allAssets.filter(a => a.type === 'video') } as any);
             }
@@ -114,7 +117,7 @@ function VideoNodeComponent({ data }: NodeProps) {
         return next;
       });
     }
-  }, [regeneratingShots, shotCamera]);
+  }, [regeneratingShots, shotCamera, t.seriesDetail.requestFailed, t.workshop.streamReadFailed]);
 
   return (
     <NodeShell status={d.status} color="pink" className="min-w-[340px] max-w-[440px]" agentRole={d.agentRole}>
@@ -126,12 +129,12 @@ function VideoNodeComponent({ data }: NodeProps) {
         </div>
         <div className="flex-1">
           <div className="text-sm font-semibold text-white flex items-center gap-2">
-            视频生成
+            {t.product.videoGen}
             {d.status === 'running' && <Loader2 className="w-3.5 h-3.5 text-green-400 animate-spin" />}
             {d.status === 'completed' && <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />}
             {d.status === 'pending' && <Clock className="w-3.5 h-3.5 text-gray-500" />}
           </div>
-          <div className="text-[11px] text-gray-400">逐段分镜视频</div>
+          <div className="text-[11px] text-gray-400">{t.projectMisc.videoNodeSub}</div>
         </div>
         {d.status === 'running' && <span className="text-[10px] text-green-400 font-medium">{d.progress}%</span>}
       </div>
@@ -144,10 +147,10 @@ function VideoNodeComponent({ data }: NodeProps) {
             const isVideo = isLikelyVideoUrl(mediaUrl);
             const sn = v.shotNumber || 0;
             const isRegenerating = regeneratingShots.has(sn);
-            // v12.299:**失败镜自己的状态优先**,不再等整个节点跑完才承认失败。
-            // 原来只看 `!hasMedia && d.status === 'completed'` —— 多镜同时生成时节点是 running,
-            // 于是某一镜网络超时进 catch、资产已写 status:'error',格子却静默变回「待生成」,
-            // 「点击重试」也不出现:用户以为它还在排队,其实早就死了。
+            // v12.299: a failed shot's own status wins — do not wait for the whole node.
+            // Old: only `!hasMedia && d.status === 'completed'` — while multi-shot gen
+            // the node is running, so a timed-out shot (asset status:'error') silently
+            // flipped back to pending and "click retry" vanished.
             const isFailed = !isRegenerating
               && (v.data?.status === 'error' || (!hasMedia && d.status === 'completed'));
             const isGeneratingStatus = v.data?.status === 'generating' || isRegenerating;
@@ -164,7 +167,7 @@ function VideoNodeComponent({ data }: NodeProps) {
                     <div className="w-full h-full grid place-items-center">
                       <div className="flex flex-col items-center gap-1.5">
                         <Loader2 className="w-5 h-5 animate-spin text-pink-400" />
-                        <span className="text-[9px] text-pink-400">重新生成中...</span>
+                        <span className="text-[9px] text-pink-400">{t.projectMisc.regenerating}</span>
                       </div>
                     </div>
                   ) : hasMedia ? (
@@ -182,13 +185,13 @@ function VideoNodeComponent({ data }: NodeProps) {
                             if (parent) {
                               const fallback = document.createElement('div');
                               fallback.className = 'w-full h-full grid place-items-center text-[10px] text-pink-400';
-                              fallback.textContent = '点击播放';
+                              fallback.textContent = t.projectMisc.clickToPlay;
                               parent.appendChild(fallback);
                             }
                           }}
                         />
                       ) : (
-                        <img loading="lazy" decoding="async" src={mediaUrl} alt={`视频${sn}`} className="w-full h-full object-cover" />
+                        <img loading="lazy" decoding="async" src={mediaUrl} alt={t.workshop.assetVideoN.replace('{n}', String(sn))} className="w-full h-full object-cover" />
                       )}
                       <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity grid place-items-center">
                         <Play className="w-6 h-6 text-white" />
@@ -201,44 +204,44 @@ function VideoNodeComponent({ data }: NodeProps) {
                       ) : isFailed ? (
                         <div role="button" tabIndex={0} className="flex flex-col items-center gap-1.5 cursor-pointer" onClick={() => handleRegenerateShot(sn, { stopPropagation: () => {} } as any)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRegenerateShot(sn, { stopPropagation: () => {} } as any); } }}>
                           <AlertCircle className="w-4 h-4 text-red-400" />
-                          <span className="text-[9px] text-red-400">生成失败</span>
-                          <span className="text-[8px] text-gray-500 hover:text-pink-400 transition-colors">点击重试</span>
+                          <span className="text-[9px] text-red-400">{t.projectMisc.genFailed}</span>
+                          <span className="text-[8px] text-gray-500 hover:text-pink-400 transition-colors">{t.projectMisc.clickRetry}</span>
                         </div>
                       ) : (
-                        <span className="text-[10px] text-gray-500">待生成</span>
+                        <span className="text-[10px] text-gray-500">{t.product.pending}</span>
                       )}
                     </div>
                   )}
                 </div>
                 <div className="px-2 py-1.5 flex items-center justify-between gap-1">
                   <div className="shrink-0">
-                    <span className="text-[10px] text-pink-400 font-medium">镜头 {sn || '?'}</span>
+                    <span className="text-[10px] text-pink-400 font-medium">{t.product.shotN.replace('{n}', String(sn || '?'))}</span>
                     {v.data?.duration && <span className="text-[9px] text-gray-500 ml-1">{v.data.duration}s</span>}
                   </div>
                   <div className="flex items-center gap-1">
-                    {/* v12.141(P0-1):每镜运镜选择(对标阅文) —— 重生时生效 */}
+                    {/* v12.141(P0-1): per-shot camera (Yuewen-style) — applies on regen */}
                     <select
                       value={shotCamera[sn] || ''}
                       onChange={(e) => { e.stopPropagation(); setShotCamera((prev) => ({ ...prev, [sn]: e.target.value })); }}
                       onClick={(e) => e.stopPropagation()}
                       disabled={isRegenerating}
                       className="opacity-0 group-hover:opacity-100 transition-all bg-black/50 border border-white/10 rounded text-[9px] text-gray-300 px-1 py-0.5 max-w-[86px] focus:outline-none"
-                      title="运镜(重生该镜视频时生效)"
+                      title={t.projectMisc.cameraTitle}
                     >
-                      <option value="">运镜·跟随剧本</option>
+                      <option value="">{t.projectMisc.cameraFollowScript}</option>
                       {CAMERA_LANGUAGE_PRESETS.map((p) => (
-                        <option key={p.id} value={p.id}>{p.label}</option>
+                        <option key={p.id} value={p.id}>{locale === 'en' ? p.en : p.label}</option>
                       ))}
                     </select>
-                    {/* v12.197:尾帧参考(可灵 image_tail 首尾帧融合;贴图片 URL,重生时生效) */}
+                    {/* v12.197: tail-frame ref (Kling image_tail); applies on regen */}
                     <input
                       value={shotTail[sn] || ''}
                       onChange={(e) => { e.stopPropagation(); setShotTail((prev) => ({ ...prev, [sn]: e.target.value })); }}
                       onClick={(e) => e.stopPropagation()}
                       disabled={isRegenerating}
-                      placeholder="尾帧URL"
+                      placeholder={t.projectMisc.tailFramePlaceholder}
                       className="opacity-0 group-hover:opacity-100 transition-all bg-black/50 border border-white/10 rounded text-[9px] text-gray-300 px-1 py-0.5 w-[64px] focus:outline-none focus:border-pink-400/40"
-                      title="尾帧参考图 URL(可灵首尾帧融合,锁定切镜构图;重生该镜时生效)"
+                      title={t.projectMisc.tailFrameTitle}
                     />
                     <button
                       onClick={(e) => handleRegenerateShot(sn, e)}
@@ -248,7 +251,7 @@ function VideoNodeComponent({ data }: NodeProps) {
                           ? 'bg-pink-500/20 cursor-wait'
                           : 'hover:bg-white/10 active:scale-90'
                       }`}
-                      title="重新生成"
+                      title={t.projectMisc.regenerate}
                     >
                       <RefreshCw className={`w-3 h-3 ${isRegenerating ? 'text-pink-400 animate-spin' : 'text-gray-400 hover:text-pink-400'}`} />
                     </button>
@@ -265,7 +268,7 @@ function VideoNodeComponent({ data }: NodeProps) {
         </div>
       ) : (
         <div className="text-center py-6 text-gray-500 text-xs">
-          {d.status === 'pending' ? '等待分镜完成...' : d.status === 'running' ? '视频生成中...' : ''}
+          {d.status === 'pending' ? t.projectMisc.waitStoryboard : d.status === 'running' ? t.projectMisc.videoGenerating : ''}
         </div>
       )}
 

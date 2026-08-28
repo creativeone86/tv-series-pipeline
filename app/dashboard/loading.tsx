@@ -1,5 +1,5 @@
 /**
- * 工作台加载态骨架 (v10.2.1) — 进入/切换 dashboard 段时的骨架屏,减少切页空窗感。
+ * Dashboard loading skeleton (v10.2.1) — shown when entering / switching dashboard segments, to reduce blank-page flash.
  */
 export default function DashboardLoading() {
   return (

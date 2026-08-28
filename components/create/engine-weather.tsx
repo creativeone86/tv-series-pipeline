@@ -1,42 +1,62 @@
 'use client';
 
 /**
- * 引擎天气条(v12.149.0)—— 创作前让用户知道哪路引擎不健康,而不是开机后黑箱降级。
+ * Engine weather bar (v12.149.0) — show which engines are unhealthy before ROLL,
+ * instead of a silent fallback after start.
  *
- * 数据源 /api/api-status(v2.17 就有,但此前前端零消费):
- *   - alerts:DB 告警(minimax/midjourney/veo 埋点,1h 窗口)
- *   - gateways:内存网关破产快照(qingyuntop/vectorengine 配额冷却期)
- * 全健康 → 不渲染(零占位);有事 → 一行琥珀色横条,可手动刷新。
+ * Source /api/api-status (existed in v2.17; previously unused in the UI):
+ *   - alerts: DB alerts (minimax/midjourney/veo, 1h window)
+ *   - gateways: in-memory gateway bankruptcy snapshot (qingyuntop/vectorengine cooldown)
+ * All healthy → render nothing; otherwise one amber bar with a manual refresh.
  */
 import { useEffect, useState, useCallback } from 'react';
+import { useLocale } from '@/hooks/use-locale';
 
 interface Alert { provider: string; alertType: string; lastSeenAt: string; count: number }
 interface Gateway { host: string; remainingSec: number }
 
+export interface WeatherLabels {
+  providers?: Record<string, string>;
+  types?: Record<string, string>;
+  gatewayCooldown?: string;
+  recentFailures?: string;
+}
+
 const PROVIDER_LABEL: Record<string, string> = {
-  minimax: 'MiniMax(视频/图)', veo: 'Veo(视频)', midjourney: 'Midjourney(图)', kling: '可灵(视频)',
+  minimax: 'MiniMax (video/image)', veo: 'Veo (video)', midjourney: 'Midjourney (image)', kling: 'Kling (video)',
 };
 const TYPE_LABEL: Record<string, string> = {
-  exhausted: '余额/额度耗尽', auth_failed: '密钥失效', saturated: '上游饱和', rate_limited: '限流中',
+  exhausted: 'credits exhausted', auth_failed: 'key invalid', saturated: 'upstream saturated', rate_limited: 'rate limited',
 };
 
-/** 纯函数:状态 → 展示片段(可单测)。v12.161:引擎近10分钟失败 ≥3 也亮条。
- *  v12.216:+能力边界提示(如「Kling 原生音效不可用」)—— 运营者开了不生效的开关时上下文亮条。 */
+/** Pure: status → display segments (unit-testable). v12.161: also light up when an engine
+ *  failed ≥3 times in ~10 min. v12.216: capability-boundary notes (e.g. Kling native audio). */
 export function weatherSegments(
   alerts: Alert[],
   gateways: Gateway[],
   engines: Array<{ provider: string; recentFailures: number }> = [],
   capabilityNotes: Array<{ text: string }> = [],
+  labels?: WeatherLabels,
 ): string[] {
+  const providers = labels?.providers ?? PROVIDER_LABEL;
+  const types = labels?.types ?? TYPE_LABEL;
+  const gatewayTpl = labels?.gatewayCooldown ?? 'Gateway {host} quota cooldown (~{n} min)';
+  const failTpl = labels?.recentFailures ?? '{provider} failed {n} times in 10 min (unstable)';
   const segs: string[] = [];
   for (const a of alerts) {
-    segs.push(`${PROVIDER_LABEL[a.provider] || a.provider} ${TYPE_LABEL[a.alertType] || a.alertType}`);
+    segs.push(`${providers[a.provider] || a.provider} ${types[a.alertType] || a.alertType}`);
   }
   for (const g of gateways) {
-    segs.push(`网关 ${g.host} 配额冷却(约 ${Math.max(1, Math.round(g.remainingSec / 60))} 分钟)`);
+    segs.push(gatewayTpl
+      .replace('{host}', g.host)
+      .replace('{n}', String(Math.max(1, Math.round(g.remainingSec / 60)))));
   }
   for (const e of engines) {
-    if (e.recentFailures >= 3) segs.push(`${PROVIDER_LABEL[e.provider] || e.provider} 近10分钟失败 ${e.recentFailures} 次(不稳)`);
+    if (e.recentFailures >= 3) {
+      segs.push(failTpl
+        .replace('{provider}', providers[e.provider] || e.provider)
+        .replace('{n}', String(e.recentFailures)));
+    }
   }
   for (const n of capabilityNotes) {
     segs.push(`⚙️ ${n.text}`);
@@ -45,18 +65,35 @@ export function weatherSegments(
 }
 
 export function EngineWeather() {
+  const { locale, t: loc } = useLocale();
+  const t = loc as typeof loc & { workshopCreate: Record<string, string> };
   const [segs, setSegs] = useState<string[]>([]);
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/api-status');
       const data = await res.json();
-      setSegs(weatherSegments(data.alerts || [], data.gateways || [], data.engines || [], data.capabilityNotes || []));
-    } catch { /* 拉不到就当晴天,不打扰 */ }
-  }, []);
+      setSegs(weatherSegments(data.alerts || [], data.gateways || [], data.engines || [], data.capabilityNotes || [], {
+        providers: {
+          minimax: t.workshopCreate.providerMinimax,
+          veo: t.workshopCreate.providerVeo,
+          midjourney: t.workshopCreate.providerMidjourney,
+          kling: t.dashBanner.kling,
+        },
+        types: {
+          exhausted: t.dashBanner.exhausted,
+          auth_failed: t.dashBanner.authFailed,
+          saturated: t.dashBanner.saturated,
+          rate_limited: t.dashBanner.rateLimited,
+        },
+        gatewayCooldown: t.workshopCreate.gatewayCooldown,
+        recentFailures: t.workshopCreate.recentFailures,
+      }));
+    } catch { /* treat fetch failure as clear skies — do not nag */ }
+  }, [locale]);
   useEffect(() => {
     void load();
-    const t = setInterval(() => void load(), 120_000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => void load(), 120_000);
+    return () => clearInterval(timer);
   }, [load]);
 
   if (segs.length === 0) return null;
@@ -64,10 +101,10 @@ export function EngineWeather() {
     <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200/90 flex items-start gap-2" data-testid="engine-weather">
       <span className="shrink-0">🌩️</span>
       <div className="min-w-0">
-        <span className="opacity-70">引擎天气:</span>{segs.join(' · ')}
-        <span className="opacity-50"> —— 受影响链路会自动降级/换引擎,可先创作或稍后重试</span>
+        <span className="opacity-70">{t.workshopCreate.engineWeather}</span>{segs.join(' · ')}
+        <span className="opacity-50"> {t.workshopCreate.engineWeatherHint}</span>
       </div>
-      <button type="button" onClick={() => void load()} className="ml-auto shrink-0 opacity-60 hover:opacity-100" title="刷新">↻</button>
+      <button type="button" onClick={() => void load()} className="ml-auto shrink-0 opacity-60 hover:opacity-100" title={t.workshopCreate.refresh}>↻</button>
     </div>
   );
 }

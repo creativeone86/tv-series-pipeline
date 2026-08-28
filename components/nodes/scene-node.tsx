@@ -7,11 +7,14 @@ import { NodeShell } from './node-shell';
 import { Mountains as Mountain, CircleNotch as Loader2, CheckCircle as CheckCircle2, Clock, ArrowsClockwise as RefreshCw } from '@phosphor-icons/react';
 import { ZoomableImage } from '@/components/ui/image-lightbox';
 import { useProjectWorkspaceStore } from '@/lib/store';
+import { useLocale } from '@/hooks/use-locale';
 
 function SceneNodeComponent({ data }: NodeProps) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectMisc: Record<string, string> };
   const d = data as unknown as PipelineNodeData;
   const scenes = d.assets?.filter(a => a.type === 'scene') || [];
-  // v12.10.0(#1):单张场景图重生
+  // v12.10.0(#1): regenerate a single scene image
   const [regenBusy, setRegenBusy] = useState<string | null>(null);
   const [regenError, setRegenError] = useState<string | null>(null);
 
@@ -24,10 +27,10 @@ function SceneNodeComponent({ data }: NodeProps) {
         body: JSON.stringify({ type: 'scene', name: sceneName }),
       });
       const body = await res.json();
-      if (!res.ok || !body.imageUrl) { setRegenError(body?.error || `失败 ${res.status}`); return; }
+      if (!res.ok || !body.imageUrl) { setRegenError(body?.error || t.seriesDetail.resumeFailStatus.replace('{status}', String(res.status))); return; }
       useProjectWorkspaceStore.getState().updateAsset(assetId, { mediaUrls: [body.imageUrl] });
     } catch (e) {
-      setRegenError(e instanceof Error ? e.message : '请求失败');
+      setRegenError(e instanceof Error ? e.message : t.seriesDetail.requestFailed);
     } finally { setRegenBusy(null); }
   };
 
@@ -41,12 +44,12 @@ function SceneNodeComponent({ data }: NodeProps) {
         </div>
         <div className="flex-1">
           <div className="text-sm font-semibold text-white flex items-center gap-2">
-            场景设计师
+            {t.product.sceneDesign}
             {d.status === 'running' && <Loader2 className="w-3.5 h-3.5 text-green-400 animate-spin" />}
             {d.status === 'completed' && <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />}
             {d.status === 'pending' && <Clock className="w-3.5 h-3.5 text-gray-500" />}
           </div>
-          <div className="text-[11px] text-gray-400">场景概念图</div>
+          <div className="text-[11px] text-gray-400">{t.projectMisc.sceneConcept}</div>
         </div>
         {d.status === 'running' && <span className="text-[10px] text-green-400 font-medium">{d.progress}%</span>}
       </div>
@@ -63,12 +66,12 @@ function SceneNodeComponent({ data }: NodeProps) {
                   className="aspect-video bg-white/5"
                 />
               )}
-              {/* v12.10.0(#1):单张场景图重生 */}
+              {/* v12.10.0(#1): regenerate a single scene image */}
               {(s as any).projectId && (
                 <button
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); regenImage(s.name, s.id, (s as any).projectId); }}
                   disabled={regenBusy !== null}
-                  title="重新生成这张场景图(只换这一张)"
+                  title={t.projectMisc.regenSceneTitle}
                   className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg bg-black/50 hover:bg-black/70 disabled:opacity-30">
                   {regenBusy === s.name ? <Loader2 className="w-3 h-3 text-emerald-400 animate-spin" /> : <RefreshCw className="w-3 h-3 text-white/80" />}
                 </button>
@@ -82,7 +85,7 @@ function SceneNodeComponent({ data }: NodeProps) {
         </div>
       ) : (
         <div className="text-center py-6 text-gray-500 text-xs">
-          {d.status === 'pending' ? '等待角色设计完成...' : d.status === 'running' ? '场景设计中...' : ''}
+          {d.status === 'pending' ? t.projectMisc.waitCharacters : d.status === 'running' ? t.projectMisc.designingScenes : ''}
         </div>
       )}
 
@@ -94,7 +97,7 @@ function SceneNodeComponent({ data }: NodeProps) {
         </div>
       )}
       {regenError && (
-        <div className="mt-2 text-[10px] text-red-300/80 bg-red-900/20 border border-red-500/20 rounded px-2 py-1">重生失败: {regenError}</div>
+        <div className="mt-2 text-[10px] text-red-300/80 bg-red-900/20 border border-red-500/20 rounded px-2 py-1">{t.projectMisc.regenFailedPrefix.replace('{error}', regenError)}</div>
       )}
 
       <Handle type="source" position={Position.Right} className="!w-4 !h-4 !bg-emerald-500 !border-2 !border-[#141414] !rounded-full hover:!scale-125 !transition-transform" />

@@ -49,31 +49,31 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe('v12.330 · 真渲染(不是只读源码)', () => {
   it('帧真的画出来,且每帧标了帧号与精确时间戳', async () => {
     render(<FrameInspectModal projectId="p1" shotNumber={3} onClose={() => {}} />);
-    await waitFor(() => expect(screen.getByAltText('第 72 帧')).toBeTruthy());
-    expect(screen.getByAltText('第 74 帧')).toBeTruthy();
+    await waitFor(() => expect(screen.getByAltText('Frame 72')).toBeTruthy());
+    expect(screen.getByAltText('Frame 74')).toBeTruthy();
     expect(screen.getByText(/#72 · 3\.000s/)).toBeTruthy();
   });
 
   it('点两帧形成选区(按钮进入 aria-pressed)', async () => {
     render(<FrameInspectModal projectId="p1" shotNumber={3} onClose={() => {}} />);
-    await waitFor(() => screen.getByAltText('第 72 帧'));
-    fireEvent.click(screen.getByAltText('第 72 帧').closest('button')!);
-    fireEvent.click(screen.getByAltText('第 74 帧').closest('button')!);
+    await waitFor(() => screen.getByAltText('Frame 72'));
+    fireEvent.click(screen.getByAltText('Frame 72').closest('button')!);
+    fireEvent.click(screen.getByAltText('Frame 74').closest('button')!);
     await waitFor(() => {
-      expect(screen.getByAltText('第 73 帧').closest('button')!.getAttribute('aria-pressed')).toBe('true');
+      expect(screen.getByAltText('Frame 73').closest('button')!.getAttribute('aria-pressed')).toBe('true');
     });
-    expect(screen.getByText(/已选 #72–#74/)).toBeTruthy();
+    expect(screen.getByText(/Selected #72–#74/)).toBeTruthy();
   });
 
   it('**换算与重拍区间来自服务端**,前端不自己算', async () => {
     const onRetake = vi.fn();
     render(<FrameInspectModal projectId="p1" shotNumber={3} onClose={() => {}} onRetake={onRetake} />);
-    await waitFor(() => screen.getByAltText('第 72 帧'));
-    fireEvent.click(screen.getByAltText('第 72 帧').closest('button')!);
-    fireEvent.click(screen.getByAltText('第 74 帧').closest('button')!);
-    fireEvent.click(screen.getByText('换算重拍区间'));
+    await waitFor(() => screen.getByAltText('Frame 72'));
+    fireEvent.click(screen.getByAltText('Frame 72').closest('button')!);
+    fireEvent.click(screen.getByAltText('Frame 74').closest('button')!);
+    fireEvent.click(screen.getByText('Resolve retake range'));
     await waitFor(() => expect(screen.getByText(/3\.000s → 3\.125s/)).toBeTruthy());
-    fireEvent.click(screen.getByText('用这段做片段重拍'));
+    fireEvent.click(screen.getByText('Retake this segment'));
     expect(onRetake).toHaveBeenCalledWith(expect.objectContaining({ fromS: 3, toS: 3.125 }));
   });
 
@@ -83,8 +83,8 @@ describe('v12.330 · 真渲染(不是只读源码)', () => {
       json: async () => ({ ...strip3, thinned: true, step: 3, failedFrames: [80, 81] }),
     })) as unknown as typeof fetch);
     render(<FrameInspectModal projectId="p1" shotNumber={3} onClose={() => {}} />);
-    await waitFor(() => expect(screen.getByText(/已抽稀:每 3 帧取 1/)).toBeTruthy());
-    expect(screen.getByText(/2 帧解码失败/)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(/Thinned: 1 of every 3 frames/)).toBeTruthy());
+    expect(screen.getByText(/2 frames failed to decode/)).toBeTruthy();
   });
 
   it('后端报错时把人话显示出来,不是静默空白(v12.300 的口径)', async () => {
@@ -99,7 +99,7 @@ describe('v12.330 · 真渲染(不是只读源码)', () => {
 describe('v12.330 · 接线', () => {
   it('单镜检查器里有入口(否则功能等于不存在)', () => {
     expect(INSPECTOR).toContain('onFrameInspect');
-    expect(INSPECTOR).toMatch(/逐帧检视/);
+    expect(INSPECTOR).toMatch(/frameInspect/);
   });
 
   it('项目页挂载了弹窗并传入了 onRetake', () => {

@@ -38,17 +38,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen bg-[var(--background)]">
-      {/* 暖墨质感氛围 */}
+      {/* Warm-ink atmosphere */}
       <div className="cosmic-bg">
         <div className="noise-overlay" />
       </div>
       <Sidebar />
       <main id="main-content" tabIndex={-1} className="flex-1 overflow-auto relative outline-none">
-        {/* 微妙的金色顶部光晕 */}
+        {/* Subtle gold top glow */}
         <div className="page-glow" />
-        {/* v2.17 P0.3: API 配额告警 banner — 任意上游配额耗尽 / 上游饱和时可见 */}
+        {/* v2.17 P0.3: API quota alert banner — visible when any upstream quota is exhausted / saturated */}
         <ApiQuotaBanner />
-        {/* v3.0 P0.1: 通知 bell — 浮在右上角, dashboard 任意页都可见 */}
+        {/* v3.0 P0.1: notification bell — floats top-right, visible on every dashboard page */}
         <div className="absolute top-4 right-5 z-30">
           <NotificationBell />
         </div>
@@ -56,7 +56,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </div>
       </main>
-      {/* v12.5.0(#4):工坊任务进行中 → 全局浮动指示条(任一模块可见、一键返回) */}
+      {/* v12.5.0(#4): workshop job in progress → global floating indicator (visible in any module, one-click return) */}
       <ActiveGenerationIndicator />
     </div>
   );

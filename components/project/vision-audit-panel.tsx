@@ -1,12 +1,12 @@
 'use client';
 
 /**
- * v3.4 — Vision Audit 面板 (VisionAuditPanel).
+ * v3.4 — Vision Audit panel (VisionAuditPanel).
  *
- * 展示端到端成片质检结果: 全片 verdict + 平均分 + pass/warn/fail 统计 +
- * 最差镜快捷跳转 + 每镜维度分 (场景/动作/情绪/构图) + 问题列表.
+ * End-to-end film QC: whole-film verdict + avg score + pass/warn/fail counts +
+ * weakest-shot jump + per-shot dims (scene/action/mood/comp) + issue list.
  *
- * 纯展示组件 — 数据由父组件从 /api/projects/[id]/vision-audit 拿后传入.
+ * Presentational — parent fetches /api/projects/[id]/vision-audit and passes data in.
  */
 
 import { Warning as AlertTriangle, CheckCircle as CheckCircle2, XCircle, Eye, FilmStrip as Film, ArrowsClockwise } from '@phosphor-icons/react';
@@ -40,9 +40,9 @@ export interface VisionAuditSummaryShape {
 export interface VisionAuditPanelProps {
   audits: VisionAuditShot[];
   summary: VisionAuditSummaryShape | null | undefined;
-  /** 点击某镜 (跳转 / 触发重生) 回调. */
+  /** Click a shot (jump / trigger rebirth). */
   onShotClick?: (shotNumber: number) => void;
-  /** v9.4.2: 「一键重拍弱镜」批量入口 (把低分镜列表交给父组件, 通常跳镜头工坊重拍). */
+  /** v9.4.2: batch "reshoot weak shots" (parent usually jumps to shot workshop). */
   onReshootWeak?: (shotNumbers: number[]) => void;
 }
 
@@ -106,7 +106,7 @@ export function VisionAuditPanel({ audits, summary, onShotClick, onReshootWeak }
 
   return (
     <div className="space-y-4">
-      {/* 总览 */}
+      {/* Overview */}
       <div className="rounded-xl border border-white/10 bg-white/5 p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2 text-white/80 text-sm font-medium">
@@ -146,7 +146,7 @@ export function VisionAuditPanel({ audits, summary, onShotClick, onReshootWeak }
         )}
       </div>
 
-      {/* v9.4.2: 重生计划 — 低分镜按优先级 + 针对性修补提示 */}
+      {/* v9.4.2: rebirth plan — low-score shots by priority + focused fix hints */}
       {rebirthPlan.count > 0 && (
         <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4">
           <div className="flex items-center justify-between mb-2.5">
@@ -179,7 +179,7 @@ export function VisionAuditPanel({ audits, summary, onShotClick, onReshootWeak }
         </div>
       )}
 
-      {/* 逐镜 */}
+      {/* Per shot */}
       <div className="space-y-2">
         {audits.map((a) => (
           <div

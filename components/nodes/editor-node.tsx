@@ -7,8 +7,11 @@ import { NodeShell } from './node-shell';
 import { Scissors, CircleNotch as Loader2, CheckCircle as CheckCircle2, Clock, Play, FilmStrip as Film, FloppyDisk as Save, ArrowsClockwise as RefreshCw, MusicNotes as Music, SpeakerHigh as Volume2, ArrowUp, ArrowDown, Trash as Trash2, ArrowUUpLeft as Undo2, WarningCircle as AlertCircle } from '@phosphor-icons/react';
 import { VideoModal } from '@/components/ui/video-modal';
 import { useProjectWorkspaceStore } from '@/lib/store';
+import { useLocale } from '@/hooks/use-locale';
 
 function EditorNodeComponent({ data }: NodeProps) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectMisc: Record<string, string> };
   const d = data as unknown as PipelineNodeData & {
     editResult?: {
       timeline: any[];
@@ -24,17 +27,17 @@ function EditorNodeComponent({ data }: NodeProps) {
   const [selectedVideoSrc, setSelectedVideoSrc] = useState('');
   const [selectedVideoTitle, setSelectedVideoTitle] = useState('');
   const [saved, setSaved] = useState(false);
-  /** v12.299:重新剪辑的失败原因 —— 此前失败被渲染成成功,用户完全看不到 */
+  /** v12.299: re-edit failure reason — previously failure rendered as success */
   const [regenError, setRegenError] = useState<string | null>(null);
   const [musicPlaying, setMusicPlaying] = useState(false);
 
-  // ═══ 时间线本地可编辑 state ═══
-  // 仅在用户主动改动时赋值;未改动则直接用 editResult.timeline
+  // === Local editable timeline ===
+  // Only set when the user edits; otherwise use editResult.timeline
   const [draftTimeline, setDraftTimeline] = useState<any[] | null>(null);
   const activeTimeline = draftTimeline || editResult?.timeline || [];
   const isDirty = !!draftTimeline;
 
-  // 当 editResult 更新（例如重新剪辑后）重置草稿
+  // Reset draft when editResult updates (e.g. after re-edit)
   useEffect(() => {
     setDraftTimeline(null);
   }, [editResult?.timeline]);
@@ -57,19 +60,19 @@ function EditorNodeComponent({ data }: NodeProps) {
   const confirmNodeAssets = useProjectWorkspaceStore(s => s.confirmNodeAssets);
 
   const handlePlayAll = () => {
-    // 优先播放 FFmpeg 合成的最终成片
+    // Prefer the FFmpeg-muxed final film
     if (editResult?.finalVideoUrl) {
       setSelectedVideoSrc(editResult.finalVideoUrl);
-      setSelectedVideoTitle('成片预览（合成版）');
+      setSelectedVideoTitle(t.projectMisc.filmPreviewMuxed);
       setModalOpen(true);
       return;
     }
-    // 降级：播放时间线第一个有效视频
+    // Fallback: first valid timeline video
     if (editResult?.timeline) {
-      const firstValid = editResult.timeline.find((t: any) => t.videoUrl && !t.videoUrl.startsWith('data:'));
+      const firstValid = editResult.timeline.find((tl: any) => tl.videoUrl && !tl.videoUrl.startsWith('data:'));
       if (firstValid) {
         setSelectedVideoSrc(firstValid.videoUrl);
-        setSelectedVideoTitle('成片预览');
+        setSelectedVideoTitle(t.projectMisc.filmPreview);
         setModalOpen(true);
       }
     }
@@ -78,17 +81,17 @@ function EditorNodeComponent({ data }: NodeProps) {
   const handleShotClick = (videoUrl: string, shotNumber: number) => {
     if (videoUrl && !videoUrl.startsWith('data:')) {
       setSelectedVideoSrc(videoUrl);
-      setSelectedVideoTitle(`镜头 ${shotNumber}`);
+      setSelectedVideoTitle(t.product.shotN.replace('{n}', String(shotNumber)));
       setModalOpen(true);
     }
   };
 
   const handleSaveToProject = async () => {
-    // 确认所有剪辑相关资产并保存到项目
+    // Confirm all edit-related assets and save to the project
     confirmNodeAssets('editor' as any);
     setSaved(true);
 
-    // 如果用户编辑了时间线，把更新后的 editResult 写回 store（供后续播放/导出使用）
+    // If the user edited the timeline, write the updated editResult back to the store
     if (draftTimeline && editResult) {
       const newTotal = draftTimeline.reduce((s, x: any) => s + (x.duration || 0), 0);
       const s = useProjectWorkspaceStore.getState();
@@ -98,7 +101,7 @@ function EditorNodeComponent({ data }: NodeProps) {
       setDraftTimeline(null);
     }
 
-    // 调用后端保存API
+    // Persist via backend
     try {
       const s = useProjectWorkspaceStore.getState();
       const projectId = s.currentProject?.id;
@@ -120,7 +123,7 @@ function EditorNodeComponent({ data }: NodeProps) {
   const [isRegenerating, setIsRegenerating] = useState(false);
 
   const handleRegenerate = async () => {
-    setRegenError(null);   // v12.299:重试前清掉上次的失败原因
+    setRegenError(null);   // v12.299: clear last failure before retry
     const s = useProjectWorkspaceStore.getState();
     const projectId = s.currentProject?.id;
     if (!projectId || isRegenerating) return;
@@ -128,7 +131,7 @@ function EditorNodeComponent({ data }: NodeProps) {
     setIsRegenerating(true);
     setSaved(false);
 
-    // 更新节点状态为 running
+    // Mark node running
     s.updateNodeData('node-editor', { status: 'running', progress: 10 } as any);
 
     try {
@@ -138,11 +141,11 @@ function EditorNodeComponent({ data }: NodeProps) {
         body: JSON.stringify({ projectId, stage: 'editor' }),
       });
 
-      if (!response.ok) throw new Error('请求失败');
+      if (!response.ok) throw new Error(t.seriesDetail.requestFailed);
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      if (!reader) throw new Error('无法读取响应流');
+      if (!reader) throw new Error(t.workshop.streamReadFailed);
 
       while (true) {
         const { done, value } = await reader.read();
@@ -163,11 +166,11 @@ function EditorNodeComponent({ data }: NodeProps) {
         }
       }
     } catch (error) {
-      // v12.299:**失败不能冒充成功**。原来这里写的是 status:'completed', progress:100 ——
-      // 于是网络出错/5xx 时,节点标题照样出现蓝色对勾、进度 100%、按钮全亮,
-      // 与真正成功**完全一致**;而 editResult 还是旧数据。用户以为剪辑刷新了,其实什么都没变。
+      // v12.299: failure must not look like success. Old code wrote status:'completed',
+      // progress:100 — so a network/5xx error still showed a blue check and 100%,
+      // identical to a real success, while editResult stayed stale.
       console.error('[EditorNode] Regenerate failed:', error);
-      const _msg = error instanceof Error ? error.message : String(error ?? '未知错误');
+      const _msg = error instanceof Error ? error.message : String(error ?? t.projectMisc.unknownShort);
       setRegenError(_msg.slice(0, 120));
       s.updateNodeData('node-editor', { status: 'error', progress: 0 } as any);
     } finally {
@@ -199,20 +202,20 @@ function EditorNodeComponent({ data }: NodeProps) {
         </div>
         <div className="flex-1">
           <div className="text-sm font-semibold text-white flex items-center gap-2">
-            剪辑师
+            {t.product.editor}
             {d.status === 'running' && <Loader2 className="w-3.5 h-3.5 text-green-400 animate-spin" />}
             {d.status === 'completed' && <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />}
             {d.status === 'pending' && <Clock className="w-3.5 h-3.5 text-gray-500" />}
             {d.status === 'error' && <AlertCircle className="w-3.5 h-3.5 text-red-400" weight="fill" />}
           </div>
-          <div className="text-[11px] text-gray-400">剪辑 · 配乐 · 合成</div>
+          <div className="text-[11px] text-gray-400">{t.projectMisc.editorSub}</div>
         </div>
         {d.status === 'running' && <span className="text-[10px] text-green-400 font-medium">{d.progress}%</span>}
       </div>
 
       {editResult ? (
         <div>
-          {/* 成片播放条 */}
+          {/* Film play bar */}
           <div
             className="flex items-center gap-3 mb-3 bg-black/20 rounded-lg p-3 cursor-pointer hover:bg-black/30 transition-colors group"
             onClick={handlePlayAll}
@@ -221,15 +224,15 @@ function EditorNodeComponent({ data }: NodeProps) {
               <Play className="w-5 h-5 text-blue-400" />
             </div>
             <div className="flex-1">
-              <div className="text-xs text-white font-medium">{editResult.videoCount} 个镜头</div>
-              <div className="text-[10px] text-gray-400">总时长 {editResult.totalDuration}s</div>
+              <div className="text-xs text-white font-medium">{t.projectMisc.shotCountN.replace('{n}', String(editResult.videoCount))}</div>
+              <div className="text-[10px] text-gray-400">{t.projectMisc.totalDuration.replace('{n}', String(editResult.totalDuration))}</div>
             </div>
             <div className="text-[10px] text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">
-              播放成片
+              {t.projectMisc.playFilm}
             </div>
           </div>
 
-          {/* 配乐状态 */}
+          {/* Score status */}
           {editResult.musicUrl && (
             <div
               className="flex items-center gap-2 mb-3 bg-black/20 rounded-lg px-3 py-2 cursor-pointer hover:bg-black/30 transition-colors"
@@ -240,41 +243,41 @@ function EditorNodeComponent({ data }: NodeProps) {
               ) : (
                 <Music className="w-3.5 h-3.5 text-purple-400" />
               )}
-              <span className="text-[11px] text-gray-300">背景配乐</span>
-              <span className="text-[9px] text-gray-500 ml-auto">{musicPlaying ? '播放中' : '点击试听'}</span>
+              <span className="text-[11px] text-gray-300">{t.projectMisc.bgm}</span>
+              <span className="text-[9px] text-gray-500 ml-auto">{musicPlaying ? t.projectMisc.playing : t.projectMisc.clickPreview}</span>
             </div>
           )}
 
-          {/* 镜头时间线 — 可编辑（上下移/删除） */}
+          {/* Shot timeline — editable (up/down/delete) */}
           {activeTimeline.length > 0 && (
             <div className="space-y-1 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
-              {activeTimeline.map((t: any, i: number) => {
+              {activeTimeline.map((tl: any, i: number) => {
                 const activeTotal = activeTimeline.reduce((s: number, x: any) => s + (x.duration || 0), 0) || 1;
                 return (
                   <div
-                    key={`${t.shotNumber}-${i}`}
+                    key={`${tl.shotNumber}-${i}`}
                     className="flex items-center gap-1.5 bg-black/20 rounded-lg px-2 py-1.5 text-[11px] group/shot hover:bg-black/30 transition-colors"
                   >
                     <span
                       className="text-blue-400 font-medium w-6 cursor-pointer"
-                      onClick={() => handleShotClick(t.videoUrl, t.shotNumber)}
+                      onClick={() => handleShotClick(tl.videoUrl, tl.shotNumber)}
                     >
-                      #{t.shotNumber}
+                      #{tl.shotNumber}
                     </span>
                     <div
                       className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden cursor-pointer"
-                      onClick={() => handleShotClick(t.videoUrl, t.shotNumber)}
+                      onClick={() => handleShotClick(tl.videoUrl, tl.shotNumber)}
                     >
-                      <div className="h-full bg-blue-500/50 rounded-full" style={{ width: `${(t.duration / activeTotal) * 100}%` }} />
+                      <div className="h-full bg-blue-500/50 rounded-full" style={{ width: `${(tl.duration / activeTotal) * 100}%` }} />
                     </div>
-                    <span className="text-gray-400 w-7 text-right text-[10px]">{t.duration}s</span>
-                    {/* 编辑按钮：仅 hover 时显示 */}
+                    <span className="text-gray-400 w-7 text-right text-[10px]">{tl.duration}s</span>
+                    {/* Edit buttons: hover only */}
                     <div className="flex items-center gap-0.5 opacity-0 group-hover/shot:opacity-100 transition-opacity">
                       <button
                         onClick={(e) => { e.stopPropagation(); moveShot(i, i - 1); }}
                         disabled={i === 0}
                         className="p-0.5 rounded hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent"
-                        title="上移"
+                        title={t.projectMisc.moveUp}
                       >
                         <ArrowUp className="w-2.5 h-2.5 text-gray-400" />
                       </button>
@@ -282,14 +285,14 @@ function EditorNodeComponent({ data }: NodeProps) {
                         onClick={(e) => { e.stopPropagation(); moveShot(i, i + 1); }}
                         disabled={i === activeTimeline.length - 1}
                         className="p-0.5 rounded hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent"
-                        title="下移"
+                        title={t.projectMisc.moveDown}
                       >
                         <ArrowDown className="w-2.5 h-2.5 text-gray-400" />
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); removeShot(i); }}
                         className="p-0.5 rounded hover:bg-red-500/20"
-                        title="删除"
+                        title={t.common.delete}
                       >
                         <Trash2 className="w-2.5 h-2.5 text-red-400" />
                       </button>
@@ -299,20 +302,20 @@ function EditorNodeComponent({ data }: NodeProps) {
               })}
             </div>
           )}
-          {/* 时间线变更提示 */}
+          {/* Timeline dirty hint */}
           {isDirty && (
             <div className="flex items-center justify-between mt-2 px-2 py-1 rounded-lg bg-orange-500/10 border border-orange-500/30 text-[10px]">
-              <span className="text-orange-300">时间线已修改（{activeTimeline.length} 镜头）</span>
+              <span className="text-orange-300">{t.projectMisc.timelineDirty.replace('{n}', String(activeTimeline.length))}</span>
               <button
                 onClick={resetTimeline}
                 className="flex items-center gap-1 text-orange-400 hover:text-orange-300 transition-colors"
               >
-                <Undo2 className="w-3 h-3" /> 撤销
+                <Undo2 className="w-3 h-3" /> {t.projectMisc.undo}
               </button>
             </div>
           )}
 
-          {/* ═══ 保存/重新生成 操作栏 ═══ */}
+          {/* === Save / regenerate bar === */}
           {d.status === 'completed' && (
             <div className="flex gap-2 mt-3 pt-3 border-t border-white/5">
               <button
@@ -325,7 +328,7 @@ function EditorNodeComponent({ data }: NodeProps) {
                 }`}
               >
                 {saved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-                {saved ? '已保存' : '保存到项目'}
+                {saved ? t.projectMisc.savedShort : t.projectMisc.saveToProject}
               </button>
               <button
                 onClick={handleRegenerate}
@@ -337,7 +340,7 @@ function EditorNodeComponent({ data }: NodeProps) {
                 }`}
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
-                {isRegenerating ? '重做中...' : '重新剪辑'}
+                {isRegenerating ? t.projectMisc.redoing : t.projectMisc.reEdit}
               </button>
             </div>
           )}
@@ -345,8 +348,8 @@ function EditorNodeComponent({ data }: NodeProps) {
       ) : (
         <div className="text-center py-6 text-xs">
           {d.status === 'error'
-            ? <span className="text-red-400">重新剪辑失败,已保留原剪辑结果{regenError ? `:${regenError}` : ''}</span>
-            : <span className="text-gray-500">{d.status === 'pending' ? '等待视频生成完成...' : d.status === 'running' ? '剪辑中...' : ''}</span>}
+            ? <span className="text-red-400">{regenError ? t.projectMisc.reEditFailedWith.replace('{error}', regenError) : t.projectMisc.reEditFailed}</span>
+            : <span className="text-gray-500">{d.status === 'pending' ? t.projectMisc.waitVideos : d.status === 'running' ? t.projectMisc.editing : ''}</span>}
         </div>
       )}
 

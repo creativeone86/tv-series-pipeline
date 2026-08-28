@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { useLocale } from "@/hooks/use-locale"
 
-// 仅保留展示用的图标 + 颜色; 标题/描述走 i18n (t.help.guides 按序对应)
+// Icons + colors only; titles/descriptions come from i18n (t.help.guides in order)
 const guideMeta = [
   { icon: Zap, color: "text-yellow-400" },
   { icon: BookOpen, color: "text-blue-400" },

@@ -3,20 +3,21 @@
 /**
  * v2.23 P0.2 — Storyboard image regen modal.
  *
- * 让用户在 workshop 里改 prompt 重生某一镜的分镜图. 不是重生视频 (那是
- * regenerate-shot), 而是仅画面.
+ * Lets the user edit a shot's prompt in the workshop and regen that board.
+ * This is image-only — video regen is regenerate-shot.
  *
  * UX:
- *   - 显示当前分镜图缩略图 + 原 prompt
- *   - 文本框让用户编辑 prompt
- *   - 切换: 是否锁 Style Bible (默认 on), 是否锁主角脸 (默认 on)
- *   - "重生" 按钮 → SSE 流式拉新图
- *   - 完成后调 onComplete(newUrl)
+ *   - Current board thumb + original prompt
+ *   - Textarea to edit the prompt
+ *   - Toggles: lock Style Bible (default on), lock lead face (default on)
+ *   - "Regen" → SSE stream for the new image
+ *   - On complete, call onComplete(newUrl)
  */
 
 import { useState } from 'react';
 import { X, CircleNotch as Loader2, ArrowsClockwise as RefreshCw, Sparkle as Sparkles, ImageBroken as ImageOff, Upload, Image as ImagePlus } from '@phosphor-icons/react';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
+import { useLocale } from '@/hooks/use-locale';
 
 export interface StoryboardRegenModalProps {
   projectId: string;
@@ -32,6 +33,9 @@ export function StoryboardRegenModal({
   projectId, shotNumber, currentImageUrl, currentPrompt, defaultAspectRatio,
   onComplete, onCancel,
 }: StoryboardRegenModalProps) {
+  const { t: loc } = useLocale();
+  const t = loc as typeof loc & { projectTools: Record<string, string> };
+  const pt = t.projectTools;
   const [prompt, setPrompt] = useState(currentPrompt || '');
   const [useStyleBible, setUseStyleBible] = useState(true);
   const [useCref, setUseCref] = useState(true);
@@ -39,10 +43,10 @@ export function StoryboardRegenModal({
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
-  // v2.24 B: 用户上传的参考图 URL (服务端持久化后的 http URL)
+  // v2.24 B: user-uploaded reference image URL (http URL after server persist)
   const [refImageUrl, setRefImageUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  // v12.137 issue #2 镜头语言草图锁:草图 URL(AI 生成或上传)+ 是否用它锁构图
+  // v12.137 issue #2 shot-language sketch lock: sketch URL (AI-generated or uploaded) + whether to lock composition
   const [sketchUrl, setSketchUrl] = useState<string | null>(null);
   const [sketchLock, setSketchLock] = useState(false);
   const [sketchBusy, setSketchBusy] = useState(false);
@@ -50,7 +54,7 @@ export function StoryboardRegenModal({
   const handleGenSketch = async () => {
     if (sketchBusy || busy) return;
     const scene = prompt.trim();
-    if (scene.length < 5) { setError('先填画面描述(≥5 字)再生成草图'); return; }
+    if (scene.length < 5) { setError(pt.sketchNeedDesc); return; }
     setSketchBusy(true); setError(null);
     try {
       const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/shot-sketch`, {
@@ -58,42 +62,42 @@ export function StoryboardRegenModal({
         body: JSON.stringify({ shotNumber, mode: 'generate', sceneDescription: scene, aspectRatio }),
       });
       const b = await res.json();
-      if (!res.ok || !b.sketchUrl) { setError(b?.error || `草图生成失败 (${res.status})`); return; }
+      if (!res.ok || !b.sketchUrl) { setError(b?.error || pt.sketchGenFailedStatus.replace('{status}', String(res.status))); return; }
       setSketchUrl(b.sketchUrl); setSketchLock(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '草图生成失败');
+      setError(e instanceof Error ? e.message : pt.sketchGenFailed);
     } finally { setSketchBusy(false); }
   };
 
   const handleUploadSketch = async (file: File) => {
     if (sketchBusy || busy) return;
-    if (file.size > 10 * 1024 * 1024) { setError('草图过大 (上限 10MB)'); return; }
+    if (file.size > 10 * 1024 * 1024) { setError(pt.sketchTooLarge); return; }
     setSketchBusy(true); setError(null);
     try {
       const form = new FormData(); form.append('file', file);
       const up = await fetch('/api/upload/character-face', { method: 'POST', body: form });
       const ub = await up.json();
-      if (!up.ok || !ub.url) { setError(ub?.error || `上传失败 (${up.status})`); return; }
-      // 落成 storyboard-sketch 资产(mode:set),供重生取用
+      if (!up.ok || !ub.url) { setError(ub?.error || `${t.product.dropFailed} (${up.status})`); return; }
+      // Persist as a storyboard-sketch asset (mode:set) for regen
       const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/shot-sketch`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shotNumber, mode: 'set', imageUrl: ub.url }),
       });
       const b = await res.json();
-      if (!res.ok || !b.sketchUrl) { setError(b?.error || `草图落库失败 (${res.status})`); return; }
+      if (!res.ok || !b.sketchUrl) { setError(b?.error || pt.persistFailed.replace('{status}', String(res.status))); return; }
       setSketchUrl(b.sketchUrl); setSketchLock(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '草图上传失败');
+      setError(e instanceof Error ? e.message : pt.sketchUploadFailed);
     } finally { setSketchBusy(false); }
   };
 
-  // v10.3.6 a11y: Escape + 焦点陷阱 + 焦点归还(此前无任何键盘关闭路径);重生中不响应 Escape
+  // v10.3.6 a11y: Escape + focus trap + restore focus (no keyboard close path before); ignore Escape while regenerating
   const dialogRef = useFocusTrap<HTMLDivElement>(true, () => { if (!busy) onCancel(); });
 
   const handleUploadFile = async (file: File) => {
     if (uploading || busy) return;
     if (file.size > 10 * 1024 * 1024) {
-      setError('参考图过大 (上限 10MB)');
+      setError(pt.refTooLarge);
       return;
     }
     setUploading(true);
@@ -107,12 +111,12 @@ export function StoryboardRegenModal({
       });
       const body = await res.json();
       if (!res.ok || !body.url) {
-        setError(body?.error || `上传失败 (${res.status})`);
+        setError(body?.error || `${t.product.dropFailed} (${res.status})`);
         return;
       }
       setRefImageUrl(body.url);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '上传失败');
+      setError(e instanceof Error ? e.message : t.product.dropFailed);
     } finally {
       setUploading(false);
     }
@@ -131,12 +135,12 @@ export function StoryboardRegenModal({
     if (busy) return;
     const trimmed = prompt.trim();
     if (trimmed.length < 5) {
-      setError('prompt 不能短于 5 字');
+      setError(pt.promptTooShort);
       return;
     }
     setBusy(true);
     setError(null);
-    setStatus('启动重生...');
+    setStatus(pt.regenStarting);
 
     try {
       const res = await fetch(
@@ -150,9 +154,9 @@ export function StoryboardRegenModal({
             useStyleBible,
             useCref,
             aspectRatio,
-            // v2.24 B: 用户上传的参考图 (作 sref 优先于 Style Bible)
+            // v2.24 B: user-uploaded reference (sref takes priority over Style Bible)
             referenceImageUrl: refImageUrl || undefined,
-            // v12.137 issue #2 草图锁:开启则用该镜草图锁构图
+            // v12.137 issue #2 sketch lock: when on, lock composition from this shot's sketch
             sketchLock: sketchLock && !!sketchUrl,
             sketchUrl: sketchLock && sketchUrl ? sketchUrl : undefined,
           }),
@@ -160,12 +164,12 @@ export function StoryboardRegenModal({
       );
       if (!res.ok && !res.body) {
         const txt = await res.text().catch(() => '');
-        setError(`请求失败 (${res.status}): ${txt.slice(0, 120)}`);
+        setError(pt.requestFailedDetail.replace('{status}', String(res.status)).replace('{msg}', txt.slice(0, 120)));
         return;
       }
       const reader = res.body?.getReader();
       if (!reader) {
-        setError('无法读取响应流');
+        setError(pt.streamReadFailed);
         return;
       }
       const decoder = new TextDecoder();
@@ -181,23 +185,23 @@ export function StoryboardRegenModal({
           try {
             const evt = JSON.parse(line.slice(6));
             if (evt.type === 'status') {
-              setStatus(evt.data?.message || '处理中...');
+              setStatus(evt.data?.message || pt.processing);
             } else if (evt.type === 'complete') {
               const newUrl = evt.data?.imageUrl;
               if (newUrl) {
                 onComplete(newUrl, evt.data?.prompt || trimmed);
-                return; // close 流程交给父组件
+                return; // parent owns the close flow
               } else {
-                setError('上游未返新图');
+                setError(pt.noNewImage);
               }
             } else if (evt.type === 'error') {
-              setError(evt.data?.message || '重生失败');
+              setError(evt.data?.message || pt.regenFailed);
             }
           } catch { /* skip malformed */ }
         }
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : '重生失败');
+      setError(e instanceof Error ? e.message : pt.regenFailed);
     } finally {
       setBusy(false);
     }
@@ -209,7 +213,7 @@ export function StoryboardRegenModal({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150 outline-none"
       role="dialog"
       aria-modal="true"
-      aria-label={`改 prompt 重生 · Shot ${shotNumber}`}
+      aria-label={pt.regenTitle.replace('{n}', String(shotNumber))}
       tabIndex={-1}
     >
       <div className="w-full max-w-2xl max-h-[90vh] rounded-2xl bg-[var(--cinema-surface)] border border-[var(--cinema-border-hi)] shadow-2xl flex flex-col overflow-hidden">
@@ -218,7 +222,7 @@ export function StoryboardRegenModal({
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-[var(--cinema-amber)]" />
             <h3 className="text-sm font-semibold text-[var(--cinema-text)]">
-              改 prompt 重生 · Shot {shotNumber}
+              {pt.regenTitle.replace('{n}', String(shotNumber))}
             </h3>
           </div>
           <button
@@ -232,7 +236,7 @@ export function StoryboardRegenModal({
 
         {/* body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {/* 当前图 */}
+          {/* Current image */}
           <div className="cinema-card-hi p-3">
             <div className="cinema-eyebrow mb-2">CURRENT IMAGE</div>
             {currentImageUrl && /^https?:|^\/api\//i.test(currentImageUrl) ? (
@@ -248,7 +252,7 @@ export function StoryboardRegenModal({
             )}
           </div>
 
-          {/* prompt 编辑 */}
+          {/* prompt editor */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="cinema-eyebrow">EDIT PROMPT</label>
@@ -260,12 +264,12 @@ export function StoryboardRegenModal({
               rows={6}
               maxLength={2000}
               disabled={busy}
-              placeholder="改写镜头描述... 例: 把主角换成俯拍角度, 加强情绪冲击"
+              placeholder={pt.promptPlaceholder}
               className="w-full px-3 py-2 cinema-mono text-[12px] bg-[var(--cinema-surface-2)] border border-[var(--cinema-border)] rounded focus:outline-none focus:border-[var(--cinema-amber)] resize-y disabled:opacity-50"
             />
           </div>
 
-          {/* v2.24 B: 用户上传参考图 (拖拽或点击) — 优先级高于 Style Bible */}
+          {/* v2.24 B: user-uploaded reference (drop or click) — higher priority than Style Bible */}
           <div
             className="cinema-card-hi p-3 space-y-2"
             onDrop={handleDrop}
@@ -274,7 +278,7 @@ export function StoryboardRegenModal({
             <div className="flex items-center justify-between mb-1">
               <div className="cinema-eyebrow flex items-center gap-1.5">
                 <ImagePlus className="w-3 h-3" />
-                参考图 (可选, 优先于 Style Bible)
+                {pt.refImageOptional}
               </div>
               {refImageUrl && (
                 <button
@@ -282,7 +286,7 @@ export function StoryboardRegenModal({
                   disabled={busy || uploading}
                   className="cinema-mono text-[10px] opacity-60 hover:text-red-300 disabled:opacity-30"
                 >
-                  ✕ 移除
+                  ✕ {pt.remove}
                 </button>
               )}
             </div>
@@ -294,12 +298,12 @@ export function StoryboardRegenModal({
                   alt="reference"
                   className="w-24 h-16 object-cover rounded border border-[var(--cinema-amber)]/40" />
                 <div className="flex-1 min-w-0">
-                  <div className="cinema-mono text-[10px] opacity-80">✓ 已上传参考图</div>
+                  <div className="cinema-mono text-[10px] opacity-80">✓ {pt.refUploaded}</div>
                   <div className="cinema-mono text-[9px] opacity-50 break-all line-clamp-2 mt-0.5">
                     {refImageUrl}
                   </div>
                   <div className="cinema-mono text-[9px] opacity-60 mt-1">
-                    本次重生会以这张图作 sref (替代 Style Bible)
+                    {pt.refUsedAsSref}
                   </div>
                 </div>
               </div>
@@ -314,13 +318,13 @@ export function StoryboardRegenModal({
                 {uploading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin opacity-60" />
-                    <span className="cinema-mono text-[11px] opacity-60">上传中...</span>
+                    <span className="cinema-mono text-[11px] opacity-60">{t.product.dropUploading}</span>
                   </>
                 ) : (
                   <>
                     <Upload className="w-4 h-4 opacity-60" />
                     <span className="cinema-mono text-[11px] opacity-60">
-                      拖一张参考图到此 (或点击选择) — 模型会按这张图风格出
+                      {pt.dropRefHint}
                     </span>
                   </>
                 )}
@@ -339,7 +343,7 @@ export function StoryboardRegenModal({
             )}
           </div>
 
-          {/* 选项 */}
+          {/* Options */}
           <div className="cinema-card-hi p-3 space-y-2">
             <div className="cinema-eyebrow mb-1">OPTIONS</div>
             <label className="flex items-center gap-2 cursor-pointer">
@@ -350,7 +354,7 @@ export function StoryboardRegenModal({
                 disabled={busy}
               />
               <span className="cinema-mono text-[11px]">
-                锁 Style Bible 画风 (推荐, 防画风跳脱)
+                {pt.lockStyleBible}
               </span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
@@ -361,11 +365,11 @@ export function StoryboardRegenModal({
                 disabled={busy}
               />
               <span className="cinema-mono text-[11px]">
-                锁主角脸 (用 primaryCharacterRef 作 cref)
+                {pt.lockLeadFace}
               </span>
             </label>
             <div className="flex items-center gap-2 pt-1">
-              <span className="cinema-mono text-[11px] opacity-60">画幅:</span>
+              <span className="cinema-mono text-[11px] opacity-60">{pt.aspect}</span>
               {(['16:9', '9:16', '1:1', '2.35:1'] as const).map((a) => (
                 <button
                   key={a}
@@ -382,10 +386,10 @@ export function StoryboardRegenModal({
               ))}
             </div>
 
-            {/* v12.137 issue #2:镜头语言草图锁(可选)— AI 生成 / 上传草图 → 锁构图重生 */}
+            {/* v12.137 issue #2: optional shot-language sketch lock — AI generate / upload sketch → lock composition on regen */}
             <div className="pt-2 mt-1 border-t border-[var(--cinema-border)]">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="cinema-mono text-[11px] opacity-70">🎬 镜头语言草图锁 <span className="opacity-40">(可选 · 用草图锁构图/机位)</span></span>
+                <span className="cinema-mono text-[11px] opacity-70">🎬 {pt.sketchLockTitle} <span className="opacity-40">{pt.sketchLockOptional}</span></span>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <button
@@ -393,33 +397,33 @@ export function StoryboardRegenModal({
                   onClick={handleGenSketch}
                   disabled={sketchBusy || busy}
                   className="cinema-btn-ghost !text-[10px] !py-1 disabled:opacity-40"
-                  title="AI 按上方画面描述出一张粗线稿构图草图"
+                  title={pt.genSketchTitle}
                 >
-                  {sketchBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} AI 生成草图
+                  {sketchBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} {pt.genSketch}
                 </button>
                 <label className="cinema-btn-ghost !text-[10px] !py-1 cursor-pointer disabled:opacity-40">
-                  <Upload className="w-3 h-3" /> 上传草图
+                  <Upload className="w-3 h-3" /> {pt.uploadSketch}
                   <input type="file" accept="image/*" className="hidden" disabled={sketchBusy || busy}
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadSketch(f); }} />
                 </label>
                 {sketchUrl && (
                   <label className="inline-flex items-center gap-1.5 cursor-pointer">
                     <input type="checkbox" checked={sketchLock} onChange={(e) => setSketchLock(e.target.checked)} disabled={busy} />
-                    <span className="cinema-mono text-[10px]">重生时用草图锁构图</span>
+                    <span className="cinema-mono text-[10px]">{pt.lockCompOnRegen}</span>
                   </label>
                 )}
               </div>
               {sketchUrl && (
                 <div className="mt-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={sketchUrl} alt="构图草图" className="max-h-24 rounded border border-[var(--cinema-border)]" />
-                  <div className="cinema-mono text-[9px] opacity-40 mt-1">软构图约束:草图定布局/机位,细节配色仍按 prompt(非默认,勾选生效)</div>
+                  <img src={sketchUrl} alt={pt.sketchAlt} className="max-h-24 rounded border border-[var(--cinema-border)]" />
+                  <div className="cinema-mono text-[9px] opacity-40 mt-1">{pt.sketchSoftHint}</div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* 状态 / 错误 */}
+          {/* Status / error */}
           {busy && (
             <div className="cinema-card p-3 border-[var(--cinema-amber)]/30 inline-flex items-center gap-2">
               <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--cinema-amber)]" />
@@ -436,7 +440,7 @@ export function StoryboardRegenModal({
         {/* footer */}
         <div className="px-5 py-3 border-t border-[var(--cinema-border)] bg-[var(--cinema-surface-2)] flex items-center justify-between">
           <span className="cinema-mono text-[10px] opacity-50">
-            走完整 image 路由 (multi-ref + style bible + 文字负向 prompt)
+            {pt.footerHint}
           </span>
           <div className="flex items-center gap-2">
             <button
@@ -444,7 +448,7 @@ export function StoryboardRegenModal({
               disabled={busy}
               className="cinema-btn !px-3 !py-1.5 !text-[11px] disabled:opacity-40"
             >
-              取消
+              {t.common.cancel}
             </button>
             <button
               onClick={handleRegen}
@@ -456,7 +460,7 @@ export function StoryboardRegenModal({
               ) : (
                 <RefreshCw className="w-3.5 h-3.5" />
               )}
-              {busy ? '重生中...' : '重生这一镜'}
+              {busy ? pt.regenInProgress : pt.regenThisShot}
             </button>
           </div>
         </div>

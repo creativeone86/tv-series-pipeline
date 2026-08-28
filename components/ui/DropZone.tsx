@@ -3,15 +3,17 @@
 import { useCallback, useId, useMemo, useState } from 'react';
 import { useLocale } from '@/hooks/use-locale';
 
+type KitT = ReturnType<typeof useLocale>['t'] & { kitUi: Record<string, string> };
+
 interface DropZoneProps {
   onFilesAccepted: (files: File[]) => void;
   accept?: Record<string, string[]>;
   maxSize?: number;
-  /** v12.300:上传失败回调 —— 外层想接管提示(如走 toast)时用;不传则显示内联错误 */
+  /** v12.300: upload-failure callback — parent can own the prompt (e.g. toast); omit to show an inline error */
   onError?: (error: unknown) => void;
 }
 
-/** 把 accept 映射摊成扩展名/MIME 列表,既用于 <input accept>,也用于落地校验。 */
+/** Flatten an accept map into extension/MIME tokens for both <input accept> and on-disk validation. */
 export const DEFAULT_ACCEPT: Record<string, string[]> = {
   'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
   'video/*': ['.mp4', '.mov', '.avi'],
@@ -28,37 +30,42 @@ export function acceptToTokens(accept: Record<string, string[]>): string[] {
 }
 
 /**
- * v12.339:**真正执行 accept / maxSize**。
+ * v12.339: **actually enforce accept / maxSize**.
  *
- * 此前这两个 prop 只存在于接口声明与解构默认值里,**从未被用来校验任何文件** ——
- * 而界面上还硬编码写着「支持图片和视频,最大 50MB」,等于向用户承诺了一个不存在的校验:
- * 500MB 的文件、.exe 都会照样交给上层。声明了却不执行,比没有这个 prop 更糟,
- * 因为调用方会以为自己已经受保护。
+ * Previously these two props lived only on the interface and in destructured defaults
+ * and were **never used to validate any file** — while the UI still hard-coded
+ * "images and video, max 50MB", promising a check that did not exist:
+ * a 500MB file or a .exe would still be handed to the parent. Declaring a prop
+ * and not enforcing it is worse than not having the prop, because callers assume
+ * they are already protected.
  *
- * 返回被拒的文件与原因;调用方据此给出**指名道姓**的错误(哪个文件、为什么),
- * 而不是笼统一句「上传失败」。
+ * Returns rejected files with a reason; the caller can then name the file and why,
+ * instead of a generic "upload failed".
  */
 export function filterFiles(
   files: File[],
   accept: Record<string, string[]>,
   maxSize: number,
+  reasonText?: { overMb: string; unsupported: string },
 ): { ok: File[]; rejected: Array<{ name: string; reason: string }> } {
+  const overTpl = reasonText?.overMb ?? 'Over {n}MB';
+  const unsupported = reasonText?.unsupported ?? 'Unsupported format';
   const tokens = acceptToTokens(accept);
   const ok: File[] = [];
   const rejected: Array<{ name: string; reason: string }> = [];
   for (const f of files || []) {
     if (maxSize > 0 && f.size > maxSize) {
-      rejected.push({ name: f.name, reason: `超过 ${(maxSize / 1048576).toFixed(0)}MB` });
+      rejected.push({ name: f.name, reason: overTpl.replace('{n}', (maxSize / 1048576).toFixed(0)) });
       continue;
     }
     if (tokens.length) {
       const name = (f.name || '').toLowerCase();
       const type = (f.type || '').toLowerCase();
-      const hit = tokens.some((t) =>
-        t.startsWith('.') ? name.endsWith(t)
-          : t.endsWith('/*') ? type.startsWith(t.slice(0, -1))
-            : type === t);
-      if (!hit) { rejected.push({ name: f.name, reason: '格式不支持' }); continue; }
+      const hit = tokens.some((tok) =>
+        tok.startsWith('.') ? name.endsWith(tok)
+          : tok.endsWith('/*') ? type.startsWith(tok.slice(0, -1))
+            : type === tok);
+      if (!hit) { rejected.push({ name: f.name, reason: unsupported }); continue; }
     }
     ok.push(f);
   }
@@ -66,12 +73,13 @@ export function filterFiles(
 }
 
 /**
- * v12.339:把「拖放 + 落地校验」抽成 hook。
+ * v12.339: extract "drop + on-disk validate" into a hook.
  *
- * 为什么不是直接把 DropZone 塞进各页面:本仓多数上传位(如 u2v 的首/尾帧)**已经长得像拖放区**,
- * 只是不支持拖放;而 DropZone 自带一套通用灰色样式,塞进影院主题页面会显得突兀。
- * 真正该复用的是**行为**,不是外观 —— 于是行为归 hook,外观各自保留。
- * DropZone 自身也走这个 hook,两边同一出处。
+ * Why not drop DropZone into every page: most upload slots here (e.g. u2v first/last
+ * frame) **already look like drop zones**, they just do not support drop; DropZone
+ * brings a generic grey skin that would look out of place on cinema-themed pages.
+ * What should be reused is **behavior**, not appearance — so behavior lives in the hook,
+ * appearance stays with each caller. DropZone itself uses this hook too; one source of truth.
  */
 export function useFileDrop(opts: {
   onFiles: (files: File[]) => void | Promise<void>;
@@ -80,15 +88,20 @@ export function useFileDrop(opts: {
   onError?: (msg: string) => void;
 }) {
   const { onFiles, accept = DEFAULT_ACCEPT, maxSize = DEFAULT_MAX_SIZE, onError } = opts;
+  const { t: loc } = useLocale();
+  const t = loc as KitT;
   const [isDragging, setIsDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const take = useCallback(async (files: File[]) => {
     if (!files?.length) return;
-    const { ok, rejected } = filterFiles(files, accept, maxSize);
+    const { ok, rejected } = filterFiles(files, accept, maxSize, {
+      overMb: t.kitUi.overSizeMb,
+      unsupported: t.kitUi.unsupportedFormat,
+    });
     if (rejected.length) {
-      const msg = `已拒绝:${rejected.map((r) => `${r.name}(${r.reason})`).join('、')}`.slice(0, 160);
+      const msg = t.kitUi.dropRejected.replace('{list}', rejected.map((r) => `${r.name}(${r.reason})`).join('、')).slice(0, 160);
       setError(msg); onError?.(msg);
       if (!ok.length) return;
     } else setError(null);
@@ -96,12 +109,12 @@ export function useFileDrop(opts: {
     try {
       await onFiles(ok);
     } catch (e) {
-      const m = e instanceof Error ? e.message : '上传失败,请重试';
+      const m = e instanceof Error ? e.message : t.product.dropRetry;
       setError(m.slice(0, 120)); onError?.(m);
     } finally { setBusy(false); }
-  }, [accept, maxSize, onFiles, onError]);
+  }, [accept, maxSize, onFiles, onError, t]);
 
-  /** 摊到目标元素上即可获得拖放能力,外观完全由调用方决定。 */
+  /** Spread onto the target element to get drop behavior; appearance is entirely the caller's. */
   const dropProps = {
     onDragOver: (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); },
     onDragLeave: (e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); },
@@ -120,13 +133,14 @@ export default function DropZone({
   onError,
 }: DropZoneProps) {
   const { t } = useLocale();
-  // v12.339:id 此前写死为 "file-upload" —— 同页放两个 DropZone,后一个的 label
-  // 会指到前一个的 input 上,点第二个区域触发的是第一个的文件选择器。
+  // v12.339: id used to be hard-coded "file-upload" — two DropZones on one page
+  // meant the second label pointed at the first input, so clicking the second
+  // zone opened the first picker.
   const inputId = useId();
   const inputAccept = useMemo(() => acceptToTokens(accept).join(','), [accept]);
 
-  // v12.339:组件与 hook **同一出处** —— 两边各写一套拖放/校验就是漂移的开始。
-  // 保留 fork 的错误透传:把 hook 内的错误消息包装回 Error 交给外层 onError。
+  // v12.339: component and hook share **one source** — two copies of drop/validate is how drift starts.
+  // Keep the fork's error forwarding: wrap the hook's message in Error for the parent's onError.
   const { dropProps, isDragging, busy: uploading, error: uploadError, take } = useFileDrop({
     onFiles: onFilesAccepted, accept, maxSize, onError: (msg) => onError?.(new Error(msg)),
   });
@@ -134,7 +148,7 @@ export default function DropZone({
   const handleFileSelect = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       await take(Array.from(e.target.files || []));
-      e.target.value = '';   // 允许连选同一个文件(否则 change 不触发,看着像没反应)
+      e.target.value = '';   // allow picking the same file again (otherwise change does not fire)
     },
     [take],
   );

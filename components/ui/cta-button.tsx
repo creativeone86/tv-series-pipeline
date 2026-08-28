@@ -7,11 +7,12 @@ import type { ReactNode } from 'react';
 /**
  * CtaButton (v8.3 P2) — Nested CTA (Button-in-Button)
  *
- * 对标 Taste Skill: 主 CTA 的尾随箭头/图标 NEVER sits naked —— 嵌进一个独立圆形"岛屿"。
- * 整个按钮全圆角胶囊, 岛屿贴合右内边距, hover 时岛屿微微右移。
+ * Taste Skill: the primary CTA's trailing arrow/icon NEVER sits naked — nest it
+ * in its own circular "island". Full-pill radius; the island hugs the right inset
+ * and nudges right on hover.
  *
- *   <CtaButton onClick={…}>用此方案去创作</CtaButton>
- *   <CtaButton variant="ghost" icon={<Sparkle/>}>优化</CtaButton>
+ *   <CtaButton onClick={…}>Create with this plan</CtaButton>
+ *   <CtaButton variant="ghost" icon={<Sparkle/>}>Optimize</CtaButton>
  */
 export function CtaButton({
   children,

@@ -26,12 +26,12 @@ describe('FirstRunGuide(v10.5.3)', () => {
 
   it('首跑:显示第 1 步 + 曝光埋点;三步推进逐步埋点;最后一步「开拍」完成', async () => {
     render(<FirstRunGuide />);
-    await waitFor(() => expect(screen.getByText('① 写下你的创意')).toBeTruthy());
-    fireEvent.click(screen.getByText('下一步'));
-    expect(screen.getByText('② 选一个画风')).toBeTruthy();
-    fireEvent.click(screen.getByText('下一步'));
-    expect(screen.getByText('③ 开机 · ROLL')).toBeTruthy();
-    fireEvent.click(screen.getByText('开拍 🎬'));
+    await waitFor(() => expect(screen.getByText('① Write your idea')).toBeTruthy());
+    fireEvent.click(screen.getByText('Next'));
+    expect(screen.getByText('② Pick a look')).toBeTruthy();
+    fireEvent.click(screen.getByText('Next'));
+    expect(screen.getByText('③ ROLL')).toBeTruthy();
+    fireEvent.click(screen.getByText('Roll 🎬'));
     expect(localStorage.getItem(DONE_KEY)).toBe('1');
     await waitFor(() => {
       const evs = trackedEvents(fetchSpy);
@@ -41,8 +41,8 @@ describe('FirstRunGuide(v10.5.3)', () => {
 
   it('跳过:落 localStorage + skipped 埋点', async () => {
     render(<FirstRunGuide />);
-    await waitFor(() => expect(screen.getByText('跳过引导')).toBeTruthy());
-    fireEvent.click(screen.getByText('跳过引导'));
+    await waitFor(() => expect(screen.getByText('Skip guide')).toBeTruthy());
+    fireEvent.click(screen.getByText('Skip guide'));
     expect(localStorage.getItem(DONE_KEY)).toBe('1');
     await waitFor(() => expect(trackedEvents(fetchSpy)).toContain('create_guide_skipped'));
   });
@@ -57,9 +57,9 @@ describe('FirstRunGuide(v10.5.3)', () => {
 
   it('上一步可回退', async () => {
     render(<FirstRunGuide />);
-    await waitFor(() => expect(screen.getByText('① 写下你的创意')).toBeTruthy());
-    fireEvent.click(screen.getByText('下一步'));
-    fireEvent.click(screen.getByText('上一步'));
-    expect(screen.getByText('① 写下你的创意')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('① Write your idea')).toBeTruthy());
+    fireEvent.click(screen.getByText('Next'));
+    fireEvent.click(screen.getByText('Back'));
+    expect(screen.getByText('① Write your idea')).toBeTruthy();
   });
 });
