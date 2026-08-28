@@ -64,7 +64,7 @@ describe('v10.5.1 · 环节真/占位明细(验收:只配 LLM → 剧本/分镜�
   it('全配齐:8 个环节全真,levelLabel=全链真实成片', () => {
     const r = computeReadiness(F({ llm: true, image: true, video: true, tts: true }));
     expect(r.stages.every((s) => s.real)).toBe(true);
-    expect(r.levelLabel).toContain('全链真实成片');
+    expect(r.levelLabel).toMatch(/full pipeline|全链真实成片/i);
   });
 
   it('media-only:画面真但剧本如实标模板', () => {

@@ -7,11 +7,13 @@
  *   - header: engines N/5 + bar + graded copy (level: none/script/visual/film/media-only)
  *   - detail: per-stage chips marked real / mock — no false promises (acceptance)
  * Hidden when all 5 engines are ready; dismissable (localStorage).
- * Data from GET /api/runtime/readiness (levelLabel / stages copy comes from the server).
+ * Stage / level copy is localized on the client from stage.key + level
+ * so a Chinese API payload never leaks into an English UI.
  */
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useLocale } from '@/hooks/use-locale';
+import type { Translations } from '@/lib/i18n';
 
 const DISMISS_KEY = 'qfmj-demo-banner-dismissed';
 
@@ -24,9 +26,29 @@ interface StageTruth {
 interface ReadinessView {
   readyCount: number;
   total: number;
+  level?: string;
   levelLabel: string;
   stages: StageTruth[];
 }
+
+const STAGE_I18N: Record<string, keyof Translations['readiness']> = {
+  script: 'stageScript',
+  storyboardPlan: 'stageStoryboardPlan',
+  audit: 'stageAudit',
+  storyboardImage: 'stageStoryboardImage',
+  shotVideo: 'stageShotVideo',
+  tts: 'stageTts',
+  lipsync: 'stageLipsync',
+  assemble: 'stageAssemble',
+};
+
+const LEVEL_I18N: Record<string, keyof Translations['readiness']> = {
+  none: 'levelNone',
+  script: 'levelScript',
+  visual: 'levelVisual',
+  film: 'levelFilm',
+  'media-only': 'levelMediaOnly',
+};
 
 export function DemoModeBanner() {
   const { t } = useLocale();
@@ -44,6 +66,7 @@ export function DemoModeBanner() {
         setReport({
           readyCount: d.readyCount,
           total: d.total,
+          level: d.level,
           levelLabel: d.levelLabel || '',
           stages: Array.isArray(d.stages) ? d.stages : [],
         });
@@ -56,6 +79,8 @@ export function DemoModeBanner() {
 
   if (!report) return null;
   const pct = Math.round((report.readyCount / Math.max(report.total, 1)) * 100);
+  const levelKey = report.level ? LEVEL_I18N[report.level] : undefined;
+  const levelLabel = (levelKey && t.readiness[levelKey]) || report.levelLabel;
 
   return (
     <div className="mb-4 rounded-lg border border-[var(--cinema-amber-deep,#8a6d1f)] bg-[rgba(232,197,71,0.08)] px-4 py-2.5 text-[12.5px] leading-snug">
@@ -75,7 +100,7 @@ export function DemoModeBanner() {
         >
           <span className="block h-full bg-[var(--cinema-amber,#E8C547)]" style={{ width: `${pct}%` }} />
         </span>
-        <span className="flex-1 opacity-90 min-w-0 truncate" title={report.levelLabel}>{report.levelLabel}</span>
+        <span className="flex-1 opacity-90 min-w-0 truncate" title={levelLabel}>{levelLabel}</span>
         <Link href="/dashboard/health" className="shrink-0 underline opacity-80 hover:opacity-100 whitespace-nowrap">
           {t.collab.demoHowToEnable} →
         </Link>
@@ -95,10 +120,13 @@ export function DemoModeBanner() {
       {/* Detail: per-stage real/mock chips */}
       {report.stages.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5 pl-6">
-          {report.stages.map((s) => (
+          {report.stages.map((s) => {
+            const sk = STAGE_I18N[s.key];
+            const label = (sk && t.readiness[sk]) || s.label;
+            return (
             <span
               key={s.key}
-              title={`${s.label}:${s.real ? t.collab.readinessReal : t.collab.readinessSim}`}
+              title={`${label}:${s.real ? t.collab.readinessReal : t.collab.readinessSim}`}
               className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${
                 s.real
                   ? 'border-emerald-500/35 text-emerald-300'
@@ -106,10 +134,11 @@ export function DemoModeBanner() {
               }`}
             >
               <span aria-hidden="true">{s.real ? '✓' : '○'}</span>
-              {s.label}
+              {label}
               <span className="opacity-75">· {s.real ? t.collab.readinessReal : t.collab.readinessSim}</span>
             </span>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

@@ -24,7 +24,7 @@ describe('v12.273 · 规模与完整性', () => {
       expect(p.name.length, `${p.id} 中文名为空`).toBeGreaterThan(0);
       expect(p.nameEn.length, `${p.id} 英文名为空`).toBeGreaterThan(0);
       expect(['realistic', 'anime', 'artistic', 'retro', 'experimental']).toContain(p.category);
-      expect(p.thumbnail, `${p.id} 缩略图路径应按 id 约定`).toBe(`/styles/${p.id}.jpg`);
+      expect(p.thumbnail, `${p.id} 缩略图路径应按 id 约定`).toMatch(new RegExp(`^/styles/${p.id}\\.(jpg|svg)$`));
       expect(p.popularity).toBeGreaterThanOrEqual(0);
       expect(p.popularity).toBeLessThanOrEqual(100);
     }

@@ -27,9 +27,9 @@ describe('DemoModeBanner(v10.5.1 配置进度条)', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => REPORT } as Response);
     render(<DemoModeBanner />);
     await waitFor(() => expect(screen.getByText(/2\/5/)).toBeTruthy());
-    expect(screen.getByText(/剧本 \/ 分镜规划 \/ 节奏审计全真/)).toBeTruthy();
-    expect(screen.getByText('剧本创作')).toBeTruthy();   // 真 chip
-    expect(screen.getByText('镜头视频')).toBeTruthy();   // 示意 chip
+    expect(screen.getByText(/Script \/ boards \/ pacing audit are real/)).toBeTruthy();
+    expect(screen.getByText('Script')).toBeTruthy();
+    expect(screen.getByText('Shot video')).toBeTruthy();
   });
 
   it('全配齐(readyCount=total)→ 整条隐藏', async () => {

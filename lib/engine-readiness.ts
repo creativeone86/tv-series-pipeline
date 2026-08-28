@@ -49,56 +49,121 @@ export interface ReadinessReport {
   stages: StageTruth[];
 }
 
-const META: Record<EngineKind, { label: string; enableHint: string }> = {
-  llm: { label: '剧本 LLM', enableHint: '配置 OPENAI_API_KEY(任意 OpenAI 兼容网关)' },
-  image: { label: '图像生成', enableHint: '配置 MINIMAX_API_KEY / VIDU_API_KEY 等图像引擎' },
-  video: { label: '视频生成', enableHint: '配置 MINIMAX_API_KEY / VIDU_API_KEY / RUNWAY_API_KEY 等视频引擎' },
-  tts: { label: '配音 TTS', enableHint: '配置 TTS 引擎密钥(MiniMax / ElevenLabs 等)' },
-  lipsync: { label: '口型渲染', enableHint: '已零配置可用(本地 2D);配 LIPSYNC_API_URL 可换真引擎' },
+export type ReadinessLocale = 'en' | 'zh';
+
+export function readinessLocale(locale?: string | null): ReadinessLocale {
+  return locale && locale.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+}
+
+const META: Record<ReadinessLocale, Record<EngineKind, { label: string; enableHint: string }>> = {
+  en: {
+    llm: { label: 'Script LLM', enableHint: 'Set OPENAI_API_KEY (any OpenAI-compatible gateway)' },
+    image: { label: 'Image generation', enableHint: 'Set MINIMAX_API_KEY / VIDU_API_KEY or another image engine' },
+    video: { label: 'Video generation', enableHint: 'Set MINIMAX_API_KEY / VIDU_API_KEY / RUNWAY_API_KEY or another video engine' },
+    tts: { label: 'Voice TTS', enableHint: 'Set a TTS key (MiniMax / ElevenLabs / …)' },
+    lipsync: { label: 'Lip-sync', enableHint: 'Works locally (2D) with no key; set LIPSYNC_API_URL for a real engine' },
+  },
+  zh: {
+    llm: { label: '剧本 LLM', enableHint: '配置 OPENAI_API_KEY(任意 OpenAI 兼容网关)' },
+    image: { label: '图像生成', enableHint: '配置 MINIMAX_API_KEY / VIDU_API_KEY 等图像引擎' },
+    video: { label: '视频生成', enableHint: '配置 MINIMAX_API_KEY / VIDU_API_KEY / RUNWAY_API_KEY 等视频引擎' },
+    tts: { label: '配音 TTS', enableHint: '配置 TTS 引擎密钥(MiniMax / ElevenLabs 等)' },
+    lipsync: { label: '口型渲染', enableHint: '已零配置可用(本地 2D);配 LIPSYNC_API_URL 可换真引擎' },
+  },
 };
 
 // llm 放首位 —— 「一把 key」推荐的第一把就是它(剧本/分镜/审计立刻全真)
 const KINDS: EngineKind[] = ['llm', 'image', 'video', 'tts', 'lipsync'];
 
-const LEVEL_LABEL: Record<ReadinessLevel, string> = {
-  none: '尚未配置引擎 —— 全流程为示意占位(可先逛演示工程)',
-  script: '剧本 / 分镜规划 / 节奏审计全真;画面与视频为示意占位',
-  visual: '剧本 + 分镜图全真;镜头视频为示意占位',
-  film: '全链真实成片',
-  'media-only': '画面/视频引擎已就绪;剧本走基础模板(配 OPENAI_API_KEY 即全真)',
+const LEVEL_LABEL: Record<ReadinessLocale, Record<ReadinessLevel, string>> = {
+  en: {
+    none: 'No engines configured — the full pipeline uses placeholders (you can still browse demos)',
+    script: 'Script / boards / pacing audit are real; pictures and video are placeholders',
+    visual: 'Script + storyboard frames are real; shot video is a placeholder',
+    film: 'Full pipeline is live — real finished film',
+    'media-only': 'Picture/video engines are ready; script uses the basic template (add OPENAI_API_KEY for the full stack)',
+  },
+  zh: {
+    none: '尚未配置引擎 —— 全流程为示意占位(可先逛演示工程)',
+    script: '剧本 / 分镜规划 / 节奏审计全真;画面与视频为示意占位',
+    visual: '剧本 + 分镜图全真;镜头视频为示意占位',
+    film: '全链真实成片',
+    'media-only': '画面/视频引擎已就绪;剧本走基础模板(配 OPENAI_API_KEY 即全真)',
+  },
 };
 
-// 创作环节 → 依赖引擎(dependsOn=null 表示本地恒真:口型零配置、ffmpeg 剪辑合成)
-const STAGE_DEFS: Array<{ key: string; label: string; dependsOn: EngineKind | null }> = [
-  { key: 'script', label: '剧本创作', dependsOn: 'llm' },
-  { key: 'storyboardPlan', label: '分镜规划', dependsOn: 'llm' },
-  { key: 'audit', label: '节奏/麦基审计', dependsOn: 'llm' },
-  { key: 'storyboardImage', label: '分镜图渲染', dependsOn: 'image' },
-  { key: 'shotVideo', label: '镜头视频', dependsOn: 'video' },
-  { key: 'tts', label: '配音', dependsOn: 'tts' },
-  { key: 'lipsync', label: '口型', dependsOn: 'lipsync' },
-  { key: 'assemble', label: '剪辑合成', dependsOn: null },
+const STAGE_DEFS: Array<{ key: string; dependsOn: EngineKind | null }> = [
+  { key: 'script', dependsOn: 'llm' },
+  { key: 'storyboardPlan', dependsOn: 'llm' },
+  { key: 'audit', dependsOn: 'llm' },
+  { key: 'storyboardImage', dependsOn: 'image' },
+  { key: 'shotVideo', dependsOn: 'video' },
+  { key: 'tts', dependsOn: 'tts' },
+  { key: 'lipsync', dependsOn: 'lipsync' },
+  { key: 'assemble', dependsOn: null },
 ];
+
+const STAGE_LABEL: Record<ReadinessLocale, Record<string, string>> = {
+  en: {
+    script: 'Script',
+    storyboardPlan: 'Board plan',
+    audit: 'Pacing / McKee audit',
+    storyboardImage: 'Board render',
+    shotVideo: 'Shot video',
+    tts: 'Voiceover',
+    lipsync: 'Lip-sync',
+    assemble: 'Edit / assemble',
+  },
+  zh: {
+    script: '剧本创作',
+    storyboardPlan: '分镜规划',
+    audit: '节奏/麦基审计',
+    storyboardImage: '分镜图渲染',
+    shotVideo: '镜头视频',
+    tts: '配音',
+    lipsync: '口型',
+    assemble: '剪辑合成',
+  },
+};
 
 /**
  * v12.76.0 存储就绪度(纯函数):local vs s3 决定「产物是否公网可达」——
  * 抠图参考图/跨镜产品一致性要喂外部图像/视频引擎,local(serve-file=localhost)引擎够不到,
  * 只有 S3(配齐 endpoint/bucket/keys)才真正解锁。之前这个坑只在代码注释里,用户看不到。
  */
-export function computeStorageReadiness(env: NodeJS.ProcessEnv = process.env): {
+export function computeStorageReadiness(env: NodeJS.ProcessEnv = process.env, locale?: string | null): {
   driver: 'local' | 's3';
   publicReachable: boolean;
   hint: string;
 } {
+  const loc = readinessLocale(locale);
   const wantS3 = env.STORAGE_DRIVER === 's3';
   const s3Complete = !!(env.S3_ENDPOINT && env.S3_BUCKET && env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY);
   if (wantS3 && s3Complete) {
-    return { driver: 's3', publicReachable: true, hint: 'S3 已配齐,产物公网可达(抠图参考可喂外部引擎)' };
+    return {
+      driver: 's3',
+      publicReachable: true,
+      hint: loc === 'zh'
+        ? 'S3 已配齐,产物公网可达(抠图参考可喂外部引擎)'
+        : 'S3 is configured — assets are publicly reachable (cutout refs can feed external engines)',
+    };
   }
   if (wantS3 && !s3Complete) {
-    return { driver: 'local', publicReachable: false, hint: 'STORAGE_DRIVER=s3 但 S3_* 未配齐,已降级 local;抠图参考仅本地可用' };
+    return {
+      driver: 'local',
+      publicReachable: false,
+      hint: loc === 'zh'
+        ? 'STORAGE_DRIVER=s3 但 S3_* 未配齐,已降级 local;抠图参考仅本地可用'
+        : 'STORAGE_DRIVER=s3 but S3_* is incomplete — fell back to local; cutout refs stay on this machine',
+    };
   }
-  return { driver: 'local', publicReachable: false, hint: 'local 存储:成片/UI 正常;抠图参考图喂外部引擎需配 S3(STORAGE_DRIVER=s3 + S3_*)' };
+  return {
+    driver: 'local',
+    publicReachable: false,
+    hint: loc === 'zh'
+      ? 'local 存储:成片/UI 正常;抠图参考图喂外部引擎需配 S3(STORAGE_DRIVER=s3 + S3_*)'
+      : 'Local storage: films/UI work; cutout refs for external engines need S3 (STORAGE_DRIVER=s3 + S3_*)',
+  };
 }
 
 export function computeLevel(flags: Record<EngineKind, boolean>): ReadinessLevel {
@@ -109,22 +174,23 @@ export function computeLevel(flags: Record<EngineKind, boolean>): ReadinessLevel
   return 'none';
 }
 
-export function computeReadiness(flags: Record<EngineKind, boolean>): ReadinessReport {
+export function computeReadiness(flags: Record<EngineKind, boolean>, locale?: string | null): ReadinessReport {
+  const loc = readinessLocale(locale);
+  const meta = META[loc];
   const engines = KINDS.map<EngineState>((kind) => ({
     kind,
     ready: !!flags[kind],
-    label: META[kind].label,
-    enableHint: META[kind].enableHint,
+    label: meta[kind].label,
+    enableHint: meta[kind].enableHint,
   }));
   const readyCount = engines.filter((e) => e.ready).length;
-  // 图像 + 视频 是真实成片的核心;缺任一即演示模式
   const demoMode = !(flags.image && flags.video);
   const level = computeLevel(flags);
   const stages = STAGE_DEFS.map<StageTruth>((s) => ({
     key: s.key,
-    label: s.label,
+    label: STAGE_LABEL[loc][s.key] || s.key,
     real: s.dependsOn ? !!flags[s.dependsOn] : true,
     dependsOn: s.dependsOn,
   }));
-  return { engines, demoMode, readyCount, total: engines.length, level, levelLabel: LEVEL_LABEL[level], stages };
+  return { engines, demoMode, readyCount, total: engines.length, level, levelLabel: LEVEL_LABEL[loc][level], stages };
 }

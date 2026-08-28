@@ -86,7 +86,12 @@ export default function StylesPage() {
                   src={s.thumbnail}
                   alt={displayName(s)}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  onError={(e) => {
+                    const el = e.currentTarget;
+                    if (el.dataset.fallback) { el.style.display = 'none'; return; }
+                    el.dataset.fallback = '1';
+                    el.src = `/styles/${s.id}.svg`;
+                  }}
                 />
                 <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-black/60 text-[10px] text-amber-200">{locale === 'en' ? s.category : categoryLabel(s.category)}</span>
                 <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-black/60 text-[10px] text-white/80 flex items-center gap-0.5">

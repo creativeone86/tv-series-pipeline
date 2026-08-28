@@ -3257,6 +3257,34 @@ export interface Translations {
     assetHttp: string;
     videoLoadNetwork: string;
   };
+  readiness: {
+    levelNone: string;
+    levelScript: string;
+    levelVisual: string;
+    levelFilm: string;
+    levelMediaOnly: string;
+    stageScript: string;
+    stageStoryboardPlan: string;
+    stageAudit: string;
+    stageStoryboardImage: string;
+    stageShotVideo: string;
+    stageTts: string;
+    stageLipsync: string;
+    stageAssemble: string;
+    engineLlm: string;
+    engineImage: string;
+    engineVideo: string;
+    engineTts: string;
+    engineLipsync: string;
+    hintLlm: string;
+    hintImage: string;
+    hintVideo: string;
+    hintTts: string;
+    hintLipsync: string;
+    storageS3Ok: string;
+    storageS3Partial: string;
+    storageLocal: string;
+  };
   providerHealth: Record<string, string>;
 }
 
@@ -6470,6 +6498,34 @@ const zhCN: Translations = {
     assetForbidden: "素材链接已过期或无权访问",
     assetHttp: "素材不可用(HTTP {n})",
     videoLoadNetwork: "视频加载失败:网络不可达",
+  },
+  readiness: {
+    levelNone: "尚未配置引擎 —— 全流程为示意占位(可先逛演示工程)",
+    levelScript: "剧本 / 分镜规划 / 节奏审计全真;画面与视频为示意占位",
+    levelVisual: "剧本 + 分镜图全真;镜头视频为示意占位",
+    levelFilm: "全链真实成片",
+    levelMediaOnly: "画面/视频引擎已就绪;剧本走基础模板(配 OPENAI_API_KEY 即全真)",
+    stageScript: "剧本创作",
+    stageStoryboardPlan: "分镜规划",
+    stageAudit: "节奏/麦基审计",
+    stageStoryboardImage: "分镜图渲染",
+    stageShotVideo: "镜头视频",
+    stageTts: "配音",
+    stageLipsync: "口型",
+    stageAssemble: "剪辑合成",
+    engineLlm: "剧本 LLM",
+    engineImage: "图像生成",
+    engineVideo: "视频生成",
+    engineTts: "配音 TTS",
+    engineLipsync: "口型渲染",
+    hintLlm: "配置 OPENAI_API_KEY(任意 OpenAI 兼容网关)",
+    hintImage: "配置 MINIMAX_API_KEY / VIDU_API_KEY 等图像引擎",
+    hintVideo: "配置 MINIMAX_API_KEY / VIDU_API_KEY / RUNWAY_API_KEY 等视频引擎",
+    hintTts: "配置 TTS 引擎密钥(MiniMax / ElevenLabs 等)",
+    hintLipsync: "已零配置可用(本地 2D);配 LIPSYNC_API_URL 可换真引擎",
+    storageS3Ok: "S3 已配齐,产物公网可达(抠图参考可喂外部引擎)",
+    storageS3Partial: "STORAGE_DRIVER=s3 但 S3_* 未配齐,已降级 local;抠图参考仅本地可用",
+    storageLocal: "local 存储:成片/UI 正常;抠图参考图喂外部引擎需配 S3(STORAGE_DRIVER=s3 + S3_*)",
   },
   providerHealth: {
     ok: "正常",
@@ -9696,6 +9752,34 @@ const en: Translations = {
     assetForbidden: "Asset link expired or access denied",
     assetHttp: "Asset unavailable (HTTP {n})",
     videoLoadNetwork: "Video failed to load: network unreachable",
+  },
+  readiness: {
+    levelNone: "No engines configured — the full pipeline uses placeholders (you can still browse demos)",
+    levelScript: "Script / boards / pacing audit are real; pictures and video are placeholders",
+    levelVisual: "Script + storyboard frames are real; shot video is a placeholder",
+    levelFilm: "Full pipeline is live — real finished film",
+    levelMediaOnly: "Picture/video engines are ready; script uses the basic template (add OPENAI_API_KEY for the full stack)",
+    stageScript: "Script",
+    stageStoryboardPlan: "Board plan",
+    stageAudit: "Pacing / McKee audit",
+    stageStoryboardImage: "Board render",
+    stageShotVideo: "Shot video",
+    stageTts: "Voiceover",
+    stageLipsync: "Lip-sync",
+    stageAssemble: "Edit / assemble",
+    engineLlm: "Script LLM",
+    engineImage: "Image generation",
+    engineVideo: "Video generation",
+    engineTts: "Voice TTS",
+    engineLipsync: "Lip-sync",
+    hintLlm: "Set OPENAI_API_KEY (any OpenAI-compatible gateway)",
+    hintImage: "Set MINIMAX_API_KEY / VIDU_API_KEY or another image engine",
+    hintVideo: "Set MINIMAX_API_KEY / VIDU_API_KEY / RUNWAY_API_KEY or another video engine",
+    hintTts: "Set a TTS key (MiniMax / ElevenLabs / …)",
+    hintLipsync: "Works locally (2D) with no key; set LIPSYNC_API_URL for a real engine",
+    storageS3Ok: "S3 is configured — assets are publicly reachable (cutout refs can feed external engines)",
+    storageS3Partial: "STORAGE_DRIVER=s3 but S3_* is incomplete — fell back to local; cutout refs stay on this machine",
+    storageLocal: "Local storage: films/UI work; cutout refs for external engines need S3 (STORAGE_DRIVER=s3 + S3_*)",
   },
   providerHealth: {
     ok: "Healthy",

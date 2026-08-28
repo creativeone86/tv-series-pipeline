@@ -14,6 +14,7 @@ import { listTTSProviders } from '@/lib/tts-providers/registry';
 import '@/lib/tts-providers/builtins'; // 副作用:注册内置 TTS provider
 import { lipSyncEngineConfigured } from '@/lib/lipsync-providers';
 import { computeReadiness, computeStorageReadiness } from '@/lib/engine-readiness';
+import { localeFromRequest } from '@/lib/api-i18n';
 import { API_CONFIG } from '@/lib/config';
 
 export const runtime = 'nodejs';
@@ -29,7 +30,8 @@ function anyAvailable(list: Array<{ available: () => boolean }>): boolean {
   });
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const locale = localeFromRequest(req);
   // v10.5.1: LLM 探测与 orchestrator hasLLM 同源语义(含 MOCK_ENGINES 全封闭 = 模板剧本,如实标占位)
   const llm =
     !!API_CONFIG.openai.apiKey &&
@@ -41,7 +43,7 @@ export async function GET() {
     video: anyAvailable(listVideoProviders()),
     tts: anyAvailable(listTTSProviders()),
     lipsync: lipSyncEngineConfigured(),
-  });
+  }, locale);
   // v10.4.0: mock 引擎开关回显 —— journey e2e 据此判断 dev server 是否以 MOCK_ENGINES=1 启动
-  return NextResponse.json({ ...report, mockEngines: process.env.MOCK_ENGINES === '1', storage: computeStorageReadiness() }); // v12.76 存储就绪度
+  return NextResponse.json({ ...report, mockEngines: process.env.MOCK_ENGINES === '1', storage: computeStorageReadiness(process.env, locale) });
 }

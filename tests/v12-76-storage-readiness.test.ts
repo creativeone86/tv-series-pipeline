@@ -21,6 +21,6 @@ describe('v12.76 · computeStorageReadiness', () => {
   it('要 S3 但缺 key → 如实标降级 local', () => {
     const r = computeStorageReadiness({ STORAGE_DRIVER: 's3', S3_ENDPOINT: 'e' } as any);
     expect(r.driver).toBe('local');
-    expect(r.hint).toContain('降级');
+    expect(r.hint).toMatch(/fell back|降级/);
   });
 });
