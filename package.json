@@ -1,6 +1,6 @@
 {
   "name": "wind-comic",
-  "version": "12.337.0",
+  "version": "12.345.0",
   "description": "Wind Comic — multi-agent AI pipeline that turns a one-line idea into a finished short-form drama: script → cinematic storyboards → video, with built-in character consistency, beat-aligned editing, and an open agent ensemble.",
   "main": "index.js",
   "homepage": "https://github.com/ChrisChen667788/wind-comic",
@@ -40,7 +40,8 @@
     "preflight": "node scripts/preflight.mjs",
     "gate:fake-green": "node scripts/fake-green-gate.mjs",
     "media:check": "node scripts/optimize-media.mjs --check",
-    "media:optimize": "node scripts/optimize-media.mjs"
+    "media:optimize": "node scripts/optimize-media.mjs",
+    "ms:sync": "node scripts/modelscope-sync.mjs"
   },
   "keywords": [
     "ai",
@@ -76,8 +77,8 @@
     "@types/node": "^25.9.5",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@xyflow/react": "^12.10.1",
-    "autoprefixer": "^10.4.27",
+    "@xyflow/react": "^12.11.3",
+    "autoprefixer": "^10.5.4",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.11.1",
     "class-variance-authority": "^0.7.1",
@@ -89,7 +90,7 @@
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.577.0",
     "nanoid": "^5.1.16",
-    "next": "^16.2.1",
+    "next": "^16.3.2",
     "openai": "^6.49.0",
     "pg": "^8.22.0",
     "postcss": "^8.5.8",
@@ -97,7 +98,7 @@
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",
     "react-dom": "^19.2.8",
-    "react-hotkeys-hook": "^5.2.4",
+    "react-hotkeys-hook": "^5.3.3",
     "react-window": "^2.2.7",
     "stripe": "^22.1.0",
     "swr": "^2.5.1",
@@ -119,12 +120,12 @@
     "@types/fluent-ffmpeg": "^2.1.28",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/ws": "^8.18.1",
-    "@vitejs/plugin-react": "^6.0.4",
+    "@vitejs/plugin-react": "^6.1.0",
     "jsdom": "^29.1.1",
     "postcss": "^8.5.15",
-    "puppeteer": "^25.7.0",
+    "puppeteer": "^25.8.0",
     "tsx": "^4.23.12",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "overrides": {
     "sharp": "^0.35.3",

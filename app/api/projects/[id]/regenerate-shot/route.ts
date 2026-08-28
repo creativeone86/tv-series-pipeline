@@ -153,11 +153,46 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             videoProvider: provider,
           });
 
+          // v12.343:生成完必须**落盘 + 落库**。原实现只把 videoUrl 从 SSE 吐出去就完了 ——
+          // 而唯一的调用方(create 页「重试镜头 N」)是 `fetch(...).catch(() => {})`,
+          // 连响应都不读。于是每次重试都真花钱生成一条视频,然后**没有任何人保存它**:
+          // 资产表没有记录、磁盘没有文件、刷新页面就没了。
+          // 引擎返回的还是会过期的外链,即便前端存了也只能撑几天(owner 的老素材就是这么没的)。
+          // v12.344:编排器在所有引擎都失败时会回落成 Ken Burns animatic(静止分镜图做缓推),
+          // 并如实返回 isAnimatic:true —— 但这个标记原来**到 API 边界就被丢掉了**,
+          // complete 事件不带它。于是前端和脚本都把「静止图动画」当成真视频,是个假绿。
+          const isAnimatic = (result as { isAnimatic?: boolean }).isAnimatic === true;
+          let savedUrl = result.videoUrl;
+          try {
+            const { persistAsset } = await import('@/lib/asset-storage');
+            const { upsertAsset } = await import('@/lib/repos/asset-repo');
+            const persisted = await persistAsset(result.videoUrl).catch(() => null);
+            if (persisted?.url) savedUrl = persisted.url;
+            else console.warn(`[regenerate-shot] 落盘失败,回退外链(会过期):${String(result.videoUrl).slice(0, 80)}`);
+            await upsertAsset({
+              projectId, type: 'video', name: `Shot ${shotNumber}`, shotNumber,
+              mediaUrls: [savedUrl],
+              persistentUrl: persisted?.url || null,
+              data: {
+                duration: result.duration || 8, provider,
+                // 落库也要记 —— 否则下次「续跑」看到盘上有文件就跳过,
+                // 占位片会被永久当成成片。
+                isAnimatic,
+                regenerated: true, regeneratedAt: new Date().toISOString(),
+              },
+            });
+          } catch (e) {
+            // 存不下不该让这一镜白跑 —— 至少把 URL 交给调用方
+            console.warn('[regenerate-shot] 保存视频资产失败:', e instanceof Error ? e.message : e);
+          }
+
           send('complete', {
             shotNumber,
-            videoUrl: result.videoUrl,
+            videoUrl: savedUrl,
             duration: result.duration || 8,
             version: 2,
+            isAnimatic,
+            ...(isAnimatic ? { degradedReason: '所有视频引擎均不可用(额度耗尽/欠费),已用分镜图生成 Ken Burns 动态占位 —— 不是 AI 生成的视频' } : {}),
           });
         }
       } catch (error) {
