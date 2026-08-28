@@ -11,8 +11,10 @@ import { FilmStripDivider } from '@/components/cinema/primitives';
 import { NumberTicker, AnimatedShinyText } from '@/components/cinema/effects';
 import { ScoreDonut } from '@/components/cinema/dataviz';
 import { readinessLevel } from '@/lib/polish-prompts';
+import { useLocale } from '@/hooks/use-locale';
 
 export default function ProjectsPage() {
+  const { t } = useLocale();
   const router = useRouter();
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +54,7 @@ export default function ProjectsPage() {
   const authHeaders = () => { const t = getToken(); return { 'Content-Type': 'application/json', ...(t ? { Authorization: `Bearer ${t}` } : {}) }; };
 
   const removeProject = async (id: string, title: string) => {
-    if (!confirm(`确定删除「${title || '未命名'}」?此操作不可恢复(连同分镜/视频/配音等全部资产)。`)) return;
+    if (!confirm(t.dashProjects.deleteConfirm.replace('{title}', title || t.dashProjects.untitled))) return;
     setBusyId(id);
     try {
       const res = await fetch(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders() });
@@ -72,10 +74,10 @@ export default function ProjectsPage() {
   };
 
   const statusConfig: Record<string, { label: string; dotColor: string; bgColor: string; icon: any }> = {
-    completed: { label: '已完成', dotColor: 'bg-emerald-400', bgColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: CheckCircle2 },
-    active: { label: '创作中', dotColor: 'bg-[#E8C547]', bgColor: 'bg-[#E8C547]/10 text-[#E8C547] border-[#E8C547]/20', icon: Play },
-    draft: { label: '草稿', dotColor: 'bg-gray-400', bgColor: 'bg-gray-500/10 text-gray-400 border-gray-500/20', icon: Clock },
-    archived: { label: '已下架', dotColor: 'bg-white/30', bgColor: 'bg-white/5 text-white/40 border-white/10', icon: Archive },
+    completed: { label: t.dashProjects.statusCompleted, dotColor: 'bg-emerald-400', bgColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: CheckCircle2 },
+    active: { label: t.dashProjects.statusActive, dotColor: 'bg-[#E8C547]', bgColor: 'bg-[#E8C547]/10 text-[#E8C547] border-[#E8C547]/20', icon: Play },
+    draft: { label: t.dashProjects.statusDraft, dotColor: 'bg-gray-400', bgColor: 'bg-gray-500/10 text-gray-400 border-gray-500/20', icon: Clock },
+    archived: { label: t.dashProjects.statusArchived, dotColor: 'bg-white/30', bgColor: 'bg-white/5 text-white/40 border-white/10', icon: Archive },
   };
 
   // 「全部」默认不含已下架(下架=从主列表移走);选「已下架」单独看
@@ -83,11 +85,11 @@ export default function ProjectsPage() {
     ? projects.filter(p => p.status !== 'archived')
     : projects.filter(p => p.status === filter);
   const filterOptions = [
-    { key: 'all', label: '全部' },
-    { key: 'active', label: '创作中' },
-    { key: 'completed', label: '已完成' },
-    { key: 'draft', label: '草稿' },
-    { key: 'archived', label: '已下架' },
+    { key: 'all', label: t.dashProjects.filterAll },
+    { key: 'active', label: t.dashProjects.filterActive },
+    { key: 'completed', label: t.dashProjects.filterCompleted },
+    { key: 'draft', label: t.dashProjects.filterDraft },
+    { key: 'archived', label: t.dashProjects.filterArchived },
   ];
 
   return (
@@ -96,17 +98,17 @@ export default function ProjectsPage() {
       <div className="flex justify-between items-end mb-6 animate-fade-up gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <AnimatedShinyText className="cinema-eyebrow tracking-widest">FILMOGRAPHY · 项目库</AnimatedShinyText>
+            <AnimatedShinyText className="cinema-eyebrow tracking-widest">FILMOGRAPHY · {t.dashProjects.eyebrow}</AnimatedShinyText>
             <span className="cinema-mono text-[10px] opacity-50">
               <NumberTicker value={projects.length} /> titles
             </span>
           </div>
-          <h1 className="cinema-headline text-3xl">我的项目</h1>
-          <p className="cinema-subhead text-sm mt-1 opacity-70">管理和追踪你的 AI 漫剧创作</p>
+          <h1 className="cinema-headline text-3xl">{t.dashProjects.title}</h1>
+          <p className="cinema-subhead text-sm mt-1 opacity-70">{t.dashProjects.subtitle}</p>
         </div>
         <Link href="/dashboard/create" className="cinema-btn cinema-btn-primary !px-5 !py-2.5 !text-[12px] whitespace-nowrap">
           <Plus className="w-4 h-4" weight="bold" />
-          新建创作
+          {t.dashProjects.newCreate}
         </Link>
       </div>
 
@@ -150,20 +152,19 @@ export default function ProjectsPage() {
         <div className="cinema-card-hi text-center py-16 animate-fade-up px-6">
           <FolderKanban className="w-10 h-10 text-[var(--cinema-amber)] opacity-60 mx-auto mb-4" />
           <div className="cinema-eyebrow tracking-widest mb-2">EMPTY ROSTER</div>
-          <p className="cinema-headline text-base mb-1">{filter === 'all' ? '还没有创作项目' : '没有符合条件的项目'}</p>
-          <p className="cinema-subhead text-xs mb-5 opacity-65 max-w-md mx-auto">输入你的创意，AI 团队将自动为你完成从剧本到成片的全流程创作</p>
+          <p className="cinema-headline text-base mb-1">{filter === 'all' ? t.dashProjects.emptyAll : t.dashProjects.emptyFiltered}</p>
+          <p className="cinema-subhead text-xs mb-5 opacity-65 max-w-md mx-auto">{t.dashProjects.emptyHint}</p>
           <div className="flex items-center justify-center gap-3 flex-wrap">
             <Link href="/dashboard/create" className="cinema-btn cinema-btn-primary !text-[12px]">
               <Sparkles className="w-4 h-4" weight="duotone" />
-              开始创作
+              {t.dashProjects.startCreate}
             </Link>
-            {/* v10.5.0: 还没配引擎 key?先导入演示工程逛逛完整工作台(分镜/成片/审计/导出全真) */}
             <button onClick={importDemo} disabled={importingDemo} className="cinema-btn !text-[12px] disabled:opacity-60">
               <Film className="w-4 h-4" weight="duotone" />
-              {importingDemo ? '导入中…' : '导入演示工程《雨夜信号》'}
+              {importingDemo ? t.dashProjects.importing : t.dashProjects.importDemo}
             </button>
           </div>
-          <p className="cinema-mono text-[10px] opacity-70 mt-3">演示工程无需任何 API key — 4 镜悬疑短剧,成片/审计/导出即刻可看</p>
+          <p className="cinema-mono text-[10px] opacity-70 mt-3">{t.dashProjects.importDemoHint}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -199,13 +200,13 @@ export default function ProjectsPage() {
                   <div className="absolute top-3 left-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button type="button" disabled={busyId === p.id}
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleArchive(p.id, p.status !== 'archived'); }}
-                      title={p.status === 'archived' ? '恢复到主列表' : '下架(从主列表移走,可恢复)'}
+                      title={p.status === 'archived' ? t.dashProjects.restoreTitle : t.dashProjects.archiveTitle}
                       className="w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white border border-white/10">
                       {p.status === 'archived' ? <Restore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
                     </button>
                     <button type="button" disabled={busyId === p.id}
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeProject(p.id, p.title); }}
-                      title="删除项目(不可恢复)"
+                      title={t.dashProjects.deleteTitle}
                       className="w-7 h-7 rounded-full bg-black/60 hover:bg-rose-600/80 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white border border-white/10">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -213,7 +214,7 @@ export default function ProjectsPage() {
                   {shotCount > 0 && (
                     <div className="absolute bottom-3 left-3 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/50 backdrop-blur-sm text-[10px] text-white/80">
                       <Film className="w-3 h-3" />
-                      {shotCount} 镜
+                      {shotCount} {t.dashProjects.shotsUnit}
                     </div>
                   )}
                   {/* AIGC 就绪度徽章 — 数据源是 latestPolish.audit.aigcReadiness, 红黄绿一眼看到该项目剧本是否上得了管线 */}
@@ -221,7 +222,7 @@ export default function ProjectsPage() {
                   {p.latestPolish && !p.latestPolish?.audit?.aigcReadiness?.score ? (
                     <div className="absolute top-3 left-3 flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/40 backdrop-blur-sm text-[10px] text-violet-50 border border-violet-300/30" title="该项目最近润色过, 但未生成 Pro 体检分数">
                       <Sparkles className="w-2.5 h-2.5" />
-                      已润色
+                      {t.dashProjects.polished}
                     </div>
                   ) : null}
                   {/* 快捷"润色"按钮 — 带原剧本跳到 Polish Studio.
@@ -235,10 +236,10 @@ export default function ProjectsPage() {
                         router.push(`/dashboard/polish?projectId=${encodeURIComponent(p.id)}`);
                       }}
                       className="absolute bottom-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#E8C547]/90 hover:bg-[#E8C547] text-black text-[10px] font-semibold shadow-lg shadow-black/30 backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
-                      title="用 Polish Studio 对该项目剧本做润色/行业诊断"
+                      title={t.dashProjects.polishTitle}
                     >
                       <Wand2 className="w-3 h-3" />
-                      润色
+                      {t.dashProjects.polishBtn}
                     </button>
                   ) : null}
                 </div>

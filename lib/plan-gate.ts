@@ -18,6 +18,7 @@
 import { db } from './db';
 import { getUserFromRequest } from '@/app/api/auth/lib';
 import type { AnyTier } from './stripe';
+import { apiT, localeFromRequest } from './api-i18n';
 
 export const TIER_ORDER: AnyTier[] = ['free', 'creator', 'pro', 'enterprise'];
 
@@ -69,11 +70,12 @@ export function checkPlan(request: Request, minTier: AnyTier): PlanCheck {
 }
 
 /** 标准化拒绝响应 — 路由直接 return 这个 */
-export function planRejection(current: AnyTier, required: AnyTier): Response {
+export function planRejection(current: AnyTier, required: AnyTier, request?: Request): Response {
+  const locale = request ? localeFromRequest(request) : 'en';
   return new Response(
     JSON.stringify({
       error: 'plan_required',
-      message: `本功能需要 ${required} 档及以上, 你当前是 ${current}`,
+      message: apiT(locale, 'planRequired', { required, current }),
       current,
       required,
       upgradeUrl: '/dashboard/billing',

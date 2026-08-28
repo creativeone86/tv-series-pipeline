@@ -34,7 +34,7 @@ describe('v9.3.3 · evaluateBudgetGuard', () => {
     const r = evaluateBudgetGuard({ spentCny: 100, capCny: 100 });
     expect(r).toMatchObject({ allow: false, level: 'hard_block', hardCapCny: 100 });
     expect(r.upgradeUrl).toBe('/dashboard/billing');
-    expect(r.message).toMatch(/硬上限/);
+    expect(r.message).toMatch(/hard cap|硬上限/);
   });
 
   it('hard_block: 本次预估会越过硬上限 → 拦截', () => {

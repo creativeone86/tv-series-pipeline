@@ -4,6 +4,7 @@ import { useHotkeys } from 'react-hotkeys-hook';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/toast-provider';
 import { useProjectWorkspaceStore } from '@/lib/store';
+import { useLocale } from '@/hooks/use-locale';
 
 /**
  * 全局工作区快捷键绑定。挂载在 CreationWorkspace 内，不渲染 UI。
@@ -14,6 +15,7 @@ import { useProjectWorkspaceStore } from '@/lib/store';
  *   ?             → 弹出快捷键帮助
  */
 export function WorkspaceHotkeys() {
+  const { t } = useLocale();
   const { showToast } = useToast();
   const router = useRouter();
   const currentProject = useProjectWorkspaceStore(s => s.currentProject);
@@ -21,7 +23,7 @@ export function WorkspaceHotkeys() {
   // Ctrl/Cmd + S — 保存提示（自动保存已由 store 负责）
   useHotkeys('mod+s', (e) => {
     e.preventDefault();
-    showToast({ title: '项目已自动保存', type: 'success', duration: 2000 });
+    showToast({ title: t.product.saved, type: 'success', duration: 2000 });
   }, { enableOnFormTags: false });
 
   // Ctrl/Cmd + Z — 尝试撤销
@@ -30,9 +32,9 @@ export function WorkspaceHotkeys() {
     const store: any = useProjectWorkspaceStore.getState();
     if (typeof store.undo === 'function') {
       store.undo();
-      showToast({ title: '已撤销', type: 'info', duration: 1500 });
+      showToast({ title: t.product.undone, type: 'info', duration: 1500 });
     } else {
-      showToast({ title: '暂无可撤销操作', type: 'info', duration: 1500 });
+      showToast({ title: t.product.nothingToUndo, type: 'info', duration: 1500 });
     }
   }, { enableOnFormTags: false });
 
@@ -50,8 +52,8 @@ export function WorkspaceHotkeys() {
   useHotkeys('shift+/', (e) => {
     e.preventDefault();
     showToast({
-      title: '快捷键',
-      description: 'Ctrl/⌘+S 保存 · Ctrl/⌘+Z 撤销 · Space 播放 · ? 帮助',
+      title: t.product.hotkeys,
+      description: t.product.hotkeysDesc,
       type: 'info', duration: 6000,
     });
   });

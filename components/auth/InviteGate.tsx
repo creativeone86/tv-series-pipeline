@@ -15,6 +15,7 @@
 
 import * as React from 'react';
 import { cn } from '@/lib/utils';
+import { useLocale } from '@/hooks/use-locale';
 
 // ──────────────────────────────────────────────────────────
 // InviteCodeField
@@ -25,14 +26,6 @@ type ValidationState =
   | { status: 'checking' }
   | { status: 'ok'; source?: string }
   | { status: 'error'; message: string };
-
-const ERROR_MESSAGES: Record<string, string> = {
-  NOT_FOUND: '邀请码不存在',
-  ALREADY_USED: '该邀请码已被使用',
-  EXPIRED: '邀请码已过期',
-  REVOKED: '邀请码已被撤销',
-  INVALID: '邀请码格式无效',
-};
 
 export interface InviteCodeFieldProps {
   value: string;
@@ -51,7 +44,15 @@ export function InviteCodeField({
   onInvalid,
   className,
 }: InviteCodeFieldProps) {
+  const { t } = useLocale();
   const [state, setState] = React.useState<ValidationState>({ status: 'idle' });
+  const ERROR_MESSAGES: Record<string, string> = {
+    NOT_FOUND: t.auth.inviteNotFound,
+    ALREADY_USED: t.auth.inviteUsed,
+    EXPIRED: t.auth.inviteExpired,
+    REVOKED: t.auth.inviteRevoked,
+    INVALID: t.auth.inviteInvalid,
+  };
 
   // debounced validate
   React.useEffect(() => {
@@ -79,14 +80,14 @@ export function InviteCodeField({
             setState({ status: 'ok', source: data.source });
             onValid?.(value.trim());
           } else {
-            const msg = ERROR_MESSAGES[data.error ?? 'INVALID'] ?? '邀请码无效';
+            const msg = ERROR_MESSAGES[data.error ?? 'INVALID'] ?? t.auth.inviteGenericInvalid;
             setState({ status: 'error', message: msg });
             onInvalid?.(data.error ?? 'INVALID');
           }
         })
         .catch(err => {
           if (err instanceof DOMException && err.name === 'AbortError') return;
-          setState({ status: 'error', message: '验证失败，请稍后重试' });
+          setState({ status: 'error', message: t.auth.inviteValidateFailed });
         });
     }, 400);
 
@@ -99,8 +100,8 @@ export function InviteCodeField({
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
       <label htmlFor="invite-code" className="text-sm font-medium text-white">
-        邀请码
-        <span className="ml-1 text-xs text-neutral-400">(Beta 版必填)</span>
+        {t.auth.inviteCode}
+        <span className="ml-1 text-xs text-neutral-400">{t.auth.inviteRequired}</span>
       </label>
       <div className="relative">
         <input
@@ -122,7 +123,7 @@ export function InviteCodeField({
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2">
           {state.status === 'checking' && (
-            <span className="text-xs text-neutral-400">校验中...</span>
+            <span className="text-xs text-neutral-400">{t.auth.inviteChecking}</span>
           )}
           {state.status === 'ok' && (
             <span className="text-green-400" aria-label="valid">
@@ -142,14 +143,14 @@ export function InviteCodeField({
         data-testid="invite-code-feedback"
       >
         {state.status === 'ok' && (
-          <span className="text-green-400">✓ 邀请码有效 {state.source ? `· ${state.source}` : ''}</span>
+          <span className="text-green-400">✓ {t.auth.inviteValid} {state.source ? `· ${state.source}` : ''}</span>
         )}
         {state.status === 'error' && <span className="text-red-400">{state.message}</span>}
         {state.status === 'idle' && !value && (
           <span className="text-neutral-500">
-            没有邀请码？
+            {t.auth.noInvite}
             <a href="#waitlist" className="ml-1 text-[#E8C547] underline">
-              申请内测
+              {t.auth.applyBeta}
             </a>
           </span>
         )}
@@ -174,6 +175,7 @@ export interface WaitlistFormProps {
 }
 
 export function WaitlistForm({ source, className }: WaitlistFormProps) {
+  const { t } = useLocale();
   const [email, setEmail] = React.useState('');
   const [purpose, setPurpose] = React.useState('');
   const [state, setState] = React.useState<WaitlistState>({ status: 'idle' });
@@ -196,20 +198,20 @@ export function WaitlistForm({ source, className }: WaitlistFormProps) {
       if (res.ok) {
         setState({
           status: 'success',
-          message: data.message ?? '已加入等待列表，审核结果将通过邮件通知',
+          message: data.message ?? t.auth.waitlistDefaultOk,
         });
         setEmail('');
         setPurpose('');
       } else {
         setState({
           status: 'error',
-          message: data.error ?? '提交失败，请稍后重试',
+          message: data.error ?? t.auth.waitlistSubmitFailed,
         });
       }
     } catch (err) {
       setState({
         status: 'error',
-        message: err instanceof Error ? err.message : '网络错误',
+        message: err instanceof Error ? err.message : t.auth.waitlistNetworkError,
       });
     }
   };
@@ -224,15 +226,15 @@ export function WaitlistForm({ source, className }: WaitlistFormProps) {
       data-testid="waitlist-form"
     >
       <div>
-        <h3 className="text-base font-semibold text-white">申请内测</h3>
+        <h3 className="text-base font-semibold text-white">{t.auth.waitlistTitle}</h3>
         <p className="mt-1 text-xs text-neutral-400">
-          留下邮箱，我们会在审核通过后发送邀请码
+          {t.auth.waitlistDesc}
         </p>
       </div>
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="waitlist-email" className="text-xs text-neutral-300">
-          邮箱
+          {t.auth.email}
         </label>
         <input
           id="waitlist-email"
@@ -248,14 +250,14 @@ export function WaitlistForm({ source, className }: WaitlistFormProps) {
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="waitlist-purpose" className="text-xs text-neutral-300">
-          使用场景 (可选)
+          {t.auth.waitlistPurpose}
         </label>
         <textarea
           id="waitlist-purpose"
           rows={3}
           value={purpose}
           onChange={e => setPurpose(e.target.value)}
-          placeholder="例如：想做自己的连载漫剧 / 用来给客户做广告片 / 学习 AI 视频..."
+          placeholder={t.auth.waitlistPurposePlaceholder}
           className="resize-none rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-[#E8C547]/60 focus:outline-none"
           data-testid="waitlist-purpose"
         />
@@ -270,7 +272,7 @@ export function WaitlistForm({ source, className }: WaitlistFormProps) {
         )}
         data-testid="waitlist-submit"
       >
-        {state.status === 'submitting' ? '提交中...' : '加入 Waitlist'}
+        {state.status === 'submitting' ? t.auth.waitlistSubmitting : t.auth.waitlistSubmit}
       </button>
 
       {state.status === 'success' && (

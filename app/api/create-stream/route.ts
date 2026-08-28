@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { nanoid } from 'nanoid';
 import { runCreatePipeline, activeOrchestrators, type CreatePipelineInput } from '@/lib/create-pipeline';
+import { apiT, localeFromRequest } from '@/lib/api-i18n';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -10,10 +11,11 @@ export const dynamic = 'force-dynamic';
 export { activeOrchestrators };
 
 export async function POST(request: NextRequest) {
+  const locale = localeFromRequest(request);
   const { idea: rawIdea, videoProvider, style, duration, aspect, projectId: clientProjectId, isPreset, enableGates, templateId, primaryCharacterRef, lockedCharacters, cameraDefault, previewSeedImage, references, editStyle, language, sketchLock } = await request.json();
 
   if (!rawIdea || !rawIdea.trim()) {
-    return new Response(JSON.stringify({ error: '请提供故事创意' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ error: apiT(locale, 'ideaRequired') }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
   // v12.4.1: 预算硬上限护栏 —— 主创作链路接入(此前只 preview-shot 接,主管线零拦截)。
@@ -27,12 +29,12 @@ export async function POST(request: NextRequest) {
     const { getUserFromRequest } = await import('@/app/api/auth/lib');
     const uid = getUserFromRequest(request)?.sub;
     if (!uid) {
-      return new Response(JSON.stringify({ error: '创作需要登录', code: 'unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ error: apiT(locale, 'loginRequired'), code: 'unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
     }
     const { assertBudget } = await import('@/lib/budget-enforce');
     // v12.172:动态估算(镜数×引擎秒单价;创建时剧本未出按 8 镜保守)—— 固定 ¥6 对 Kling 20 镜低估 5-10 倍
     const { estimatePipelineCostCny } = await import('@/lib/budget-estimate');
-    const b = await assertBudget({ userId: uid, pendingCostCny: estimatePipelineCostCny({ videoProvider }) });
+    const b = await assertBudget({ userId: uid, pendingCostCny: estimatePipelineCostCny({ videoProvider }), locale });
     if (!b.allow) {
       return new Response(JSON.stringify({ error: b.guard.message, code: 'budget_exceeded', guard: b.guard }), { status: 402, headers: { 'Content-Type': 'application/json' } });
     }
@@ -57,13 +59,11 @@ export async function POST(request: NextRequest) {
   const softThin = finalIdea.length < 30 && normalized.detectedGenres.length === 0;
   if (hardTooShort || softThin) {
     const reason = hardTooShort
-      ? `创意只有 ${finalIdea.length} 字 — 即使是题材关键词也至少需要 10 字才能构成完整意图`
-      : `创意 ${finalIdea.length} 字且没识别出题材线索, 直接生成会得到占位内容`;
+      ? apiT(locale, 'thinIdeaTooShort', { n: finalIdea.length })
+      : apiT(locale, 'thinIdeaNoGenre', { n: finalIdea.length });
     return new Response(
       JSON.stringify({
-        error:
-          reason + '. 建议补充至少 30 字的具体设定: 主角是谁, 在什么时空, 面对什么冲突. ' +
-          '或者点 "🎬 试拍 1 镜" 先看 vibe, 选个故事模板补足设定再开机.',
+        error: `${reason} ${apiT(locale, 'thinIdeaHint')}`,
         category: 'thin-idea',
         normalizedLength: finalIdea.length,
         detectedGenres: normalized.detectedGenres,
@@ -101,6 +101,7 @@ export async function POST(request: NextRequest) {
     editStyle, // v12.0.4 一句指令调剪辑风格
     language, // v12.134 issue #2:显式选剧本语言('auto'/空 → 自动检测)
     sketchLock: sketchLock === true, // v12.143 全片草图锁(对标阅文分镜面板)
+    uiLocale: locale,
   };
   const encoder = new TextEncoder();
   const sseHeaders = { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' };

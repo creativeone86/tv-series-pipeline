@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, WarningCircle as AlertCircle, ArrowsOutSimple as Maximize2, SpeakerHigh as Volume2, SpeakerSlash as VolumeX } from '@phosphor-icons/react';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
+import { useLocale } from '@/hooks/use-locale';
 
 interface Props {
   open: boolean;
@@ -28,6 +29,7 @@ function isVideoUrl(url: string): boolean {
 }
 
 export function VideoModal({ open, onOpenChange, src, title }: Props) {
+  const { t } = useLocale();
   const [videoError, setVideoError] = useState(false);
   const [mounted, setMounted] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -97,7 +99,7 @@ export function VideoModal({ open, onOpenChange, src, title }: Props) {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={title || '视频预览'}
+        aria-label={title || t.product.videoPreview}
         tabIndex={-1}
         className="relative w-[90vw] max-w-5xl rounded-2xl overflow-hidden bg-black border border-white/8 shadow-2xl outline-none"
         style={{ animation: 'zoomIn 0.2s ease' }}
@@ -115,7 +117,7 @@ export function VideoModal({ open, onOpenChange, src, title }: Props) {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-                title="在新窗口中打开"
+                title={t.product.openNewWindow}
               >
                 <Maximize2 className="w-3.5 h-3.5 text-white/70" />
               </a>
@@ -123,7 +125,7 @@ export function VideoModal({ open, onOpenChange, src, title }: Props) {
             <button
               onClick={handleClose}
               className="p-2 rounded-lg hover:bg-white/20 transition-colors"
-              title="关闭"
+              title={t.product.close}
             >
               <X className="w-4 h-4 text-white" />
             </button>
@@ -145,7 +147,7 @@ export function VideoModal({ open, onOpenChange, src, title }: Props) {
         ) : isVideo && videoError ? (
           <div className="w-full aspect-video bg-black flex flex-col items-center justify-center gap-3 px-8 text-center">
             <AlertCircle className="w-8 h-8 text-yellow-500/60" />
-            <p className="text-sm text-gray-300 font-medium">视频加载失败</p>
+            <p className="text-sm text-gray-300 font-medium">{t.product.videoLoadFail}</p>
             {/* v2.12 fix: 给具体可操作的指引,不要只甩个失败 */}
             <div className="text-xs text-gray-400 leading-relaxed max-w-md">
               {src.startsWith('/api/serve-file?path=') ? (

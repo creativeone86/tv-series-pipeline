@@ -9,6 +9,7 @@ import { AgentRole, type Project } from '@/types/agents';
 import { MagicWand as Wand2, Lightning as Zap, Sparkle as Sparkles, Lightbulb, FilmSlate, Play, Pencil } from '@phosphor-icons/react';
 import { validateIdea, sanitizeInput } from '@/lib/validation';
 import { useToast } from '@/components/ui/toast-provider';
+import { useLocale } from '@/hooks/use-locale';
 import { IMG_PREVIEW_DEFAULT } from '@/lib/placeholder-images';
 import { buildInitialNodes, initialEdges } from '@/components/pipeline-canvas';
 import { storyTemplates, type StoryTemplate } from '@/lib/story-templates';
@@ -72,12 +73,6 @@ const durationOptions = ['3s', '5s', '8s']; // 调整为适配当前API能力的
 // v10.6.0 竖屏优先:9:16 置首 = 新项目默认竖屏(2026 短剧主战场);横屏仍一键可选
 const aspectOptions = ['9:16', '16:9', '1:1', '2.35:1'];
 
-// v12.5.0(#4):SSE 里程碑事件 → 全局指示条阶段中文名
-const SSE_PHASE: Record<string, string> = {
-  plan: '导演规划', script: '编写剧本', characters: '设计角色', scenes: '构建场景',
-  storyboardPlans: '分镜规划', storyboards: '渲染分镜', videoClip: '生成视频', videos: '生成视频',
-  pacingAudit: '节奏审计', editResult: '剪辑合成', review: '导演审核', complete: '完成',
-};
 
 const exampleIdeas = [
   { title: '赛博朋克侦探', content: '2077年的新东京，一位赛博侦探接到神秘委托，调查连环失踪案，却发现背后隐藏着惊天阴谋', icon: Zap },
@@ -87,6 +82,10 @@ const exampleIdeas = [
 ];
 
 export default function DashboardCreatePage() {
+  const { t, locale } = useLocale();
+  const zhUi = locale === 'zh-CN' || locale === 'zh-TW';
+  const styleLabel = (p: (typeof stylePresets)[number]) => (zhUi ? p.label : p.en);
+  const styleDesc = (p: (typeof stylePresets)[number]) => (zhUi ? p.desc : p.en);
   const searchParams = useSearchParams();
   const [idea, setIdea] = useState('');
   const [urlInput, setUrlInput] = useState('');
@@ -390,7 +389,14 @@ export default function DashboardCreatePage() {
     const s = useProjectWorkspaceStore.getState();
 
     // v12.5.0(#4):里程碑事件 → 更新全局指示条阶段名(切模块也能看到进度)
-    const phase = SSE_PHASE[type];
+    const phaseMap: Record<string, string> = {
+      plan: t.product.phasePlan, script: t.product.phaseScript, characters: t.product.phaseCharacters,
+      scenes: t.product.phaseScenes, storyboardPlans: t.product.phaseStoryboardPlans,
+      storyboards: t.product.phaseStoryboards, videoClip: t.product.phaseVideo, videos: t.product.phaseVideo,
+      pacingAudit: t.product.phasePacing, editResult: t.product.phaseEdit, review: t.product.phaseReview,
+      complete: t.product.phaseComplete,
+    };
+    const phase = phaseMap[type];
     if (phase) useActiveGenerationStore.getState().setPhase(phase);
 
     switch (type) {
@@ -941,7 +947,7 @@ export default function DashboardCreatePage() {
                   >
                     <div className="aspect-[4/3] relative overflow-hidden">
                       {stylePreviews[preset.id] ? (
-                        <img loading="lazy" decoding="async" src={stylePreviews[preset.id]} alt={preset.label} className="absolute inset-0 w-full h-full object-cover" />
+                        <img loading="lazy" decoding="async" src={stylePreviews[preset.id]} alt={styleLabel(preset)} className="absolute inset-0 w-full h-full object-cover" />
                       ) : (
                         // v8.3 P6.3: AI 金色 emblem 兜底 (无动态预览图时), 再无图则露出 emoji
                         <div className="absolute inset-0 grid place-items-center text-3xl bg-[var(--cinema-surface-2)]">
@@ -964,8 +970,8 @@ export default function DashboardCreatePage() {
                       )}
                     </div>
                     <div className="px-2 py-1.5 bg-[var(--cinema-surface)]">
-                      <div className="cinema-headline text-[11px] truncate">{preset.label}</div>
-                      <div className="cinema-mono text-[9px] opacity-55 truncate mt-0.5">{preset.desc}</div>
+                      <div className="cinema-headline text-[11px] truncate">{styleLabel(preset)}</div>
+                      <div className="cinema-mono text-[9px] opacity-55 truncate mt-0.5">{styleDesc(preset)}</div>
                     </div>
                   </button>
                 );
@@ -1057,9 +1063,9 @@ export default function DashboardCreatePage() {
             <div className="cinema-mono text-[10px] opacity-50 mb-1.5 tracking-wider">剪辑风格 · 一句话调节奏</div>
             <div className="flex flex-wrap gap-1.5 mb-2">
               {[
-                { v: '', label: '默认中速' },
-                { v: '快节奏燃向', label: '⚡ 快节奏燃向' },
-                { v: '慢叙抒情', label: '🌙 慢叙抒情' },
+                { v: '', label: zhUi ? '默认中速' : 'Default mid-tempo' },
+                { v: '快节奏燃向', label: zhUi ? '⚡ 快节奏燃向' : '⚡ Fast & punchy' },
+                { v: '慢叙抒情', label: zhUi ? '🌙 慢叙抒情' : '🌙 Slow & lyrical' },
               ].map((p) => (
                 <button
                   key={p.label}

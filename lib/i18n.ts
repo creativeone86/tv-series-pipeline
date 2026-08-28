@@ -42,6 +42,229 @@ export interface Translations {
     userCenter: string;
     newProject: string;
   };
+  auth: {
+    brand: string;
+    welcomeBack: string;
+    createAccount: string;
+    loginSubtitle: string;
+    registerSubtitle: string;
+    username: string;
+    usernamePlaceholder: string;
+    email: string;
+    emailPlaceholder: string;
+    password: string;
+    passwordPlaceholder: string;
+    demoHint: string;
+    login: string;
+    register: string;
+    loginSuccess: string;
+    registerSuccess: string;
+    actionFailed: string;
+    noAccount: string;
+    hasAccount: string;
+    registerNow: string;
+    loginNow: string;
+    inviteCode: string;
+    inviteRequired: string;
+    inviteNotFound: string;
+    inviteUsed: string;
+    inviteExpired: string;
+    inviteRevoked: string;
+    inviteInvalid: string;
+    inviteGenericInvalid: string;
+    inviteValid: string;
+    inviteChecking: string;
+    inviteValidateFailed: string;
+    noInvite: string;
+    applyBeta: string;
+    waitlistTitle: string;
+    waitlistDesc: string;
+    waitlistPurpose: string;
+    waitlistPurposePlaceholder: string;
+    waitlistSubmit: string;
+    waitlistSubmitting: string;
+    waitlistDefaultOk: string;
+    waitlistSubmitFailed: string;
+    waitlistNetworkError: string;
+  };
+  sidebar: {
+    overview: string;
+    myProjects: string;
+    workshop: string;
+    shortVideo: string;
+    storyIntake: string;
+    series: string;
+    polish: string;
+    u2v: string;
+    mv: string;
+    comic: string;
+    editChat: string;
+    assets: string;
+    characters: string;
+    ipMarket: string;
+    workflows: string;
+    masterPrompt: string;
+    styles: string;
+    cases: string;
+    templates: string;
+    account: string;
+    team: string;
+    health: string;
+    usage: string;
+    jobs: string;
+    billing: string;
+    logout: string;
+    expand: string;
+    collapse: string;
+    backHome: string;
+  };
+  errors: {
+    title: string;
+    description: string;
+    retry: string;
+    backHome: string;
+    pageTitle: string;
+    unknown: string;
+    backWorkbench: string;
+    loading: string;
+  };
+  dashProjects: {
+    eyebrow: string;
+    title: string;
+    subtitle: string;
+    newCreate: string;
+    filterAll: string;
+    filterActive: string;
+    filterCompleted: string;
+    filterDraft: string;
+    filterArchived: string;
+    emptyAll: string;
+    emptyFiltered: string;
+    emptyHint: string;
+    startCreate: string;
+    importing: string;
+    importDemo: string;
+    importDemoHint: string;
+    untitled: string;
+    deleteConfirm: string;
+    restoreTitle: string;
+    archiveTitle: string;
+    deleteTitle: string;
+    shotsUnit: string;
+    polished: string;
+    polishBtn: string;
+    polishTitle: string;
+    statusCompleted: string;
+    statusActive: string;
+    statusDraft: string;
+    statusArchived: string;
+  };
+  dashBanner: {
+    title: string;
+    itemsUnit: string;
+    autoFallback: string;
+    billingLink: string;
+    dismiss: string;
+    exhausted: string;
+    saturated: string;
+    rateLimited: string;
+    authFailed: string;
+    modelUnavailable: string;
+    kling: string;
+    qingyuntop: string;
+  };
+  continueCard: {
+    eyebrow: string;
+    statusActive: string;
+    statusDraft: string;
+    statusCompleted: string;
+    draftReadyLabel: string;
+    draftReadyHint: string;
+    draftEmptyLabel: string;
+    draftEmptyHint: string;
+    activeLabel: string;
+    activeHint: string;
+    completedLabel: string;
+    completedHint: string;
+    openLabel: string;
+    openHint: string;
+  };
+  product: {
+    director: string;
+    writer: string;
+    characterDesign: string;
+    sceneDesign: string;
+    storyboard: string;
+    videoGen: string;
+    editor: string;
+    producer: string;
+    untitled: string;
+    creating: string;
+    collapseChat: string;
+    expandChat: string;
+    timeline: string;
+    shotsUnit: string;
+    generating: string;
+    pending: string;
+    shotN: string;
+    tabDirector: string;
+    tabScript: string;
+    tabCharacters: string;
+    tabScenes: string;
+    tabStoryboard: string;
+    tabContinuity: string;
+    tabVideos: string;
+    tabWorkshop: string;
+    tabTimeline: string;
+    tabPacing: string;
+    tabPullsheet: string;
+    tabVision: string;
+    tabOneclick: string;
+    tabMonitor: string;
+    tabParam: string;
+    tabComments: string;
+    tabDistribution: string;
+    tabPlay: string;
+    groupCreate: string;
+    groupRefine: string;
+    groupReview: string;
+    groupDeliver: string;
+    statShots: string;
+    statCast: string;
+    statScore: string;
+    statStatus: string;
+    statusDone: string;
+    statusMaking: string;
+    emptyCharacters: string;
+    emptyScenes: string;
+    emptyVideos: string;
+    saved: string;
+    undone: string;
+    nothingToUndo: string;
+    hotkeys: string;
+    hotkeysDesc: string;
+    videoPreview: string;
+    openNewWindow: string;
+    close: string;
+    videoLoadFail: string;
+    dropUploading: string;
+    dropFailed: string;
+    dropRetry: string;
+    dropHint: string;
+    dropHintSub: string;
+    dropHere: string;
+    phasePlan: string;
+    phaseScript: string;
+    phaseCharacters: string;
+    phaseScenes: string;
+    phaseStoryboardPlans: string;
+    phaseStoryboards: string;
+    phaseVideo: string;
+    phasePacing: string;
+    phaseEdit: string;
+    phaseReview: string;
+    phaseComplete: string;
+  };
   create: {
     badge: string;
     title: string;
@@ -446,6 +669,174 @@ const zhCN: Translations = {
     cases: '作品案例',
     userCenter: '用户中心',
     newProject: '新建项目',
+  },
+  auth: {
+    brand: '青枫漫剧',
+    welcomeBack: '欢迎回到青枫漫剧',
+    createAccount: '创建账户',
+    loginSubtitle: '使用账号进入创作工作台',
+    registerSubtitle: '注册开始你的创作之旅',
+    username: '用户名',
+    usernamePlaceholder: '输入用户名',
+    email: '邮箱',
+    emailPlaceholder: '输入邮箱地址',
+    password: '密码',
+    passwordPlaceholder: '输入密码',
+    demoHint: '演示账号:demo@qfmanju.ai(密码由部署方 DEMO_PASSWORD 提供)',
+    login: '登录',
+    register: '注册',
+    loginSuccess: '登录成功',
+    registerSuccess: '注册成功',
+    actionFailed: '操作失败',
+    noAccount: '还没有账户？',
+    hasAccount: '已有账户？',
+    registerNow: '立即注册',
+    loginNow: '立即登录',
+    inviteCode: '邀请码',
+    inviteRequired: '(Beta 版必填)',
+    inviteNotFound: '邀请码不存在',
+    inviteUsed: '该邀请码已被使用',
+    inviteExpired: '邀请码已过期',
+    inviteRevoked: '邀请码已被撤销',
+    inviteInvalid: '邀请码格式无效',
+    inviteGenericInvalid: '邀请码无效',
+    inviteValid: '邀请码有效',
+    inviteChecking: '校验中...',
+    inviteValidateFailed: '验证失败，请稍后重试',
+    noInvite: '没有邀请码？',
+    applyBeta: '申请内测',
+    waitlistTitle: '申请内测',
+    waitlistDesc: '留下邮箱，我们会在审核通过后发送邀请码',
+    waitlistPurpose: '使用场景 (可选)',
+    waitlistPurposePlaceholder: '例如：想做自己的连载漫剧 / 用来给客户做广告片 / 学习 AI 视频...',
+    waitlistSubmit: '加入 Waitlist',
+    waitlistSubmitting: '提交中...',
+    waitlistDefaultOk: '已加入等待列表，审核结果将通过邮件通知',
+    waitlistSubmitFailed: '提交失败，请稍后重试',
+    waitlistNetworkError: '网络错误',
+  },
+  sidebar: {
+    overview: '创作总览',
+    myProjects: '我的项目',
+    workshop: '创作工坊',
+    shortVideo: '极速分镜台',
+    storyIntake: '长篇拆解',
+    series: '我的系列',
+    polish: '剧本润色',
+    u2v: '单图变视频',
+    mv: 'MV 卡点',
+    comic: '漫转视频',
+    editChat: '对话式编辑',
+    assets: '素材库',
+    characters: '角色库',
+    ipMarket: 'IP 市场',
+    workflows: '工作流',
+    masterPrompt: 'MasterPrompt',
+    styles: '风格画廊',
+    cases: '灵感库',
+    templates: '模板市场',
+    account: '账户',
+    team: '团队',
+    health: 'API 健康',
+    usage: '用量成本',
+    jobs: '任务队列',
+    billing: '订阅 / 计费',
+    logout: '退出',
+    expand: '展开侧边栏',
+    collapse: '收起侧边栏',
+    backHome: '返回首页',
+  },
+  errors: {
+    title: '出错了',
+    description: '应用遇到了一个意外错误,我们已经记录了这个问题。',
+    retry: '重试',
+    backHome: '返回首页',
+    pageTitle: '页面出错了',
+    unknown: '发生了未知错误,请重试。',
+    backWorkbench: '回工作台',
+    loading: 'Loading',
+  },
+  dashProjects: {
+    eyebrow: '项目库',
+    title: '我的项目',
+    subtitle: '管理和追踪你的 AI 漫剧创作',
+    newCreate: '新建创作',
+    filterAll: '全部',
+    filterActive: '创作中',
+    filterCompleted: '已完成',
+    filterDraft: '草稿',
+    filterArchived: '已下架',
+    emptyAll: '还没有创作项目',
+    emptyFiltered: '没有符合条件的项目',
+    emptyHint: '输入你的创意，AI 团队将自动为你完成从剧本到成片的全流程创作',
+    startCreate: '开始创作',
+    importing: '导入中…',
+    importDemo: '导入演示工程《雨夜信号》',
+    importDemoHint: '演示工程无需任何 API key — 4 镜悬疑短剧,成片/审计/导出即刻可看',
+    untitled: '未命名',
+    deleteConfirm: '确定删除「{title}」?此操作不可恢复(连同分镜/视频/配音等全部资产)。',
+    restoreTitle: '恢复到主列表',
+    archiveTitle: '下架(从主列表移走,可恢复)',
+    deleteTitle: '删除项目(不可恢复)',
+    shotsUnit: '镜',
+    polished: '已润色',
+    polishBtn: '润色',
+    polishTitle: '用 Polish Studio 对该项目剧本做润色/行业诊断',
+    statusCompleted: '已完成',
+    statusActive: '创作中',
+    statusDraft: '草稿',
+    statusArchived: '已下架',
+  },
+  dashBanner: {
+    title: 'API 状态告警',
+    itemsUnit: '项',
+    autoFallback: '创作流程会自动降级到备选引擎; 如需充值, 请联系管理员或查看',
+    billingLink: '计费页',
+    dismiss: '本次会话不再提示',
+    exhausted: '余额耗尽',
+    saturated: '上游饱和',
+    rateLimited: '触发限流',
+    authFailed: '鉴权失败',
+    modelUnavailable: '套餐不支持此模型',
+    kling: '可灵 (视频)',
+    qingyuntop: '青云顶 (聚合网关)',
+  },
+  continueCard: {
+    eyebrow: '继续创作',
+    statusActive: '创作中',
+    statusDraft: '草稿',
+    statusCompleted: '已完成',
+    draftReadyLabel: '回到工坊,开机 ROLL',
+    draftReadyHint: '剧本草稿已就绪,还没跑完整流水线',
+    draftEmptyLabel: '补全设定,开机 ROLL',
+    draftEmptyHint: '这部还停在创意阶段 —— 30 字创意即可开拍',
+    activeLabel: '查看创作进度',
+    activeHint: '流水线进行中;阶段细节可在「任务队列」查看',
+    completedLabel: '看成片 · 跑审计 · 导出',
+    completedHint: '试试节奏审计与 EDL/AAF 导出,弱镜可单镜 4K 重渲',
+    openLabel: '打开项目',
+    openHint: '从上次停下的地方继续',
+  },
+  product: {
+    director: '导演', writer: '编剧', characterDesign: '角色设计', sceneDesign: '场景设计',
+    storyboard: '分镜', videoGen: '视频生成', editor: '剪辑师', producer: '制片人',
+    untitled: '未命名项目', creating: '创作中', collapseChat: '收起对话面板', expandChat: '展开对话面板',
+    timeline: '时间线', shotsUnit: '镜头', generating: '生成中...', pending: '待生成', shotN: '镜头 {n}',
+    tabDirector: '导演台', tabScript: '剧本', tabCharacters: '角色', tabScenes: '场景', tabStoryboard: '分镜',
+    tabContinuity: '连贯性', tabVideos: '视频', tabWorkshop: '镜头工坊', tabTimeline: 'Cinema 时间线',
+    tabPacing: '节奏分析', tabPullsheet: '拉片', tabVision: '成片质检', tabOneclick: '一键成片',
+    tabMonitor: '技术监看', tabParam: '参数联动', tabComments: '评论协作', tabDistribution: '分发', tabPlay: '完整播放',
+    groupCreate: '创作', groupRefine: '精修', groupReview: '审校', groupDeliver: '交付',
+    statShots: '镜头', statCast: '角色', statScore: '评分', statStatus: '状态', statusDone: '已完成', statusMaking: '制作中',
+    emptyCharacters: '还没有角色', emptyScenes: '还没有场景', emptyVideos: '还没有镜头视频',
+    saved: '项目已自动保存', undone: '已撤销', nothingToUndo: '暂无可撤销操作',
+    hotkeys: '快捷键', hotkeysDesc: 'Ctrl/⌘+S 保存 · Ctrl/⌘+Z 撤销 · Space 播放 · ? 帮助',
+    videoPreview: '视频预览', openNewWindow: '在新窗口中打开', close: '关闭', videoLoadFail: '视频加载失败',
+    dropUploading: '上传中...', dropFailed: '上传失败', dropRetry: '上传失败,请重试',
+    dropHint: '拖拽文件到这里，或点击选择文件', dropHintSub: '支持图片和视频，最大 50MB', dropHere: '放开以上传文件...',
+    phasePlan: '导演规划', phaseScript: '编写剧本', phaseCharacters: '设计角色', phaseScenes: '构建场景',
+    phaseStoryboardPlans: '分镜规划', phaseStoryboards: '渲染分镜', phaseVideo: '生成视频',
+    phasePacing: '节奏审计', phaseEdit: '剪辑合成', phaseReview: '导演审核', phaseComplete: '完成',
   },
   create: {
     badge: 'AI 创作工作台',
@@ -885,6 +1276,174 @@ const en: Translations = {
     userCenter: 'Dashboard',
     newProject: 'New Project',
   },
+  auth: {
+    brand: 'Wind Comic',
+    welcomeBack: 'Welcome back to Wind Comic',
+    createAccount: 'Create an account',
+    loginSubtitle: 'Sign in to enter the studio',
+    registerSubtitle: 'Register to start creating',
+    username: 'Username',
+    usernamePlaceholder: 'Enter username',
+    email: 'Email',
+    emailPlaceholder: 'Enter email address',
+    password: 'Password',
+    passwordPlaceholder: 'Enter password',
+    demoHint: 'Demo account: demo@qfmanju.ai (password from DEMO_PASSWORD)',
+    login: 'Sign in',
+    register: 'Sign up',
+    loginSuccess: 'Signed in',
+    registerSuccess: 'Account created',
+    actionFailed: 'Something went wrong',
+    noAccount: 'No account yet?',
+    hasAccount: 'Already have an account?',
+    registerNow: 'Sign up',
+    loginNow: 'Sign in',
+    inviteCode: 'Invite code',
+    inviteRequired: '(required for Beta)',
+    inviteNotFound: 'Invite code not found',
+    inviteUsed: 'This invite code has already been used',
+    inviteExpired: 'Invite code expired',
+    inviteRevoked: 'Invite code revoked',
+    inviteInvalid: 'Invalid invite code format',
+    inviteGenericInvalid: 'Invalid invite code',
+    inviteValid: 'Invite code valid',
+    inviteChecking: 'Checking...',
+    inviteValidateFailed: 'Validation failed, try again later',
+    noInvite: 'No invite code?',
+    applyBeta: 'Request beta access',
+    waitlistTitle: 'Request beta access',
+    waitlistDesc: 'Leave your email and we will send an invite after review',
+    waitlistPurpose: 'Use case (optional)',
+    waitlistPurposePlaceholder: 'e.g. serial comics / client ads / learning AI video...',
+    waitlistSubmit: 'Join waitlist',
+    waitlistSubmitting: 'Submitting...',
+    waitlistDefaultOk: 'You are on the waitlist. We will email you after review.',
+    waitlistSubmitFailed: 'Submit failed, try again later',
+    waitlistNetworkError: 'Network error',
+  },
+  sidebar: {
+    overview: 'Overview',
+    myProjects: 'My Projects',
+    workshop: 'Workshop',
+    shortVideo: 'Storyboard Desk',
+    storyIntake: 'Long-form Split',
+    series: 'My Series',
+    polish: 'Script Polish',
+    u2v: 'Image to Video',
+    mv: 'MV Beats',
+    comic: 'Comic to Video',
+    editChat: 'Edit Chat',
+    assets: 'Assets',
+    characters: 'Characters',
+    ipMarket: 'IP Market',
+    workflows: 'Workflows',
+    masterPrompt: 'MasterPrompt',
+    styles: 'Style Gallery',
+    cases: 'Inspiration',
+    templates: 'Templates',
+    account: 'Account',
+    team: 'Team',
+    health: 'API Health',
+    usage: 'Usage & Cost',
+    jobs: 'Job Queue',
+    billing: 'Billing',
+    logout: 'Sign out',
+    expand: 'Expand sidebar',
+    collapse: 'Collapse sidebar',
+    backHome: 'Back to home',
+  },
+  errors: {
+    title: 'Something went wrong',
+    description: 'The app hit an unexpected error. We have logged it.',
+    retry: 'Retry',
+    backHome: 'Back to home',
+    pageTitle: 'This page failed',
+    unknown: 'An unknown error occurred. Please retry.',
+    backWorkbench: 'Back to studio',
+    loading: 'Loading',
+  },
+  dashProjects: {
+    eyebrow: 'Library',
+    title: 'My Projects',
+    subtitle: 'Manage and track your AI short-drama work',
+    newCreate: 'New project',
+    filterAll: 'All',
+    filterActive: 'In progress',
+    filterCompleted: 'Completed',
+    filterDraft: 'Draft',
+    filterArchived: 'Archived',
+    emptyAll: 'No projects yet',
+    emptyFiltered: 'No projects match this filter',
+    emptyHint: 'Enter an idea and the AI team will take it from script to finished film',
+    startCreate: 'Start creating',
+    importing: 'Importing…',
+    importDemo: 'Import demo: Rain Signal',
+    importDemoHint: 'No API key needed — 4-shot mystery short with film, audit, and export ready',
+    untitled: 'Untitled',
+    deleteConfirm: 'Delete “{title}”? This cannot be undone (storyboards, video, and voiceover included).',
+    restoreTitle: 'Restore to main list',
+    archiveTitle: 'Archive (remove from main list, can restore)',
+    deleteTitle: 'Delete project (cannot undo)',
+    shotsUnit: 'shots',
+    polished: 'Polished',
+    polishBtn: 'Polish',
+    polishTitle: 'Polish this script in Polish Studio',
+    statusCompleted: 'Completed',
+    statusActive: 'In progress',
+    statusDraft: 'Draft',
+    statusArchived: 'Archived',
+  },
+  dashBanner: {
+    title: 'API status alerts',
+    itemsUnit: 'items',
+    autoFallback: 'The pipeline will fall back to backup engines automatically. To top up, contact an admin or open',
+    billingLink: 'Billing',
+    dismiss: 'Hide for this session',
+    exhausted: 'Out of credits',
+    saturated: 'Upstream saturated',
+    rateLimited: 'Rate limited',
+    authFailed: 'Auth failed',
+    modelUnavailable: 'Plan does not include this model',
+    kling: 'Kling (video)',
+    qingyuntop: 'Qingyuntop (gateway)',
+  },
+  continueCard: {
+    eyebrow: 'Continue',
+    statusActive: 'In progress',
+    statusDraft: 'Draft',
+    statusCompleted: 'Completed',
+    draftReadyLabel: 'Back to workshop — ROLL',
+    draftReadyHint: 'Script draft is ready; the full pipeline has not run yet',
+    draftEmptyLabel: 'Finish setup — ROLL',
+    draftEmptyHint: 'Still at the idea stage — about 30 characters is enough to start',
+    activeLabel: 'View generation progress',
+    activeHint: 'Pipeline is running; check Job Queue for stage detail',
+    completedLabel: 'Watch · audit · export',
+    completedHint: 'Try pacing audit and EDL/AAF export; weak shots can be 4K re-rendered',
+    openLabel: 'Open project',
+    openHint: 'Pick up where you left off',
+  },
+  product: {
+    director: 'Director', writer: 'Writer', characterDesign: 'Character Design', sceneDesign: 'Scene Design',
+    storyboard: 'Storyboard', videoGen: 'Video', editor: 'Editor', producer: 'Producer',
+    untitled: 'Untitled project', creating: 'In production', collapseChat: 'Collapse chat', expandChat: 'Expand chat',
+    timeline: 'Timeline', shotsUnit: 'shots', generating: 'Generating...', pending: 'Pending', shotN: 'Shot {n}',
+    tabDirector: 'Director', tabScript: 'Script', tabCharacters: 'Cast', tabScenes: 'Scenes', tabStoryboard: 'Boards',
+    tabContinuity: 'Continuity', tabVideos: 'Video', tabWorkshop: 'Shot Workshop', tabTimeline: 'Cinema Timeline',
+    tabPacing: 'Pacing', tabPullsheet: 'Pull sheet', tabVision: 'QC', tabOneclick: 'One-click film',
+    tabMonitor: 'Monitor', tabParam: 'Params', tabComments: 'Comments', tabDistribution: 'Distribute', tabPlay: 'Play',
+    groupCreate: 'Create', groupRefine: 'Refine', groupReview: 'Review', groupDeliver: 'Deliver',
+    statShots: 'Shots', statCast: 'Cast', statScore: 'Score', statStatus: 'Status', statusDone: 'Done', statusMaking: 'In progress',
+    emptyCharacters: 'No characters yet', emptyScenes: 'No scenes yet', emptyVideos: 'No shot videos yet',
+    saved: 'Project auto-saved', undone: 'Undone', nothingToUndo: 'Nothing to undo',
+    hotkeys: 'Shortcuts', hotkeysDesc: 'Ctrl/⌘+S save · Ctrl/⌘+Z undo · Space play · ? help',
+    videoPreview: 'Video preview', openNewWindow: 'Open in new window', close: 'Close', videoLoadFail: 'Video failed to load',
+    dropUploading: 'Uploading...', dropFailed: 'Upload failed', dropRetry: 'Upload failed, try again',
+    dropHint: 'Drop files here, or click to choose', dropHintSub: 'Images and video, max 50MB', dropHere: 'Release to upload...',
+    phasePlan: 'Directing', phaseScript: 'Writing', phaseCharacters: 'Characters', phaseScenes: 'Scenes',
+    phaseStoryboardPlans: 'Board plan', phaseStoryboards: 'Rendering boards', phaseVideo: 'Generating video',
+    phasePacing: 'Pacing audit', phaseEdit: 'Edit & mux', phaseReview: 'Director review', phaseComplete: 'Done',
+  },
   create: {
     badge: 'AI Creation Studio',
     title: 'Start Your Creative Journey',
@@ -1304,6 +1863,114 @@ const zhTW: Translations = {
     home: '首頁', projects: '我的專案', create: '開始創作', pricing: '定價', profile: '個人資料', settings: '設定',
     polish: '劇本潤色', workbench: '工作台', cases: '作品案例', userCenter: '使用者中心', newProject: '新增專案',
   },
+  auth: {
+    brand: '青楓漫劇',
+    welcomeBack: '歡迎回到青楓漫劇',
+    createAccount: '建立帳戶',
+    loginSubtitle: '使用帳號進入創作工作台',
+    registerSubtitle: '註冊開始你的創作之旅',
+    username: '使用者名稱',
+    usernamePlaceholder: '輸入使用者名稱',
+    email: '電子郵件',
+    emailPlaceholder: '輸入電子郵件',
+    password: '密碼',
+    passwordPlaceholder: '輸入密碼',
+    demoHint: '示範帳號:demo@qfmanju.ai(密碼由部署方 DEMO_PASSWORD 提供)',
+    login: '登入',
+    register: '註冊',
+    loginSuccess: '登入成功',
+    registerSuccess: '註冊成功',
+    actionFailed: '操作失敗',
+    noAccount: '還沒有帳戶？',
+    hasAccount: '已有帳戶？',
+    registerNow: '立即註冊',
+    loginNow: '立即登入',
+    inviteCode: '邀請碼',
+    inviteRequired: '(Beta 版必填)',
+    inviteNotFound: '邀請碼不存在',
+    inviteUsed: '該邀請碼已被使用',
+    inviteExpired: '邀請碼已過期',
+    inviteRevoked: '邀請碼已被撤銷',
+    inviteInvalid: '邀請碼格式無效',
+    inviteGenericInvalid: '邀請碼無效',
+    inviteValid: '邀請碼有效',
+    inviteChecking: '校驗中...',
+    inviteValidateFailed: '驗證失敗，請稍後重試',
+    noInvite: '沒有邀請碼？',
+    applyBeta: '申請內測',
+    waitlistTitle: '申請內測',
+    waitlistDesc: '留下電子郵件，我們會在審核通過後發送邀請碼',
+    waitlistPurpose: '使用場景 (可選)',
+    waitlistPurposePlaceholder: '例如：想做自己的連載漫劇 / 用來給客戶做廣告片 / 學習 AI 影片...',
+    waitlistSubmit: '加入 Waitlist',
+    waitlistSubmitting: '提交中...',
+    waitlistDefaultOk: '已加入等待列表，審核結果將透過郵件通知',
+    waitlistSubmitFailed: '提交失敗，請稍後重試',
+    waitlistNetworkError: '網路錯誤',
+  },
+  sidebar: {
+    overview: '創作總覽', myProjects: '我的專案', workshop: '創作工坊', shortVideo: '極速分鏡台',
+    storyIntake: '長篇拆解', series: '我的系列', polish: '劇本潤色', u2v: '單圖變影片',
+    mv: 'MV 卡點', comic: '漫轉影片', editChat: '對話式編輯', assets: '素材庫',
+    characters: '角色庫', ipMarket: 'IP 市場', workflows: '工作流', masterPrompt: 'MasterPrompt',
+    styles: '風格畫廊', cases: '靈感庫', templates: '模板市場', account: '帳戶',
+    team: '團隊', health: 'API 健康', usage: '用量成本', jobs: '任務佇列',
+    billing: '訂閱 / 計費', logout: '登出', expand: '展開側邊欄', collapse: '收起側邊欄', backHome: '返回首頁',
+  },
+  errors: {
+    title: '出錯了', description: '應用遇到了一個意外錯誤,我們已經記錄了這個問題。',
+    retry: '重試', backHome: '返回首頁', pageTitle: '頁面出錯了',
+    unknown: '發生了未知錯誤,請重試。', backWorkbench: '回工作台', loading: 'Loading',
+  },
+  dashProjects: {
+    eyebrow: '專案庫', title: '我的專案', subtitle: '管理和追蹤你的 AI 漫劇創作', newCreate: '新建創作',
+    filterAll: '全部', filterActive: '創作中', filterCompleted: '已完成', filterDraft: '草稿', filterArchived: '已下架',
+    emptyAll: '還沒有創作專案', emptyFiltered: '沒有符合條件的專案',
+    emptyHint: '輸入你的創意，AI 團隊將自動為你完成從劇本到成片的全流程創作',
+    startCreate: '開始創作', importing: '匯入中…', importDemo: '匯入示範工程《雨夜信號》',
+    importDemoHint: '示範工程無需任何 API key — 4 鏡懸疑短劇,成片/審計/匯出即刻可看',
+    untitled: '未命名', deleteConfirm: '確定刪除「{title}」?此操作不可恢復(連同分鏡/影片/配音等全部資產)。',
+    restoreTitle: '恢復到主列表', archiveTitle: '下架(從主列表移走,可恢復)', deleteTitle: '刪除專案(不可恢復)',
+    shotsUnit: '鏡', polished: '已潤色', polishBtn: '潤色', polishTitle: '用 Polish Studio 對該專案劇本做潤色/行業診斷',
+    statusCompleted: '已完成', statusActive: '創作中', statusDraft: '草稿', statusArchived: '已下架',
+  },
+  dashBanner: {
+    title: 'API 狀態告警', itemsUnit: '項',
+    autoFallback: '創作流程會自動降級到備選引擎; 如需儲值, 請聯繫管理員或查看',
+    billingLink: '計費頁', dismiss: '本次工作階段不再提示',
+    exhausted: '餘額耗盡', saturated: '上游飽和', rateLimited: '觸發限流',
+    authFailed: '鑑權失敗', modelUnavailable: '方案不支援此模型',
+    kling: '可靈 (影片)', qingyuntop: '青雲頂 (聚合閘道)',
+  },
+  continueCard: {
+    eyebrow: '繼續創作', statusActive: '創作中', statusDraft: '草稿', statusCompleted: '已完成',
+    draftReadyLabel: '回到工坊,開機 ROLL', draftReadyHint: '劇本草稿已就緒,還沒跑完整流水線',
+    draftEmptyLabel: '補全設定,開機 ROLL', draftEmptyHint: '這部還停在創意階段 —— 30 字創意即可開拍',
+    activeLabel: '查看創作進度', activeHint: '流水線進行中;階段細節可在「任務佇列」查看',
+    completedLabel: '看成片 · 跑審計 · 匯出', completedHint: '試試節奏審計與 EDL/AAF 匯出,弱鏡可單鏡 4K 重渲',
+    openLabel: '打開專案', openHint: '從上次停下的地方繼續',
+  },
+  product: {
+    director: '導演', writer: '編劇', characterDesign: '角色設計', sceneDesign: '場景設計',
+    storyboard: '分鏡', videoGen: '影片生成', editor: '剪輯師', producer: '製片人',
+    untitled: '未命名專案', creating: '創作中', collapseChat: '收起對話面板', expandChat: '展開對話面板',
+    timeline: '時間線', shotsUnit: '鏡頭', generating: '生成中...', pending: '待生成', shotN: '鏡頭 {n}',
+    tabDirector: '導演台', tabScript: '劇本', tabCharacters: '角色', tabScenes: '場景', tabStoryboard: '分鏡',
+    tabContinuity: '連貫性', tabVideos: '影片', tabWorkshop: '鏡頭工坊', tabTimeline: 'Cinema 時間線',
+    tabPacing: '節奏分析', tabPullsheet: '拉片', tabVision: '成片質檢', tabOneclick: '一鍵成片',
+    tabMonitor: '技術監看', tabParam: '參數聯動', tabComments: '評論協作', tabDistribution: '分發', tabPlay: '完整播放',
+    groupCreate: '創作', groupRefine: '精修', groupReview: '審校', groupDeliver: '交付',
+    statShots: '鏡頭', statCast: '角色', statScore: '評分', statStatus: '狀態', statusDone: '已完成', statusMaking: '製作中',
+    emptyCharacters: '還沒有角色', emptyScenes: '還沒有場景', emptyVideos: '還沒有鏡頭影片',
+    saved: '專案已自動儲存', undone: '已撤銷', nothingToUndo: '暫無可撤銷操作',
+    hotkeys: '快捷鍵', hotkeysDesc: 'Ctrl/⌘+S 儲存 · Ctrl/⌘+Z 撤銷 · Space 播放 · ? 說明',
+    videoPreview: '影片預覽', openNewWindow: '在新視窗中開啟', close: '關閉', videoLoadFail: '影片載入失敗',
+    dropUploading: '上傳中...', dropFailed: '上傳失敗', dropRetry: '上傳失敗,請重試',
+    dropHint: '拖曳檔案到這裡，或點擊選擇檔案', dropHintSub: '支援圖片和影片，最大 50MB', dropHere: '放開以上傳檔案...',
+    phasePlan: '導演規劃', phaseScript: '編寫劇本', phaseCharacters: '設計角色', phaseScenes: '建構場景',
+    phaseStoryboardPlans: '分鏡規劃', phaseStoryboards: '渲染分鏡', phaseVideo: '生成影片',
+    phasePacing: '節奏審計', phaseEdit: '剪輯合成', phaseReview: '導演審核', phaseComplete: '完成',
+  },
   create: {
     badge: 'AI 創作工作台',
     title: '開始你的創作之旅',
@@ -1715,6 +2382,89 @@ const ja: Translations = {
   nav: {
     home: 'ホーム', projects: 'マイプロジェクト', create: '作成', pricing: '料金', profile: 'プロフィール', settings: '設定',
     polish: '脚本推敲', workbench: 'ワークベンチ', cases: '作品事例', userCenter: 'マイページ', newProject: '新規プロジェクト',
+  },
+  auth: {
+    brand: 'Wind Comic', welcomeBack: 'Welcome back to Wind Comic', createAccount: 'Create an account',
+    loginSubtitle: 'Sign in to enter the studio', registerSubtitle: 'Register to start creating',
+    username: 'Username', usernamePlaceholder: 'Enter username', email: 'Email', emailPlaceholder: 'Enter email address',
+    password: 'Password', passwordPlaceholder: 'Enter password',
+    demoHint: 'Demo account: demo@qfmanju.ai (password from DEMO_PASSWORD)',
+    login: 'Sign in', register: 'Sign up', loginSuccess: 'Signed in', registerSuccess: 'Account created',
+    actionFailed: 'Something went wrong', noAccount: 'No account yet?', hasAccount: 'Already have an account?',
+    registerNow: 'Sign up', loginNow: 'Sign in', inviteCode: 'Invite code', inviteRequired: '(required for Beta)',
+    inviteNotFound: 'Invite code not found', inviteUsed: 'This invite code has already been used',
+    inviteExpired: 'Invite code expired', inviteRevoked: 'Invite code revoked',
+    inviteInvalid: 'Invalid invite code format', inviteGenericInvalid: 'Invalid invite code',
+    inviteValid: 'Invite code valid', inviteChecking: 'Checking...', inviteValidateFailed: 'Validation failed, try again later',
+    noInvite: 'No invite code?', applyBeta: 'Request beta access', waitlistTitle: 'Request beta access',
+    waitlistDesc: 'Leave your email and we will send an invite after review',
+    waitlistPurpose: 'Use case (optional)', waitlistPurposePlaceholder: 'e.g. serial comics / client ads / learning AI video...',
+    waitlistSubmit: 'Join waitlist', waitlistSubmitting: 'Submitting...',
+    waitlistDefaultOk: 'You are on the waitlist. We will email you after review.',
+    waitlistSubmitFailed: 'Submit failed, try again later', waitlistNetworkError: 'Network error',
+  },
+  sidebar: {
+    overview: 'Overview', myProjects: 'My Projects', workshop: 'Workshop', shortVideo: 'Storyboard Desk',
+    storyIntake: 'Long-form Split', series: 'My Series', polish: 'Script Polish', u2v: 'Image to Video',
+    mv: 'MV Beats', comic: 'Comic to Video', editChat: 'Edit Chat', assets: 'Assets',
+    characters: 'Characters', ipMarket: 'IP Market', workflows: 'Workflows', masterPrompt: 'MasterPrompt',
+    styles: 'Style Gallery', cases: 'Inspiration', templates: 'Templates', account: 'Account',
+    team: 'Team', health: 'API Health', usage: 'Usage & Cost', jobs: 'Job Queue',
+    billing: 'Billing', logout: 'Sign out', expand: 'Expand sidebar', collapse: 'Collapse sidebar', backHome: 'Back to home',
+  },
+  errors: {
+    title: 'Something went wrong', description: 'The app hit an unexpected error. We have logged it.',
+    retry: 'Retry', backHome: 'Back to home', pageTitle: 'This page failed',
+    unknown: 'An unknown error occurred. Please retry.', backWorkbench: 'Back to studio', loading: 'Loading',
+  },
+  dashProjects: {
+    eyebrow: 'Library', title: 'My Projects', subtitle: 'Manage and track your AI short-drama work', newCreate: 'New project',
+    filterAll: 'All', filterActive: 'In progress', filterCompleted: 'Completed', filterDraft: 'Draft', filterArchived: 'Archived',
+    emptyAll: 'No projects yet', emptyFiltered: 'No projects match this filter',
+    emptyHint: 'Enter an idea and the AI team will take it from script to finished film',
+    startCreate: 'Start creating', importing: 'Importing…', importDemo: 'Import demo: Rain Signal',
+    importDemoHint: 'No API key needed — 4-shot mystery short with film, audit, and export ready',
+    untitled: 'Untitled', deleteConfirm: 'Delete “{title}”? This cannot be undone (storyboards, video, and voiceover included).',
+    restoreTitle: 'Restore to main list', archiveTitle: 'Archive (remove from main list, can restore)', deleteTitle: 'Delete project (cannot undo)',
+    shotsUnit: 'shots', polished: 'Polished', polishBtn: 'Polish', polishTitle: 'Polish this script in Polish Studio',
+    statusCompleted: 'Completed', statusActive: 'In progress', statusDraft: 'Draft', statusArchived: 'Archived',
+  },
+  dashBanner: {
+    title: 'API status alerts', itemsUnit: 'items',
+    autoFallback: 'The pipeline will fall back to backup engines automatically. To top up, contact an admin or open',
+    billingLink: 'Billing', dismiss: 'Hide for this session',
+    exhausted: 'Out of credits', saturated: 'Upstream saturated', rateLimited: 'Rate limited',
+    authFailed: 'Auth failed', modelUnavailable: 'Plan does not include this model',
+    kling: 'Kling (video)', qingyuntop: 'Qingyuntop (gateway)',
+  },
+  continueCard: {
+    eyebrow: 'Continue', statusActive: 'In progress', statusDraft: 'Draft', statusCompleted: 'Completed',
+    draftReadyLabel: 'Back to workshop — ROLL', draftReadyHint: 'Script draft is ready; the full pipeline has not run yet',
+    draftEmptyLabel: 'Finish setup — ROLL', draftEmptyHint: 'Still at the idea stage — about 30 characters is enough to start',
+    activeLabel: 'View generation progress', activeHint: 'Pipeline is running; check Job Queue for stage detail',
+    completedLabel: 'Watch · audit · export', completedHint: 'Try pacing audit and EDL/AAF export; weak shots can be 4K re-rendered',
+    openLabel: 'Open project', openHint: 'Pick up where you left off',
+  },
+  product: {
+    director: 'Director', writer: 'Writer', characterDesign: 'Character Design', sceneDesign: 'Scene Design',
+    storyboard: 'Storyboard', videoGen: 'Video', editor: 'Editor', producer: 'Producer',
+    untitled: 'Untitled project', creating: 'In production', collapseChat: 'Collapse chat', expandChat: 'Expand chat',
+    timeline: 'Timeline', shotsUnit: 'shots', generating: 'Generating...', pending: 'Pending', shotN: 'Shot {n}',
+    tabDirector: 'Director', tabScript: 'Script', tabCharacters: 'Cast', tabScenes: 'Scenes', tabStoryboard: 'Boards',
+    tabContinuity: 'Continuity', tabVideos: 'Video', tabWorkshop: 'Shot Workshop', tabTimeline: 'Cinema Timeline',
+    tabPacing: 'Pacing', tabPullsheet: 'Pull sheet', tabVision: 'QC', tabOneclick: 'One-click film',
+    tabMonitor: 'Monitor', tabParam: 'Params', tabComments: 'Comments', tabDistribution: 'Distribute', tabPlay: 'Play',
+    groupCreate: 'Create', groupRefine: 'Refine', groupReview: 'Review', groupDeliver: 'Deliver',
+    statShots: 'Shots', statCast: 'Cast', statScore: 'Score', statStatus: 'Status', statusDone: 'Done', statusMaking: 'In progress',
+    emptyCharacters: 'No characters yet', emptyScenes: 'No scenes yet', emptyVideos: 'No shot videos yet',
+    saved: 'Project auto-saved', undone: 'Undone', nothingToUndo: 'Nothing to undo',
+    hotkeys: 'Shortcuts', hotkeysDesc: 'Ctrl/⌘+S save · Ctrl/⌘+Z undo · Space play · ? help',
+    videoPreview: 'Video preview', openNewWindow: 'Open in new window', close: 'Close', videoLoadFail: 'Video failed to load',
+    dropUploading: 'Uploading...', dropFailed: 'Upload failed', dropRetry: 'Upload failed, try again',
+    dropHint: 'Drop files here, or click to choose', dropHintSub: 'Images and video, max 50MB', dropHere: 'Release to upload...',
+    phasePlan: 'Directing', phaseScript: 'Writing', phaseCharacters: 'Characters', phaseScenes: 'Scenes',
+    phaseStoryboardPlans: 'Board plan', phaseStoryboards: 'Rendering boards', phaseVideo: 'Generating video',
+    phasePacing: 'Pacing audit', phaseEdit: 'Edit & mux', phaseReview: 'Director review', phaseComplete: 'Done',
   },
   create: {
     badge: 'AI 創作スタジオ',
@@ -2172,6 +2922,89 @@ const ko: Translations = {
     "cases": "쇼케이스",
     "userCenter": "대시보드",
     "newProject": "새 프로젝트"
+  },
+  "auth": {
+    "brand": "Wind Comic", "welcomeBack": "Welcome back to Wind Comic", "createAccount": "Create an account",
+    "loginSubtitle": "Sign in to enter the studio", "registerSubtitle": "Register to start creating",
+    "username": "Username", "usernamePlaceholder": "Enter username", "email": "Email", "emailPlaceholder": "Enter email address",
+    "password": "Password", "passwordPlaceholder": "Enter password",
+    "demoHint": "Demo account: demo@qfmanju.ai (password from DEMO_PASSWORD)",
+    "login": "Sign in", "register": "Sign up", "loginSuccess": "Signed in", "registerSuccess": "Account created",
+    "actionFailed": "Something went wrong", "noAccount": "No account yet?", "hasAccount": "Already have an account?",
+    "registerNow": "Sign up", "loginNow": "Sign in", "inviteCode": "Invite code", "inviteRequired": "(required for Beta)",
+    "inviteNotFound": "Invite code not found", "inviteUsed": "This invite code has already been used",
+    "inviteExpired": "Invite code expired", "inviteRevoked": "Invite code revoked",
+    "inviteInvalid": "Invalid invite code format", "inviteGenericInvalid": "Invalid invite code",
+    "inviteValid": "Invite code valid", "inviteChecking": "Checking...", "inviteValidateFailed": "Validation failed, try again later",
+    "noInvite": "No invite code?", "applyBeta": "Request beta access", "waitlistTitle": "Request beta access",
+    "waitlistDesc": "Leave your email and we will send an invite after review",
+    "waitlistPurpose": "Use case (optional)", "waitlistPurposePlaceholder": "e.g. serial comics / client ads / learning AI video...",
+    "waitlistSubmit": "Join waitlist", "waitlistSubmitting": "Submitting...",
+    "waitlistDefaultOk": "You are on the waitlist. We will email you after review.",
+    "waitlistSubmitFailed": "Submit failed, try again later", "waitlistNetworkError": "Network error"
+  },
+  "sidebar": {
+    "overview": "Overview", "myProjects": "My Projects", "workshop": "Workshop", "shortVideo": "Storyboard Desk",
+    "storyIntake": "Long-form Split", "series": "My Series", "polish": "Script Polish", "u2v": "Image to Video",
+    "mv": "MV Beats", "comic": "Comic to Video", "editChat": "Edit Chat", "assets": "Assets",
+    "characters": "Characters", "ipMarket": "IP Market", "workflows": "Workflows", "masterPrompt": "MasterPrompt",
+    "styles": "Style Gallery", "cases": "Inspiration", "templates": "Templates", "account": "Account",
+    "team": "Team", "health": "API Health", "usage": "Usage & Cost", "jobs": "Job Queue",
+    "billing": "Billing", "logout": "Sign out", "expand": "Expand sidebar", "collapse": "Collapse sidebar", "backHome": "Back to home"
+  },
+  "errors": {
+    "title": "Something went wrong", "description": "The app hit an unexpected error. We have logged it.",
+    "retry": "Retry", "backHome": "Back to home", "pageTitle": "This page failed",
+    "unknown": "An unknown error occurred. Please retry.", "backWorkbench": "Back to studio", "loading": "Loading"
+  },
+  "dashProjects": {
+    "eyebrow": "Library", "title": "My Projects", "subtitle": "Manage and track your AI short-drama work", "newCreate": "New project",
+    "filterAll": "All", "filterActive": "In progress", "filterCompleted": "Completed", "filterDraft": "Draft", "filterArchived": "Archived",
+    "emptyAll": "No projects yet", "emptyFiltered": "No projects match this filter",
+    "emptyHint": "Enter an idea and the AI team will take it from script to finished film",
+    "startCreate": "Start creating", "importing": "Importing…", "importDemo": "Import demo: Rain Signal",
+    "importDemoHint": "No API key needed — 4-shot mystery short with film, audit, and export ready",
+    "untitled": "Untitled", "deleteConfirm": "Delete “{title}”? This cannot be undone (storyboards, video, and voiceover included).",
+    "restoreTitle": "Restore to main list", "archiveTitle": "Archive (remove from main list, can restore)", "deleteTitle": "Delete project (cannot undo)",
+    "shotsUnit": "shots", "polished": "Polished", "polishBtn": "Polish", "polishTitle": "Polish this script in Polish Studio",
+    "statusCompleted": "Completed", "statusActive": "In progress", "statusDraft": "Draft", "statusArchived": "Archived"
+  },
+  "dashBanner": {
+    "title": "API status alerts", "itemsUnit": "items",
+    "autoFallback": "The pipeline will fall back to backup engines automatically. To top up, contact an admin or open",
+    "billingLink": "Billing", "dismiss": "Hide for this session",
+    "exhausted": "Out of credits", "saturated": "Upstream saturated", "rateLimited": "Rate limited",
+    "authFailed": "Auth failed", "modelUnavailable": "Plan does not include this model",
+    "kling": "Kling (video)", "qingyuntop": "Qingyuntop (gateway)"
+  },
+  "continueCard": {
+    "eyebrow": "Continue", "statusActive": "In progress", "statusDraft": "Draft", "statusCompleted": "Completed",
+    "draftReadyLabel": "Back to workshop — ROLL", "draftReadyHint": "Script draft is ready; the full pipeline has not run yet",
+    "draftEmptyLabel": "Finish setup — ROLL", "draftEmptyHint": "Still at the idea stage — about 30 characters is enough to start",
+    "activeLabel": "View generation progress", "activeHint": "Pipeline is running; check Job Queue for stage detail",
+    "completedLabel": "Watch · audit · export", "completedHint": "Try pacing audit and EDL/AAF export; weak shots can be 4K re-rendered",
+    "openLabel": "Open project", "openHint": "Pick up where you left off"
+  },
+  "product": {
+    "director": "Director", "writer": "Writer", "characterDesign": "Character Design", "sceneDesign": "Scene Design",
+    "storyboard": "Storyboard", "videoGen": "Video", "editor": "Editor", "producer": "Producer",
+    "untitled": "Untitled project", "creating": "In production", "collapseChat": "Collapse chat", "expandChat": "Expand chat",
+    "timeline": "Timeline", "shotsUnit": "shots", "generating": "Generating...", "pending": "Pending", "shotN": "Shot {n}",
+    "tabDirector": "Director", "tabScript": "Script", "tabCharacters": "Cast", "tabScenes": "Scenes", "tabStoryboard": "Boards",
+    "tabContinuity": "Continuity", "tabVideos": "Video", "tabWorkshop": "Shot Workshop", "tabTimeline": "Cinema Timeline",
+    "tabPacing": "Pacing", "tabPullsheet": "Pull sheet", "tabVision": "QC", "tabOneclick": "One-click film",
+    "tabMonitor": "Monitor", "tabParam": "Params", "tabComments": "Comments", "tabDistribution": "Distribute", "tabPlay": "Play",
+    "groupCreate": "Create", "groupRefine": "Refine", "groupReview": "Review", "groupDeliver": "Deliver",
+    "statShots": "Shots", "statCast": "Cast", "statScore": "Score", "statStatus": "Status", "statusDone": "Done", "statusMaking": "In progress",
+    "emptyCharacters": "No characters yet", "emptyScenes": "No scenes yet", "emptyVideos": "No shot videos yet",
+    "saved": "Project auto-saved", "undone": "Undone", "nothingToUndo": "Nothing to undo",
+    "hotkeys": "Shortcuts", "hotkeysDesc": "Ctrl/⌘+S save · Ctrl/⌘+Z undo · Space play · ? help",
+    "videoPreview": "Video preview", "openNewWindow": "Open in new window", "close": "Close", "videoLoadFail": "Video failed to load",
+    "dropUploading": "Uploading...", "dropFailed": "Upload failed", "dropRetry": "Upload failed, try again",
+    "dropHint": "Drop files here, or click to choose", "dropHintSub": "Images and video, max 50MB", "dropHere": "Release to upload...",
+    "phasePlan": "Directing", "phaseScript": "Writing", "phaseCharacters": "Characters", "phaseScenes": "Scenes",
+    "phaseStoryboardPlans": "Board plan", "phaseStoryboards": "Rendering boards", "phaseVideo": "Generating video",
+    "phasePacing": "Pacing audit", "phaseEdit": "Edit & mux", "phaseReview": "Director review", "phaseComplete": "Done"
   },
   "create": {
     "badge": "AI 창작 스튜디오",
@@ -2663,6 +3496,89 @@ const ru: Translations = {
     "userCenter": "Панель управления",
     "newProject": "Новый проект"
   },
+  "auth": {
+    "brand": "Wind Comic", "welcomeBack": "Welcome back to Wind Comic", "createAccount": "Create an account",
+    "loginSubtitle": "Sign in to enter the studio", "registerSubtitle": "Register to start creating",
+    "username": "Username", "usernamePlaceholder": "Enter username", "email": "Email", "emailPlaceholder": "Enter email address",
+    "password": "Password", "passwordPlaceholder": "Enter password",
+    "demoHint": "Demo account: demo@qfmanju.ai (password from DEMO_PASSWORD)",
+    "login": "Sign in", "register": "Sign up", "loginSuccess": "Signed in", "registerSuccess": "Account created",
+    "actionFailed": "Something went wrong", "noAccount": "No account yet?", "hasAccount": "Already have an account?",
+    "registerNow": "Sign up", "loginNow": "Sign in", "inviteCode": "Invite code", "inviteRequired": "(required for Beta)",
+    "inviteNotFound": "Invite code not found", "inviteUsed": "This invite code has already been used",
+    "inviteExpired": "Invite code expired", "inviteRevoked": "Invite code revoked",
+    "inviteInvalid": "Invalid invite code format", "inviteGenericInvalid": "Invalid invite code",
+    "inviteValid": "Invite code valid", "inviteChecking": "Checking...", "inviteValidateFailed": "Validation failed, try again later",
+    "noInvite": "No invite code?", "applyBeta": "Request beta access", "waitlistTitle": "Request beta access",
+    "waitlistDesc": "Leave your email and we will send an invite after review",
+    "waitlistPurpose": "Use case (optional)", "waitlistPurposePlaceholder": "e.g. serial comics / client ads / learning AI video...",
+    "waitlistSubmit": "Join waitlist", "waitlistSubmitting": "Submitting...",
+    "waitlistDefaultOk": "You are on the waitlist. We will email you after review.",
+    "waitlistSubmitFailed": "Submit failed, try again later", "waitlistNetworkError": "Network error"
+  },
+  "sidebar": {
+    "overview": "Overview", "myProjects": "My Projects", "workshop": "Workshop", "shortVideo": "Storyboard Desk",
+    "storyIntake": "Long-form Split", "series": "My Series", "polish": "Script Polish", "u2v": "Image to Video",
+    "mv": "MV Beats", "comic": "Comic to Video", "editChat": "Edit Chat", "assets": "Assets",
+    "characters": "Characters", "ipMarket": "IP Market", "workflows": "Workflows", "masterPrompt": "MasterPrompt",
+    "styles": "Style Gallery", "cases": "Inspiration", "templates": "Templates", "account": "Account",
+    "team": "Team", "health": "API Health", "usage": "Usage & Cost", "jobs": "Job Queue",
+    "billing": "Billing", "logout": "Sign out", "expand": "Expand sidebar", "collapse": "Collapse sidebar", "backHome": "Back to home"
+  },
+  "errors": {
+    "title": "Something went wrong", "description": "The app hit an unexpected error. We have logged it.",
+    "retry": "Retry", "backHome": "Back to home", "pageTitle": "This page failed",
+    "unknown": "An unknown error occurred. Please retry.", "backWorkbench": "Back to studio", "loading": "Loading"
+  },
+  "dashProjects": {
+    "eyebrow": "Library", "title": "My Projects", "subtitle": "Manage and track your AI short-drama work", "newCreate": "New project",
+    "filterAll": "All", "filterActive": "In progress", "filterCompleted": "Completed", "filterDraft": "Draft", "filterArchived": "Archived",
+    "emptyAll": "No projects yet", "emptyFiltered": "No projects match this filter",
+    "emptyHint": "Enter an idea and the AI team will take it from script to finished film",
+    "startCreate": "Start creating", "importing": "Importing…", "importDemo": "Import demo: Rain Signal",
+    "importDemoHint": "No API key needed — 4-shot mystery short with film, audit, and export ready",
+    "untitled": "Untitled", "deleteConfirm": "Delete “{title}”? This cannot be undone (storyboards, video, and voiceover included).",
+    "restoreTitle": "Restore to main list", "archiveTitle": "Archive (remove from main list, can restore)", "deleteTitle": "Delete project (cannot undo)",
+    "shotsUnit": "shots", "polished": "Polished", "polishBtn": "Polish", "polishTitle": "Polish this script in Polish Studio",
+    "statusCompleted": "Completed", "statusActive": "In progress", "statusDraft": "Draft", "statusArchived": "Archived"
+  },
+  "dashBanner": {
+    "title": "API status alerts", "itemsUnit": "items",
+    "autoFallback": "The pipeline will fall back to backup engines automatically. To top up, contact an admin or open",
+    "billingLink": "Billing", "dismiss": "Hide for this session",
+    "exhausted": "Out of credits", "saturated": "Upstream saturated", "rateLimited": "Rate limited",
+    "authFailed": "Auth failed", "modelUnavailable": "Plan does not include this model",
+    "kling": "Kling (video)", "qingyuntop": "Qingyuntop (gateway)"
+  },
+  "continueCard": {
+    "eyebrow": "Continue", "statusActive": "In progress", "statusDraft": "Draft", "statusCompleted": "Completed",
+    "draftReadyLabel": "Back to workshop — ROLL", "draftReadyHint": "Script draft is ready; the full pipeline has not run yet",
+    "draftEmptyLabel": "Finish setup — ROLL", "draftEmptyHint": "Still at the idea stage — about 30 characters is enough to start",
+    "activeLabel": "View generation progress", "activeHint": "Pipeline is running; check Job Queue for stage detail",
+    "completedLabel": "Watch · audit · export", "completedHint": "Try pacing audit and EDL/AAF export; weak shots can be 4K re-rendered",
+    "openLabel": "Open project", "openHint": "Pick up where you left off"
+  },
+  "product": {
+    "director": "Director", "writer": "Writer", "characterDesign": "Character Design", "sceneDesign": "Scene Design",
+    "storyboard": "Storyboard", "videoGen": "Video", "editor": "Editor", "producer": "Producer",
+    "untitled": "Untitled project", "creating": "In production", "collapseChat": "Collapse chat", "expandChat": "Expand chat",
+    "timeline": "Timeline", "shotsUnit": "shots", "generating": "Generating...", "pending": "Pending", "shotN": "Shot {n}",
+    "tabDirector": "Director", "tabScript": "Script", "tabCharacters": "Cast", "tabScenes": "Scenes", "tabStoryboard": "Boards",
+    "tabContinuity": "Continuity", "tabVideos": "Video", "tabWorkshop": "Shot Workshop", "tabTimeline": "Cinema Timeline",
+    "tabPacing": "Pacing", "tabPullsheet": "Pull sheet", "tabVision": "QC", "tabOneclick": "One-click film",
+    "tabMonitor": "Monitor", "tabParam": "Params", "tabComments": "Comments", "tabDistribution": "Distribute", "tabPlay": "Play",
+    "groupCreate": "Create", "groupRefine": "Refine", "groupReview": "Review", "groupDeliver": "Deliver",
+    "statShots": "Shots", "statCast": "Cast", "statScore": "Score", "statStatus": "Status", "statusDone": "Done", "statusMaking": "In progress",
+    "emptyCharacters": "No characters yet", "emptyScenes": "No scenes yet", "emptyVideos": "No shot videos yet",
+    "saved": "Project auto-saved", "undone": "Undone", "nothingToUndo": "Nothing to undo",
+    "hotkeys": "Shortcuts", "hotkeysDesc": "Ctrl/⌘+S save · Ctrl/⌘+Z undo · Space play · ? help",
+    "videoPreview": "Video preview", "openNewWindow": "Open in new window", "close": "Close", "videoLoadFail": "Video failed to load",
+    "dropUploading": "Uploading...", "dropFailed": "Upload failed", "dropRetry": "Upload failed, try again",
+    "dropHint": "Drop files here, or click to choose", "dropHintSub": "Images and video, max 50MB", "dropHere": "Release to upload...",
+    "phasePlan": "Directing", "phaseScript": "Writing", "phaseCharacters": "Characters", "phaseScenes": "Scenes",
+    "phaseStoryboardPlans": "Board plan", "phaseStoryboards": "Rendering boards", "phaseVideo": "Generating video",
+    "phasePacing": "Pacing audit", "phaseEdit": "Edit & mux", "phaseReview": "Director review", "phaseComplete": "Done"
+  },
   "create": {
     "badge": "AI-студия создания",
     "title": "Начните свой творческий путь",
@@ -3120,32 +4036,31 @@ export const LOCALE_LABELS: Record<Locale, string> = {
 
 /**
  * 任意语言标签 (浏览器 / Accept-Language) → 我们支持的 Locale.
- * zh-TW / zh-Hant / zh-HK → 繁中; 其余 zh → 简中; en* → en; ja* → ja; 兜底 zh-CN.
+ * zh-TW / zh-Hant / zh-HK → 繁中; 其余 zh → 简中; en* → en; ja* → ja; 空/未知 → en.
  */
 export function normalizeLocale(input: string | null | undefined): Locale {
   const s = (input || '').trim().toLowerCase();
-  if (!s) return 'zh-CN';
+  if (!s) return 'en';
   if (s.startsWith('zh-tw') || s.startsWith('zh-hant') || s.startsWith('zh-hk') || s.startsWith('zh-mo')) return 'zh-TW';
   if (s.startsWith('zh')) return 'zh-CN';
   if (s.startsWith('ja')) return 'ja';
   if (s.startsWith('ko')) return 'ko';
   if (s.startsWith('ru')) return 'ru';
   if (s.startsWith('en')) return 'en';
-  // v12.186:未知语言标签回退 en(此前回 zh-CN —— 俄语等非中文用户看全中文 UI);
-  // 空输入仍回 zh-CN(无信号维持主用户群默认)。
+  // empty / unknown tags fall back to en
   return 'en';
 }
 
 /** 解析 Accept-Language 头, 按 q 权重挑第一个我们支持的语言. */
 export function resolveLocaleFromHeader(acceptLanguage: string | null | undefined): Locale {
-  if (!acceptLanguage) return 'zh-CN';
+  if (!acceptLanguage) return 'en';
   const parts = acceptLanguage.split(',').map((p) => {
     const [tag, q] = p.trim().split(';q=');
     return { tag: tag.trim(), q: q ? parseFloat(q) : 1 };
   }).sort((a, b) => b.q - a.q);
   for (const { tag } of parts) {
     const loc = normalizeLocale(tag);
-    // normalizeLocale 兜底总返 zh-CN; 只有真匹配上才提前返回
+    // normalizeLocale 兜底总返 en; 只有真匹配上才提前返回
     const s = tag.toLowerCase();
     if (s.startsWith('zh') || s.startsWith('en') || s.startsWith('ja') || s.startsWith('ko') || s.startsWith('ru')) return loc;
   }
@@ -3153,7 +4068,7 @@ export function resolveLocaleFromHeader(acceptLanguage: string | null | undefine
   return 'en';
 }
 
-/** 深合并: 用 locale 覆盖 zhCN base, 缺的 key 自动回退简中 (未来部分翻译也安全). */
+/** 深合并: 用 locale 覆盖 en base, 缺的 key 自动回退英文. */
 function deepMergeFallback(base: any, over: any): any {
   if (over == null) return base;
   if (typeof base !== 'object' || typeof over !== 'object') return over ?? base;
@@ -3168,19 +4083,19 @@ export function getTranslations(locale: Locale): Translations {
   // v12.186:ko/ru 文案包未成 —— 以 en 字典兜底(键级渐进补真文案零结构改动)
   const effective = (locale === 'ko' || locale === 'ru') ? 'en' : locale;
   const t = translations[effective as keyof typeof translations];
-  if (!t) return translations['zh-CN'];
-  // 以 zhCN 为底回退, 防某 locale 漏 key 时出现 undefined
-  return deepMergeFallback(zhCN, t) as Translations;
+  if (!t) return translations.en;
+  // 以 en 为底回退, 防某 locale 漏 key 时出现中文(或 undefined)
+  return deepMergeFallback(en, t) as Translations;
 }
 
-/** 点路径取翻译 (e.g. t('ja', 'nav.projects')). 缺失回退简中, 再缺回 path. */
+/** 点路径取翻译 (e.g. t('ja', 'nav.projects')). 缺失回退英文, 再缺回 path. */
 export function t(locale: Locale, path: string): string {
   const get = (obj: any) => path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
-  const v = get(translations[locale]) ?? get(zhCN);
+  const v = get(translations[locale]) ?? get(en);
   return typeof v === 'string' ? v : path;
 }
 
 export function useTranslations(locale?: Locale) {
-  const currentLocale = locale || 'zh-CN';
+  const currentLocale = locale || 'en';
   return getTranslations(currentLocale);
 }

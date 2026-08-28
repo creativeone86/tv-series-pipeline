@@ -67,7 +67,7 @@ export async function createUser(input: CreateUserInput): Promise<UserRow> {
      VALUES (?, ?, ?, ?, ?, ?, ?, 'free', ?)`,
     [
       id, input.email, input.passwordHash, input.name,
-      input.role || 'user', input.avatarUrl ?? null, input.locale || 'zh', createdAt,
+      input.role || 'user', input.avatarUrl ?? null, input.locale || 'en', createdAt,
     ],
   );
   const row = await findUserById(id);

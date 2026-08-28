@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { api } from '@/lib/api-client';
 import { getStoredUser, storeUser, clearUser, setToken, clearToken } from '@/lib/auth';
+import { applyLocaleIfUnset } from '@/hooks/use-locale';
 
 interface User {
   id: string;
@@ -37,11 +38,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const stored = getStoredUser();
     if (stored) {
       setUser(stored);
+      applyLocaleIfUnset(stored.locale);
       // Verify token is still valid
       api.me()
         .then((data: any) => {
           setUser(data);
           storeUser(data);
+          applyLocaleIfUnset(data?.locale);
         })
         .catch(() => {
           clearToken();
@@ -59,6 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(data.token);
     storeUser(data.user);
     setUser(data.user);
+    applyLocaleIfUnset(data.user?.locale);
   }, []);
 
   const register = useCallback(async (email: string, password: string, name: string) => {
@@ -66,6 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(data.token);
     storeUser(data.user);
     setUser(data.user);
+    applyLocaleIfUnset(data.user?.locale);
   }, []);
 
   const logout = useCallback(() => {

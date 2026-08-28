@@ -59,14 +59,14 @@ describe('v5.0 · normalizeLocale', () => {
     ['zh-TW', 'zh-TW'], ['zh-Hant', 'zh-TW'], ['zh-HK', 'zh-TW'], ['ZH-tw', 'zh-TW'],
     ['en', 'en'], ['en-US', 'en'], ['EN-GB', 'en'],
     ['ja', 'ja'], ['ja-JP', 'ja'],
-    ['', 'zh-CN'], ['fr', 'en'], ['de-DE', 'en'], // v12.186:未知语言回退 en(非中文用户不再看全中文)
+    ['', 'en'], ['fr', 'en'], ['de-DE', 'en'], // 空/未知 → en
   ];
   for (const [input, expected] of cases) {
     it(`"${input}" → ${expected}`, () => expect(normalizeLocale(input)).toBe(expected));
   }
-  it('null/undefined → zh-CN', () => {
-    expect(normalizeLocale(null)).toBe('zh-CN');
-    expect(normalizeLocale(undefined)).toBe('zh-CN');
+  it('null/undefined → en', () => {
+    expect(normalizeLocale(null)).toBe('en');
+    expect(normalizeLocale(undefined)).toBe('en');
   });
 });
 
@@ -79,9 +79,9 @@ describe('v5.0 · resolveLocaleFromHeader', () => {
   it('unsupported-only → en(v12.186:非中文用户回退英文)', () => {
     expect(resolveLocaleFromHeader('fr,de;q=0.8')).toBe('en'); // v12.186 同上
   });
-  it('empty → zh-CN', () => {
-    expect(resolveLocaleFromHeader('')).toBe('zh-CN');
-    expect(resolveLocaleFromHeader(null)).toBe('zh-CN');
+  it('empty → en', () => {
+    expect(resolveLocaleFromHeader('')).toBe('en');
+    expect(resolveLocaleFromHeader(null)).toBe('en');
   });
 });
 

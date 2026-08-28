@@ -7,6 +7,7 @@ import { SiteHeader } from '@/components/site-header';
 import { useAuth } from '@/components/auth-provider';
 import { useToast } from '@/components/ui/toast-provider';
 import { IMG_AUTH_BG1, IMG_AUTH_BG2 } from '@/lib/placeholder-images';
+import { useLocale } from '@/hooks/use-locale';
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -18,6 +19,7 @@ export default function AuthPage() {
   const router = useRouter();
   const { login, register } = useAuth();
   const { showToast } = useToast();
+  const { t } = useLocale();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,10 +31,10 @@ export default function AuthPage() {
       } else {
         await register(email, password, name);
       }
-      showToast({ title: mode === 'login' ? '登录成功' : '注册成功', type: 'success' });
+      showToast({ title: mode === 'login' ? t.auth.loginSuccess : t.auth.registerSuccess, type: 'success' });
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.message || '操作失败');
+      setError(err.message || t.auth.actionFailed);
     } finally {
       setLoading(false);
     }
@@ -49,48 +51,48 @@ export default function AuthPage() {
               <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
             </div>
             <div>
-              <span className="text-lg font-bold brand-gradient">青枫漫剧</span>
+              <span className="text-lg font-bold brand-gradient">{t.auth.brand}</span>
               <div className="text-[10px] text-[var(--soft)] tracking-widest uppercase">AI Studio</div>
             </div>
           </div>
           <h1 className="text-2xl font-bold mb-2">
-            {mode === 'login' ? '欢迎回到青枫漫剧' : '创建账户'}
+            {mode === 'login' ? t.auth.welcomeBack : t.auth.createAccount}
           </h1>
           <p className="text-sm text-[var(--muted)] mb-6">
-            {mode === 'login' ? '使用账号进入创作工作台' : '注册开始你的创作之旅'}
+            {mode === 'login' ? t.auth.loginSubtitle : t.auth.registerSubtitle}
           </p>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {mode === 'register' && (
               <label className="flex flex-col gap-2 text-sm">
-                用户名
+                {t.auth.username}
                 <input
                   type="text" value={name} onChange={(e) => setName(e.target.value)} required
                   className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-4 py-3 text-white focus:border-[#E8C547]/40 focus:outline-none focus:ring-1 focus:ring-[#E8C547]/20 transition-all placeholder:text-[var(--soft)]"
-                  placeholder="输入用户名"
+                  placeholder={t.auth.usernamePlaceholder}
                 />
               </label>
             )}
             <label className="flex flex-col gap-2 text-sm">
-              邮箱
+              {t.auth.email}
               <input
                 type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
                 className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-4 py-3 text-white focus:border-[#E8C547]/40 focus:outline-none focus:ring-1 focus:ring-[#E8C547]/20 transition-all placeholder:text-[var(--soft)]"
-                placeholder="输入邮箱地址"
+                placeholder={t.auth.emailPlaceholder}
               />
             </label>
             <label className="flex flex-col gap-2 text-sm">
-              密码
+              {t.auth.password}
               <input
                 type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
                 className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-4 py-3 text-white focus:border-[#E8C547]/40 focus:outline-none focus:ring-1 focus:ring-[#E8C547]/20 transition-all placeholder:text-[var(--soft)]"
-                placeholder="输入密码"
+                placeholder={t.auth.passwordPlaceholder}
               />
             </label>
 
             {mode === 'login' && (
               <div className="flex justify-between items-center text-xs text-[var(--soft)]">
-                <span>演示账号:demo@qfmanju.ai(密码由部署方 DEMO_PASSWORD 提供)</span>
+                <span>{t.auth.demoHint}</span>
               </div>
             )}
 
@@ -99,14 +101,14 @@ export default function AuthPage() {
             )}
 
             <button type="submit" disabled={loading} className="btn-primary py-3 rounded-xl text-sm w-full">
-              {loading ? '...' : mode === 'login' ? '登录' : '注册'}
+              {loading ? '...' : mode === 'login' ? t.auth.login : t.auth.register}
             </button>
           </form>
 
           <p className="text-sm text-[var(--soft)] text-center mt-6">
-            {mode === 'login' ? '还没有账户？' : '已有账户？'}
+            {mode === 'login' ? t.auth.noAccount : t.auth.hasAccount}
             <button onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }} className="ml-1 text-[var(--primary)] hover:underline">
-              {mode === 'login' ? '立即注册' : '立即登录'}
+              {mode === 'login' ? t.auth.registerNow : t.auth.loginNow}
             </button>
           </p>
         </div>

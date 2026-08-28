@@ -13,12 +13,14 @@ import { OverallProgressBar } from '@/components/ui/overall-progress';
 import { WorkspaceHotkeys } from '@/components/workspace-hotkeys';
 import { InviteProjectButton } from '@/components/project/invite-project-button';
 import { useAuth } from '@/components/auth-provider';
+import { useLocale } from '@/hooks/use-locale';
 
 interface Props {
   project: Project;
 }
 
 export function CreationWorkspace({ project }: Props) {
+  const { t } = useLocale();
   // 移动端默认收起 chat 面板
   const [chatOpen, setChatOpen] = useState(() => {
     if (typeof window === 'undefined') return true;
@@ -33,10 +35,19 @@ export function CreationWorkspace({ project }: Props) {
 
   useEffect(() => {
     setCurrentProject(project);
-    const nodes = buildInitialNodes(assets);
+    const nodes = buildInitialNodes(assets, {
+      director: t.product.director,
+      writer: t.product.writer,
+      characterDesign: t.product.characterDesign,
+      sceneDesign: t.product.sceneDesign,
+      storyboard: t.product.storyboard,
+      videoGen: t.product.videoGen,
+      editor: t.product.editor,
+      producer: t.product.producer,
+    });
     setNodes(nodes);
     setEdges(initialEdges);
-  }, [project.id]);
+  }, [project.id, t]);
 
   const mascotMood = isProducing ? 'working' : 'completed';
 
@@ -49,7 +60,7 @@ export function CreationWorkspace({ project }: Props) {
       return {
         shotNumber: v.shotNumber || 0,
         videoUrl: v.mediaUrls?.[0] || '',
-        description: sb?.data?.description || v.name || `镜头 ${v.shotNumber}`,
+        description: sb?.data?.description || v.name || t.product.shotN.replace('{n}', String(v.shotNumber)),
         duration: v.data?.duration || 8,
         status: v.data?.status || 'pending',
         cameraAngle: sb?.data?.planData?.cameraAngle || '',
@@ -60,7 +71,7 @@ export function CreationWorkspace({ project }: Props) {
   const handleShotPlay = (videoUrl: string, shotNumber: number) => {
     if (videoUrl && !videoUrl.startsWith('data:')) {
       setSelectedVideoSrc(videoUrl);
-      setSelectedVideoTitle(`镜头 ${shotNumber}`);
+      setSelectedVideoTitle(t.product.shotN.replace('{n}', String(shotNumber)));
       setVideoModalOpen(true);
     }
   };
@@ -74,13 +85,13 @@ export function CreationWorkspace({ project }: Props) {
           <button
             onClick={() => setChatOpen(!chatOpen)}
             className="p-1.5 rounded-lg hover:bg-white/[0.06] transition-colors text-white/40 hover:text-white/70"
-            title={chatOpen ? '收起对话面板' : '展开对话面板'}
+            title={chatOpen ? t.product.collapseChat : t.product.expandChat}
           >
             {chatOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
           </button>
           <div>
-            <h1 className="text-sm font-medium text-white/90 tracking-tight">{project.title || '未命名项目'}</h1>
-            <div className="text-[10px] text-white/25 font-medium tracking-wider uppercase">创作中</div>
+            <h1 className="text-sm font-medium text-white/90 tracking-tight">{project.title || t.product.untitled}</h1>
+            <div className="text-[10px] text-white/25 font-medium tracking-wider uppercase">{t.product.creating}</div>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
@@ -128,9 +139,9 @@ export function CreationWorkspace({ project }: Props) {
               >
                 <div className="flex items-center gap-2">
                   <Film className="w-3 h-3 text-[#E8C547]/60" />
-                  <span className="font-medium">时间线</span>
+                  <span className="font-medium">{t.product.timeline}</span>
                   <span className="text-[10px] text-white/20">
-                    {timelineShots.length} 镜头 · {timelineShots.reduce((s, t) => s + t.duration, 0)}s
+                    {timelineShots.length} {t.product.shotsUnit} · {timelineShots.reduce((s, sh) => s + sh.duration, 0)}s
                   </span>
                 </div>
                 {timelineOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
@@ -165,7 +176,7 @@ export function CreationWorkspace({ project }: Props) {
                               </>
                             ) : (
                               <div className="text-[8px] text-white/20">
-                                {isProducing ? '生成中...' : '待生成'}
+                                {isProducing ? t.product.generating : t.product.pending}
                               </div>
                             )}
                           </div>

@@ -19,6 +19,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from './auth-guard';
 import { assertBudget } from './budget-enforce';
+import { apiT, localeFromRequest } from './api-i18n';
 
 export type PaidGuardResult =
   | { ok: true; userId: string }
@@ -28,18 +29,19 @@ export async function guardPaidEndpoint(
   request: Request,
   opts: { pendingCostCny?: number } = {},
 ): Promise<PaidGuardResult> {
+  const locale = localeFromRequest(request);
   const u = requireUser(request);
   if (!u.ok) {
     return { ok: false, response: NextResponse.json({ message: u.message }, { status: u.status }) };
   }
 
-  const { allow, guard } = await assertBudget({ userId: u.userId, pendingCostCny: opts.pendingCostCny });
+  const { allow, guard } = await assertBudget({ userId: u.userId, pendingCostCny: opts.pendingCostCny, locale });
   if (!allow) {
     // 402 Payment Required —— 语义比 403 准确:身份没问题,是额度不够。
     return {
       ok: false,
       response: NextResponse.json(
-        { message: guard.message || '已达本月用量上限', guard, code: 'budget_exceeded' },
+        { message: guard.message || apiT(locale, 'budgetExceeded'), guard, code: 'budget_exceeded' },
         { status: 402 },
       ),
     };

@@ -56,7 +56,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const gate = checkPlan(request, requiredTier);
         if (!gate.ok) {
           console.warn(`[export] plan-gate blocked: user=${gate.userId} tier=${gate.current} req=${requiredTier} resolution=${resolutionParam}`);
-          return planRejection(gate.current, gate.required);
+          return planRejection(gate.current, gate.required, request);
         }
       }
     }

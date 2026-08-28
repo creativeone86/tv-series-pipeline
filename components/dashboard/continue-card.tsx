@@ -8,12 +8,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api-client';
-import { pickContinueProject, suggestNextStep, type ProjectLike } from '@/lib/next-step';
+import { pickContinueProject, type ProjectLike } from '@/lib/next-step';
 import { ArrowRight, FilmSlate } from '@phosphor-icons/react';
-
-const STATUS_LABEL: Record<string, string> = { active: '创作中', draft: '草稿', completed: '已完成' };
+import { useLocale } from '@/hooks/use-locale';
 
 export function ContinueCard() {
+  const { t } = useLocale();
   const [project, setProject] = useState<(ProjectLike & { covers?: string[] }) | null>(null);
 
   useEffect(() => {
@@ -29,8 +29,21 @@ export function ContinueCard() {
     return () => { alive = false; };
   }, []);
 
-  if (!project) return null; // 空项目态不显示
-  const step = suggestNextStep(project);
+  if (!project) return null;
+  const shots = project.scriptData?.shots?.length ?? 0;
+  const step = project.status === 'draft'
+    ? (shots > 0
+      ? { label: t.continueCard.draftReadyLabel, hint: t.continueCard.draftReadyHint }
+      : { label: t.continueCard.draftEmptyLabel, hint: t.continueCard.draftEmptyHint })
+    : project.status === 'active'
+      ? { label: t.continueCard.activeLabel, hint: t.continueCard.activeHint }
+      : project.status === 'completed'
+        ? { label: t.continueCard.completedLabel, hint: t.continueCard.completedHint }
+        : { label: t.continueCard.openLabel, hint: t.continueCard.openHint };
+  const statusLabel = project.status === 'active' ? t.continueCard.statusActive
+    : project.status === 'draft' ? t.continueCard.statusDraft
+    : project.status === 'completed' ? t.continueCard.statusCompleted
+    : project.status;
   const cover = project.covers?.[0];
 
   return (
@@ -49,7 +62,7 @@ export function ContinueCard() {
       )}
       <span className="min-w-0 flex-1">
         <span className="block text-[10px] font-mono tracking-[0.22em] uppercase text-[#E8C547]/75 mb-0.5">
-          继续创作 · {STATUS_LABEL[project.status || ''] || project.status}
+          {t.continueCard.eyebrow} · {statusLabel}
         </span>
         <span className="block text-sm font-semibold text-white truncate">{project.title || project.id}</span>
         <span className="block text-xs text-[var(--muted)] truncate">{step.hint}</span>

@@ -78,8 +78,7 @@ describe('/api/create-stream thin-idea guard (v2.18.1)', () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.category).toBe('thin-idea');
-    // v2.18.1 文案: "创意只有 N 字 ..." (旧版本是 "简短")
-    expect(body.error).toMatch(/字|简短/);
+    expect(body.error).toMatch(/characters|字|简短/i);
   });
 
   it('idea 10-30 chars BUT has genre keyword → passes thin-idea guard (continues to safety/pipeline)', async () => {
@@ -108,7 +107,7 @@ describe('/api/create-stream thin-idea guard (v2.18.1)', () => {
     const res = await POST(mkReq({}));
     expect(res.status).toBe(400);
     const body = await res.json();
-    // 原有的 "请提供故事创意" 错误, 不是 thin-idea
-    expect(body.error).toContain('故事创意');
+    // Missing-idea error (English default), not thin-idea
+    expect(body.error).toMatch(/story idea|故事创意/i);
   });
 });

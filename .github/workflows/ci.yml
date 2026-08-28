@@ -89,6 +89,9 @@ jobs:
       - name: Consumer gate (唯一入口不得被绕过)
         run: npx tsx scripts/consumer-gate.mjs
 
+      - name: CJK UI gate (no new Han in app/components TSX)
+        run: npm run gate:cjk-ui
+
       # v12.290:变更日志溯源门禁 —— VERSIONS.md 里记的提交哈希必须在 main 历史中可达。
       # 病根是「commit → sed 哈希 → git commit --amend」写进去的是**被 amend 丢弃的游离哈希**,
       # 498 条里 247 条不可达。本步骤同时拦「陈旧待填」(发版漏跑回填脚本)。

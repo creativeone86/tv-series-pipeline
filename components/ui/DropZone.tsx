@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { useLocale } from '@/hooks/use-locale';
 
 interface DropZoneProps {
   onFilesAccepted: (files: File[]) => void;
@@ -19,6 +20,7 @@ export default function DropZone({
   maxSize = 50 * 1024 * 1024, // 50MB
   onError,
 }: DropZoneProps) {
+  const { t } = useLocale();
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   /** v12.300:上传失败原因 —— 此前失败只进 console,界面静默恢复初始态 */
@@ -50,14 +52,14 @@ export default function DropZone({
         // 用户不知道失败了,可能以为成功、或反复重试。低层通用组件不依赖 ToastProvider,
         // 自带内联错误(外层可用 onError 接管)。
         console.error('文件上传错误:', error);
-        const msg = error instanceof Error ? error.message : '上传失败,请重试';
+        const msg = error instanceof Error ? error.message : t.product.dropRetry;
         setUploadError(msg.slice(0, 120));
         onError?.(error);
       } finally {
         setUploading(false);
       }
     },
-    [onFilesAccepted]
+    [onFilesAccepted, onError, t]
   );
 
   const handleFileSelect = useCallback(
@@ -74,14 +76,14 @@ export default function DropZone({
         // 用户不知道失败了,可能以为成功、或反复重试。低层通用组件不依赖 ToastProvider,
         // 自带内联错误(外层可用 onError 接管)。
         console.error('文件上传错误:', error);
-        const msg = error instanceof Error ? error.message : '上传失败,请重试';
+        const msg = error instanceof Error ? error.message : t.product.dropRetry;
         setUploadError(msg.slice(0, 120));
         onError?.(error);
       } finally {
         setUploading(false);
       }
     },
-    [onFilesAccepted]
+    [onFilesAccepted, onError, t]
   );
 
   return (
@@ -111,18 +113,18 @@ export default function DropZone({
         <div className="space-y-2">
           <div className="text-4xl">📁</div>
           {uploading ? (
-            <p className="text-blue-500">上传中...</p>
+            <p className="text-blue-500">{t.product.dropUploading}</p>
           ) : uploadError ? (
-            <p className="text-red-500" role="alert">上传失败:{uploadError}</p>
+            <p className="text-red-500" role="alert">{t.product.dropFailed}:{uploadError}</p>
           ) : isDragging ? (
-            <p className="text-blue-500">放开以上传文件...</p>
+            <p className="text-blue-500">{t.product.dropHere}</p>
           ) : (
             <>
               <p className="text-gray-600 dark:text-gray-400">
-                拖拽文件到这里，或点击选择文件
+                {t.product.dropHint}
               </p>
               <p className="text-sm text-gray-500 dark:text-gray-500">
-                支持图片和视频，最大 50MB
+                {t.product.dropHintSub}
               </p>
             </>
           )}

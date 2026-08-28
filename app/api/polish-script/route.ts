@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     const gate = checkPlan(request, 'pro');
     if (!gate.ok) {
       console.warn(`[polish-script] plan-gate blocked pro: user=${gate.userId} tier=${gate.current}`);
-      return planRejection(gate.current, gate.required);
+      return planRejection(gate.current, gate.required, request);
     }
   }
   const style = typeof body?.style === 'string' ? body.style : undefined;

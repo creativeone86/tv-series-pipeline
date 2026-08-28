@@ -25,6 +25,7 @@ import { enrichScenesFromWriterScript } from '@/lib/scene-enrich';
 import { bindElements } from '@/lib/reference-elements';
 import { loadCheckpoints, emptyCheckpoints, checkpointSummary, type PipelineCheckpoints } from '@/lib/pipeline-checkpoints';
 import { StageTimer, summarizeTiming } from '@/lib/stage-timing'; // v12.32.0 阶段耗时归因
+import { apiT, type Locale } from '@/lib/api-i18n';
 
 // 活跃编排器注册表 — gate 路由 / rerun / regenerate 据此找到运行中的编排器
 // (原在 route 模块;route 仍 re-export 以保持既有 import 路径不变)
@@ -55,12 +56,16 @@ export interface CreatePipelineInput {
   seriesRecap?: string;
   /** v12.143(对标阅文分镜面板):全片草图锁 —— 每镜先出构图草图再锁构图渲染(每镜多一次出图)。 */
   sketchLock?: boolean;
+  /** UI locale for SSE status / error lines. Defaults to English. */
+  uiLocale?: Locale;
 }
 
 export type PipelineEmit = (type: string, data: unknown) => void;
 
 export async function runCreatePipeline(input: CreatePipelineInput, emit: PipelineEmit, opts?: { resume?: boolean }): Promise<void> {
-  const { idea, projectId, videoProvider, style, aspect, enableGates, templateId, primaryCharacterRef, lockedCharacters, cameraDefault, previewSeedImage, references, replicaScript, editStyle, language, sketchLock } = input as CreatePipelineInput & Record<string, any>;
+  const { idea, projectId, videoProvider, style, aspect, enableGates, templateId, primaryCharacterRef, lockedCharacters, cameraDefault, previewSeedImage, references, replicaScript, editStyle, language, sketchLock, uiLocale } = input as CreatePipelineInput & Record<string, any>;
+  const locale: Locale = uiLocale || 'en';
+  const st = (key: string, vars?: Record<string, string | number>) => apiT(locale, key, vars);
   // v12.32.0:阶段耗时归因 —— 各阶段边界本就发 send('step',{step}),顺手用它做计时埋点(零额外侵入)。
   const _stageTimer = new StageTimer();
   let _curStage: string | null = null;
@@ -86,7 +91,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
   let review: any = null;
 
   try {
-    const orchestrator = new HybridOrchestrator();
+    const orchestrator = new HybridOrchestrator({ locale });
     orchestrator.onProgress = (type, data) => {
       send(type, data);
       // v12.143:草图锁的每镜草图落 storyboard-sketch 资产(面板展示/重生复用);fire-and-forget
@@ -155,7 +160,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
     // ── v12.143:全片草图锁(每镜先草图后锁构图渲染;成本:每镜多一次出图)──
     if (sketchLock === true) {
       orchestrator.setSketchLockAll(true);
-      send('status', { message: '📐 分镜草图锁已开启:每镜先出构图草图,再按草图锁构图渲染' });
+      send('status', { message: st('stSketchLock') });
     }
 
     // ── v12.181:跨集一致性注入 —— 本集属于系列且调用方未显式锁角时,从 series_anchors 读
@@ -170,7 +175,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
         if (anchor) {
           if ((!lockedCharacters || lockedCharacters.length === 0) && anchor.lockedCharacters?.length) {
             orchestrator.setLockedCharacters(anchor.lockedCharacters as any);
-            send('status', { message: `🔗 跨集一致性:继承系列角色锚 ${anchor.lockedCharacters.map((c) => c.name).join('、')}(来自第 ${anchor.fromEpisode ?? '?'} 集)` });
+            send('status', { message: st('stSeriesAnchor', { names: anchor.lockedCharacters.map((c) => c.name).join(', '), ep: anchor.fromEpisode ?? '?' }) });
           }
           if (anchor.styleAnchorUrl) orchestrator.setStyleAnchorUrl?.(anchor.styleAnchorUrl);
           if (anchor.lastEpisodeEndFrame && !previewSeedImage) {
@@ -186,7 +191,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       const { normalizeLanguage, ttsReliable, languageDisplayName } = await import('@/lib/language-detect');
       const lang = normalizeLanguage(language, idea);
       orchestrator.setTargetLanguage(lang);
-      send('status', { message: `🌐 剧本语言:${languageDisplayName(lang)}${ttsReliable(lang) ? '' : '(配音降级:仅字幕/近似音色)'}` });
+      send('status', { message: `${st('stLang', { lang: languageDisplayName(lang) })}${ttsReliable(lang) ? '' : st('stLangTtsDegrade')}` });
     }
 
     // ── v12.193:题材镜头包 —— 按 idea 检测题材,一键注入「运镜+剪辑风格+BGM 风格」组合拳;
@@ -199,7 +204,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
         if (!cameraDefault) { orchestrator.setCameraDefault(pack.cameraDefault); applied.push('运镜'); }
         if (!editStyle) { orchestrator.setEditStyle(pack.editStyle); applied.push('剪辑'); }
         (orchestrator as any).bgmStyleHint = pack.bgmStyleHint; // BGM prompt 侧读取(软注入)
-        if (applied.length) send('status', { message: `🎬 题材镜头包「${pack.label}」已注入(${applied.join('/')};显式选择不受影响)` });
+        if (applied.length) send('status', { message: st('stLensPack', { pack: pack.label, applied: applied.join('/') }) });
       }
     } catch { /* 包注入失败不阻塞 */ }
 
@@ -228,14 +233,14 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
     const effectiveSeed = (previewSeedImage && typeof previewSeedImage === 'string' ? previewSeedImage : '') || boundSref || '';
     if (effectiveSeed) {
       orchestrator.setPreviewSeedImage(effectiveSeed);
-      if (!previewSeedImage && boundSref) send('status', { message: '多参:风格元素已锚定整片画风 (sref)' });
+      if (!previewSeedImage && boundSref) send('status', { message: st('stStyleRef') });
     }
 
     // v9.4.6 收尾: 多参「场景/道具」元素 → 分镜构图附加参考(低优先, 不挤占角色/画风锚)
     const boundSceneRefs = [...elementBinding.sceneImages, ...elementBinding.propImages].filter(isHttpRef);
     if (boundSceneRefs.length) {
       orchestrator.setSceneReferences(boundSceneRefs);
-      send('status', { message: `多参:${boundSceneRefs.length} 个场景/道具元素已挂为构图参考` });
+      send('status', { message: st('stSceneRefs', { n: boundSceneRefs.length }) });
     }
 
     // ── v2.9 P0 Cameo: 注入项目级主角脸参考图(锁死全片 IP)──
@@ -264,7 +269,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       effectiveCameoRef = boundCref;
       const cw = elementBinding.primaryCharacterWeight;
       if (typeof cw === 'number') orchestrator.setPrimaryCharacterCw(cw);
-      send('status', { message: `多参:角色元素已锁主角 (cref + DNA${typeof cw === 'number' ? `, cw ${cw}` : ''})` });
+      send('status', { message: st('stCharRef', { extra: typeof cw === 'number' ? `, cw ${cw}` : '' }) });
     }
     // v12.56.0 广告题材:产品/角色参考图自动抠净背景 → 锁主体跨镜复用保一致(电商核心痛点)。
     // gated:仅「商业题材 + 抠图后端可用(rembg/BG_REMOVAL_URL)」才抠;否则原样,零行为改动。非阻塞。
@@ -277,7 +282,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
           const [cut] = await prepProductReferences([effectiveCameoRef]);
           if (cut && cut !== effectiveCameoRef) {
             effectiveCameoRef = cut;
-            send('status', { message: '产品参考图已抠净背景 → 锁主体跨镜复用保一致' });
+            send('status', { message: st('stProductCutout') });
           }
         }
       } catch (e) { console.warn('[create] 产品抠图预处理失败(非阻塞):', e instanceof Error ? e.message : e); }
@@ -377,7 +382,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       }
     } catch (e) {
       console.error('[DB] Project creation failed:', e);
-      send('error', { message: '项目创建失败，请重试' });
+      send('error', { message: st('projectCreateFailed') });
       return;
     }
 
@@ -388,14 +393,14 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
     const cp: PipelineCheckpoints = opts?.resume ? await loadCheckpoints(projectId) : emptyCheckpoints();
     if (opts?.resume) {
       console.log(`[Resume] ${projectId} 断点装载: ${checkpointSummary(cp)}`);
-      send('status', { message: `[续跑] 已装载断点产物:${checkpointSummary(cp)}` });
+      send('status', { message: st('stResumeLoaded', { summary: checkpointSummary(cp) }) });
     }
 
     // ── 1. Director ──
     if (cp.plan) {
       plan = cp.plan;
       send('step', { step: 'director' });
-      send('status', { message: '[续跑] 导演计划已就绪,跳过' });
+      send('status', { message: st('stResumePlan') });
       send('plan', plan);
     } else if (replicaScript && Array.isArray(replicaScript.shots) && replicaScript.shots.length) {
       // v11.1.2 拉片复刻:从替换后的 shots 合成 plan(角色/场景取真实替换值),
@@ -406,12 +411,12 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
         { style: style || '' },
       );
       send('step', { step: 'director' });
-      send('status', { message: '拉片复刻:按原片结构合成导演计划(跳过创意导演)...' });
+      send('status', { message: st('stReplicaPlan') });
       send('plan', plan);
       await saveAsset(projectId, 'plan', '导演计划', plan);
     } else try {
       send('step', { step: 'director' });
-      send('status', { message: 'AI 导演正在分析创意...' });
+      send('status', { message: st('stDirector') });
       plan = await orchestrator.runDirector(idea);
       // v10.4.2: 计划落库 —— 此前只在内存,续跑会被迫重跑导演(多一次 LLM 计费)
       await saveAsset(projectId, 'plan', '导演计划', plan);
@@ -419,19 +424,19 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       send('plan', plan);
     } catch (e) {
       console.error('[Stream] Director failed:', e);
-      send('status', { message: '导演分析出错，使用默认计划...' });
+      send('status', { message: st('stDirectorFallback') });
     }
 
-    if (!plan) { send('error', { message: '导演计划生成失败' }); return; }
+    if (!plan) { send('error', { message: st('directorPlanFailed') }); return; }
 
     // ── 1.5 Style Bible ── v2.20 P0.1: 渲染 1 张全片视觉锚点帧
     if (cp.styleBibleUrl) {
       send('step', { step: 'styleBible' });
       send('styleBible', { url: cp.styleBibleUrl });
-      send('status', { message: '[续跑] Style Bible 已就绪,跳过' });
+      send('status', { message: st('stResumeBible') });
     } else try {
       send('step', { step: 'styleBible' });
-      send('status', { message: '渲染 Style Bible 帧 — 锁定全片画风...' });
+      send('status', { message: st('stStyleBible') });
       const bibleUrl = await orchestrator.runStyleBibleArtist(plan);
       if (bibleUrl) {
         send('styleBible', { url: bibleUrl });
@@ -445,14 +450,14 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
     if (cp.script) {
       script = cp.script;
       send('step', { step: 'writer' });
-      send('status', { message: '[续跑] 剧本已就绪,跳过' });
+      send('status', { message: st('stResumeScript') });
       send('script', script);
       orchestrator.setWriterScript(script);
     } else if (replicaScript && Array.isArray(replicaScript.shots) && replicaScript.shots.length) {
       // v11.1.2 拉片复刻:用预构脚本,跳过 Writer 创意(保原片镜头结构/时长)
       script = replicaScript;
       send('step', { step: 'writer' });
-      send('status', { message: '拉片复刻:按原片结构构建脚本(跳过创意编剧)...' });
+      send('status', { message: st('stReplicaScript') });
       send('script', script);
       // v12.278:必须带上 pacingReport —— 此前只存 {synopsis,title,shots,theme},
       // 节奏审计结果**从不落库**:它只经 SSE 推给前端、再被 store.updateAsset 写进
@@ -462,7 +467,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       orchestrator.setWriterScript(script);
     } else try {
       send('step', { step: 'writer' });
-      send('status', { message: 'AI 编剧正在运用麦基方法论创作剧本...' });
+      send('status', { message: st('stWriter') });
       script = await orchestrator.runWriter(plan);
 
       // v12.65.0 广告合规:商业题材台词过《广告法》红线(最/第一/根治…自动替换安全表达)。
@@ -474,7 +479,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
           const hits = sanitizeScriptDialogues((script as any).shots);
           if (hits.length > 0) {
             console.warn(`[create] v12.65 广告合规净化 ${hits.length} 处: ${hits.slice(0, 5).map((h) => h.word).join('、')}`);
-            send('status', { message: `⚖️ 广告合规:已替换 ${hits.length} 处违禁用语(${[...new Set(hits.map((h) => h.category))].join('/')})` });
+            send('status', { message: st('stAdReplace', { n: hits.length, cats: [...new Set(hits.map((h) => h.category))].join('/') }) });
           }
           // v12.72.0 CTA 收尾保障:末镜无号召则补确定性 CTA(片尾卡与口播都吃它)
           // v12.118:按创意语种补对应语言的 CTA(英文片此前会被塞中文 CTA)
@@ -482,7 +487,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
           const ctaFix = ensureCtaEnding((script as any).shots, (script as any).title || '', detectLanguage(idea));
           if (ctaFix.added) {
             console.log(`[create] v12.72 CTA 收尾已补: ${ctaFix.cta}`);
-            send('status', { message: `📣 已为广告补 CTA 收尾:「${ctaFix.cta}」` });
+            send('status', { message: st('stAdCta', { cta: ctaFix.cta }) });
           }
         }
       } catch (e) { console.warn('[create] 广告合规检查失败(非阻塞):', e instanceof Error ? e.message : e); }
@@ -496,10 +501,10 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       orchestrator.setWriterScript(script);
     } catch (e) {
       console.error('[Stream] Writer failed:', e);
-      send('status', { message: '编剧创作出错，继续下一步...' });
+      send('status', { message: st('stWriterFallback') });
     }
 
-    if (!script) { send('error', { message: '剧本生成失败' }); return; }
+    if (!script) { send('error', { message: st('scriptFailed') }); return; }
 
     // ── Gate: after-script ──
     if (enableGates) {
@@ -516,11 +521,11 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
     const runCharacterStep = async () => {
       if (cp.characters.length > 0) {
         send('characters', cp.characters);
-        send('status', { message: `[续跑] 角色已就绪(×${cp.characters.length}),跳过重绘` });
+        send('status', { message: st('stResumeChars', { n: cp.characters.length }) });
         return cp.characters;
       }
       try {
-        send('status', { message: 'AI 角色设计师正在绘制角色三视图...' });
+        send('status', { message: st('stChars') });
         const result = await orchestrator.runCharacterDesigner(plan.characters);
         send('agents', orchestrator.getAllAgents());
         send('characters', result);
@@ -567,7 +572,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
             }
           }
           if (saved > 0) {
-            send('status', { message: `已把 ${saved} 个新角色登记到角色库` });
+            send('status', { message: st('stCharsSaved', { n: saved }) });
           }
         } catch (e) {
           console.warn('[Stream] global_assets character save failed:', e);
@@ -575,7 +580,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
         return result;
       } catch (e) {
         console.error('[Stream] Character Designer failed:', e);
-        send('status', { message: '角色设计出错，继续下一步...' });
+        send('status', { message: st('stCharsFallback') });
         return [] as any[];
       }
     };
@@ -583,11 +588,11 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
     const runSceneStep = async () => {
       if (cp.scenes.length > 0) {
         send('scenes', cp.scenes);
-        send('status', { message: `[续跑] 场景已就绪(×${cp.scenes.length}),跳过重绘` });
+        send('status', { message: st('stResumeScenes', { n: cp.scenes.length }) });
         return cp.scenes;
       }
       try {
-        send('status', { message: 'AI 场景设计师正在设计场景概念图...' });
+        send('status', { message: st('stScenes') });
         // v2.13.5: 用 Writer 的 shots 把 plan.scenes 的 description 加厚
         const enrichedScenes = enrichScenesFromWriterScript(plan.scenes, script);
         const result = await orchestrator.runSceneDesigner(enrichedScenes);
@@ -631,7 +636,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
         return result;
       } catch (e) {
         console.error('[Stream] Scene Designer failed:', e);
-        send('status', { message: '场景设计出错，继续下一步...' });
+        send('status', { message: st('stScenesFallback') });
         return [] as any[];
       }
     };
@@ -648,7 +653,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       scenes = await runSceneStep();
     } else {
       // 普通模式: 并行跑, 创作时长省 30-60s
-      send('status', { message: '🚀 角色与场景设计并行启动...' });
+      send('status', { message: st('stParallel') });
       const [chars, scns] = await Promise.all([runCharacterStep(), runSceneStep()]);
       characters = chars;
       scenes = scns;
@@ -659,11 +664,11 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
     if (cp.storyboardPlans.length > 0) {
       storyboardPlans = cp.storyboardPlans;
       send('step', { step: 'storyboardPlan' });
-      send('status', { message: `[续跑] 分镜规划已就绪(×${storyboardPlans.length}),跳过` });
+      send('status', { message: st('stResumeBoardPlans', { n: storyboardPlans.length }) });
       send('storyboardPlans', storyboardPlans);
     } else try {
       send('step', { step: 'storyboardPlan' });
-      send('status', { message: 'AI 分镜师正在规划分镜描述...' });
+      send('status', { message: st('stBoardPlans') });
       storyboardPlans = await orchestrator.runStoryboardArtist(script, characters, scenes);
       send('agents', orchestrator.getAllAgents());
       send('storyboardPlans', storyboardPlans);
@@ -678,7 +683,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       }
     } catch (e) {
       console.error('[Stream] Storyboard Planning failed:', e);
-      send('status', { message: '分镜规划出错，继续下一步...' });
+      send('status', { message: st('stBoardPlansFallback') });
     }
 
     // ── 5b. 分镜图渲染（2路并发，每张3分钟超时）──
@@ -691,10 +696,10 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       const pendingPlans = (storyboardPlans as any[]).filter((sb: any) => !doneShots.has(sb.shotNumber));
       if (pendingPlans.length === 0 && cp.storyboards.length > 0) {
         storyboards = cp.storyboards;
-        send('status', { message: `[续跑] 分镜图已全部渲染(×${storyboards.length}),跳过` });
+        send('status', { message: st('stResumeBoards', { n: storyboards.length }) });
       } else {
-        if (doneShots.size > 0) send('status', { message: `[续跑] 已有 ${doneShots.size} 镜分镜图,补渲染 ${pendingPlans.length} 镜` });
-        send('status', { message: 'AI 分镜师正在渲染分镜图（角色+场景一致性）...' });
+        if (doneShots.size > 0) send('status', { message: st('stResumeBoardsPartial', { done: doneShots.size, pending: pendingPlans.length }) });
+        send('status', { message: st('stBoards') });
         const rendered = await orchestrator.runStoryboardRenderer(pendingPlans, script, characters, scenes);
         storyboards = [...cp.storyboards, ...rendered].sort((a: any, b: any) => (a.shotNumber ?? 0) - (b.shotNumber ?? 0));
       }
@@ -718,7 +723,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       }
     } catch (e) {
       console.error('[Stream] Storyboard Rendering failed:', e);
-      send('status', { message: '分镜图渲染出错，使用文本分镜继续...' });
+      send('status', { message: st('stBoardsFallback') });
       storyboards = storyboardPlans;
       send('storyboards', storyboards);
     }
@@ -738,10 +743,10 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       const pendingBoards = (storyboards as any[]).filter((sb: any) => !doneVideoShots.has(sb.shotNumber));
       if (pendingBoards.length === 0 && cp.videos.length > 0) {
         videos = cp.videos;
-        send('status', { message: `[续跑] 镜头视频已全部生成(×${videos.length}),跳过` });
+        send('status', { message: st('stResumeVideos', { n: videos.length }) });
       } else {
-        if (doneVideoShots.size > 0) send('status', { message: `[续跑] 已有 ${doneVideoShots.size} 镜视频,补生成 ${pendingBoards.length} 镜` });
-        send('status', { message: `AI 视频制作正在逐条生成视频（${providerLabel}，共 ${pendingBoards.length} 个镜头）...` });
+        if (doneVideoShots.size > 0) send('status', { message: st('stResumeVideosPartial', { done: doneVideoShots.size, pending: pendingBoards.length }) });
+        send('status', { message: st('stVideos', { provider: providerLabel, n: pendingBoards.length }) });
         const made = await orchestrator.runVideoProducer(pendingBoards, activeProvider, characters, scenes, script);
         videos = [...cp.videos, ...made].sort((a: any, b: any) => (a.shotNumber ?? 0) - (b.shotNumber ?? 0));
       }
@@ -762,7 +767,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       }
     } catch (e) {
       console.error('[Stream] Video Producer failed:', e);
-      send('status', { message: '视频生成出错，继续下一步...' });
+      send('status', { message: st('stVideosFallback') });
     } finally {
       clearInterval(heartbeatInterval);
     }
@@ -771,11 +776,11 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
     if (cp.hasFinalVideo) {
       editResult = cp.editResult;
       send('step', { step: 'editor' });
-      send('status', { message: '[续跑] 已有成片,跳过剪辑合成' });
+      send('status', { message: st('stResumeEdit') });
       if (editResult) send('editResult', editResult);
     } else try {
       send('step', { step: 'editor' });
-      send('status', { message: 'AI 剪辑师正在剪辑合成完整视频并生成配乐...' });
+      send('status', { message: st('stEdit') });
       editResult = await orchestrator.runEditor(videos, script);
       send('agents', orchestrator.getAllAgents());
       send('editResult', editResult);
@@ -808,9 +813,9 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
                 reportData.preflight = preflight;
                 const blocked = preflight.filter((p) => !p.pass);
                 if (blocked.length > 0) {
-                  send('status', { message: `⚠️ 发布预检:${blocked.map((p) => `${p.label}(${p.issues[0]})`).join(';')}` });
+                  send('status', { message: st('stPublishWarn', { issues: blocked.map((p) => `${p.label}(${p.issues[0]})`).join(';') }) });
                 } else {
-                  send('status', { message: '✅ 发布预检:抖音/小红书/视频号 三平台硬指标全过' });
+                  send('status', { message: st('stPublishOk') });
                 }
               }
             }
@@ -859,7 +864,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       }
     } catch (e) {
       console.error('[Stream] Editor failed:', e);
-      send('status', { message: '剪辑出错，继续审核...' });
+      send('status', { message: st('stEditFallback') });
     }
 
     // ── v12.181:跨集一致性写回 —— 本集完成后把角色锚/styleBible/末帧沉淀到 series_anchors,
@@ -884,7 +889,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
           lastEpisodeEndFrame: (videos as any[])?.length ? undefined : prev.lastEpisodeEndFrame, // 末帧提取重,P3 再接 extractLastFrame
           fromEpisode: typeof epRow === 'number' ? epRow : prev.fromEpisode,
         });
-        send('status', { message: `🔗 系列锚点已更新(角色 ${chars.length} 位,供后续集继承)` });
+        send('status', { message: st('stSeriesUpdated', { n: chars.length }) });
       }
     } catch (e) { console.warn('[SeriesAnchor] 写回失败(不阻塞):', e instanceof Error ? e.message.slice(0, 60) : e); }
 
@@ -892,17 +897,17 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
     if (cp.review) {
       review = cp.review;
       send('step', { step: 'review' });
-      send('status', { message: '[续跑] 审核结论已就绪,跳过' });
+      send('status', { message: st('stResumeReview') });
       send('review', review);
     } else try {
       send('step', { step: 'review' });
-      send('status', { message: 'AI 制片人正在进行100分制全面审核...' });
+      send('status', { message: st('stReview') });
       review = await orchestrator.runDirectorReview(script, videos, editResult);
       send('agents', orchestrator.getAllAgents());
       send('review', review);
     } catch (e) {
       console.error('[Stream] Producer Review failed:', e);
-      send('status', { message: '制片人审核出错...' });
+      send('status', { message: st('stReviewFallback') });
     }
 
     // ── 9. 闭环：不通过则自动改进 ──
@@ -911,7 +916,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
 
     if (review && !review.passed) {
       try {
-        send('status', { message: '导演审核未通过，正在自动优化...' });
+        send('status', { message: st('stReviewRetry') });
         const improved = await orchestrator.executeReviewFeedback(review, script, storyboards, videos);
         finalStoryboards = improved.storyboards;
         finalVideos = improved.videos;
@@ -921,7 +926,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
         for (const v of finalVideos as any[]) { await updateAssetMedia(projectId, 'video', `视频 ${v.shotNumber}`, [v.videoUrl], v.shotNumber); }
 
         // 二次审核
-        send('status', { message: 'AI 导演正在进行二次审核...' });
+        send('status', { message: st('stReview2') });
         const review2 = await orchestrator.runDirectorReview(script, finalVideos, editResult);
         send('review', review2);
         try { await updateProjectById(projectId, { director_notes: JSON.stringify(review2) }); } catch {}
@@ -953,7 +958,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
 
   } catch (error) {
     console.error('[Stream] Fatal error:', error);
-    const payload = toSsePayload(error);
+    const payload = toSsePayload(error, locale);
     // 兼容旧客户端: 同时发 { message } 与结构化 {code,userMsg,retryable,stage}
     send('error', { ...payload, message: payload.userMsg });
   } finally {

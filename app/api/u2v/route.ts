@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
     const gate = checkPlan(request, requiredTier);
     if (!gate.ok) {
       console.warn(`[u2v] plan-gate blocked: user=${gate.userId} tier=${gate.current} req=${requiredTier} duration=${duration}`);
-      return planRejection(gate.current, gate.required);
+      return planRejection(gate.current, gate.required, request);
     }
   }
 

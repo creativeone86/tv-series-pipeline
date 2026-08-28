@@ -67,6 +67,7 @@ import { buildElementsRegistry, mountForShot, scenesLikelySame, subjectReference
 import { normalizeVideoAspect } from '@/lib/video-aspect'; // v12.14.0 横竖屏:把项目比例传给视频引擎
 import { StoryTemplate } from '@/lib/story-templates';
 import { createError, normalizeError, PipelineError } from '@/lib/pipeline-error';
+import { apiT, type Locale } from '@/lib/api-i18n';
 import { execFile } from 'child_process';
 import path from 'path';
 import fs from 'fs';
@@ -313,6 +314,7 @@ export class HybridOrchestrator {
   private falFluxService: FalFluxService | null;
   private comfyuiService: ComfyUIService | null;
   public onProgress?: ProgressCallback;
+  private locale: Locale = 'en';
 
   // Pipeline intervention gate support
   private gateResolvers: Map<string, (data: any) => void> = new Map();
@@ -701,7 +703,8 @@ export class HybridOrchestrator {
     }
   }
 
-  constructor() {
+  constructor(opts?: { locale?: Locale }) {
+    this.locale = opts?.locale ?? 'en';
     this.agents = new Map();
     this.openai = hasLLM ? new OpenAI({ apiKey: API_CONFIG.openai.apiKey, baseURL: API_CONFIG.openai.baseURL, timeout: 180_000, maxRetries: 1 }) : null;
     this.minimaxService = hasMinimax ? new MinimaxService() : null;
@@ -768,18 +771,22 @@ export class HybridOrchestrator {
     })();
   }
 
+  private pipe(key: string, vars?: Record<string, string | number>): string {
+    return apiT(this.locale, key, vars);
+  }
+
   private initializeAgents() {
     const a = (role: AgentRole, id: string, name: string, avatar: string): [AgentRole, Agent] =>
       [role, { id, role, name, avatar, status: 'idle' as const, progress: 0 }];
     this.agents = new Map([
-      a(AgentRole.DIRECTOR, 'director-001', '张导', '/avatars/beaver-crown.jpg'),
-      a(AgentRole.WRITER, 'writer-001', '李编剧', '/avatars/beaver-happy.jpg'),
-      a(AgentRole.CHARACTER_DESIGNER, 'character-001', '王设计师', '/avatars/frog-3d.jpg'),
-      a(AgentRole.SCENE_DESIGNER, 'scene-001', '陈场景师', '/avatars/beaver-sleepy.jpg'),
-      a(AgentRole.STORYBOARD, 'storyboard-001', '赵分镜师', '/avatars/frog-cartoon.jpg'),
-      a(AgentRole.VIDEO_PRODUCER, 'video-001', '孙制作', '/avatars/frog-3d.jpg'),
-      a(AgentRole.EDITOR, 'editor-001', '周剪辑', '/avatars/beaver-crown.jpg'),
-      a(AgentRole.PRODUCER, 'producer-001', '钱制片', '/avatars/frog-cartoon.jpg'),
+      a(AgentRole.DIRECTOR, 'director-001', this.pipe('agentDirector'), '/avatars/beaver-crown.jpg'),
+      a(AgentRole.WRITER, 'writer-001', this.pipe('agentWriter'), '/avatars/beaver-happy.jpg'),
+      a(AgentRole.CHARACTER_DESIGNER, 'character-001', this.pipe('agentCharacter'), '/avatars/frog-3d.jpg'),
+      a(AgentRole.SCENE_DESIGNER, 'scene-001', this.pipe('agentScene'), '/avatars/beaver-sleepy.jpg'),
+      a(AgentRole.STORYBOARD, 'storyboard-001', this.pipe('agentStoryboard'), '/avatars/frog-cartoon.jpg'),
+      a(AgentRole.VIDEO_PRODUCER, 'video-001', this.pipe('agentVideo'), '/avatars/frog-3d.jpg'),
+      a(AgentRole.EDITOR, 'editor-001', this.pipe('agentEditor'), '/avatars/beaver-crown.jpg'),
+      a(AgentRole.PRODUCER, 'producer-001', this.pipe('agentProducer'), '/avatars/frog-cartoon.jpg'),
     ]);
   }
 
@@ -938,7 +945,7 @@ export class HybridOrchestrator {
           parsed = r;
           if (ai > 0) {
             console.log(`[LLM:${callId}] ✅ 兜底成功 [${a.label}] | ${elapsed}s`);
-            this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: `主 LLM 异常,已自动兜底到 ${a.label} 继续` });
+            this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: this.pipe('llmFallback', { label: a.label }) });
           }
           try {
             const { recordApiCall } = await import('@/lib/api-usage-tracker');
@@ -964,12 +971,12 @@ export class HybridOrchestrator {
         const errMsg = String(lastErr);
         console.error(`[LLM:${callId}] ❌ 全部尝试失败 (主+兜底) | ${errMsg}`);
         if (errMsg.includes('insufficient_quota') || errMsg.includes('quota')) {
-          this.emit('status', { message: '⚠️ LLM API 余额不足 (主+兜底均失败)' });
-          this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: '❌ LLM 余额不足,无法继续创作。' });
+          this.emit('status', { message: this.pipe('llmQuotaStatus') });
+          this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: this.pipe('llmQuota') });
         } else if (errMsg === 'timeout') {
-          this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: `LLM 响应超时,跳过此步骤...` });
+          this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: this.pipe('llmTimeout') });
         } else {
-          this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: `LLM 出错: ${errMsg.slice(0, 80)}` });
+          this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: this.pipe('llmError', { msg: errMsg.slice(0, 80) }) });
         }
         return '';
       }
@@ -1013,10 +1020,10 @@ export class HybridOrchestrator {
       const errMsg = e?.message || String(e);
       if (errMsg.includes('timeout')) {
         console.error(`[LLM:${callId}] ❌ 请求超时 (${LLM_TIMEOUT / 1000}s)`);
-        this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: `LLM 响应超时，跳过此步骤...` });
+        this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: this.pipe('llmTimeout') });
       } else {
         console.error(`[LLM:${callId}] ❌ 调用失败:`, errMsg);
-        this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: `LLM 出错: ${errMsg.slice(0, 80)}` });
+        this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: this.pipe('llmError', { msg: errMsg.slice(0, 80) }) });
       }
       return '';
     } finally {
@@ -1130,7 +1137,7 @@ export class HybridOrchestrator {
       if (!res.ok) {
         const errBody = await res.text().catch(() => '');
         if (res.status === 401 || res.status === 402 || res.status === 403 || isOutOfCreditsError(errBody)) markGatewayOutOfCredits(apiBase); // v12.164:401 key 失效同样冷却,别每镜撞
-        throw createError('ENGINE_FAILED', `${model} 图像生成失败 (${res.status})`, {
+        throw createError('ENGINE_FAILED', this.pipe('imgGenFailed', { model, status: res.status }), {
           stage: 'storyboard',
           retryable: true,
           details: { status: res.status, body: errBody.slice(0, 120), model, label },
@@ -1147,7 +1154,7 @@ export class HybridOrchestrator {
         console.log(`[ImageRouter] ✅ ${model} succeeded for: ${label}`);
         return json.data[0].url;
       }
-      throw createError('INVALID_RESPONSE', `${model} 未返回图像 URL`, {
+      throw createError('INVALID_RESPONSE', this.pipe('imgNoUrl', { model }), {
         stage: 'storyboard', retryable: true, details: { model, label },
       });
     };
@@ -1181,7 +1188,7 @@ export class HybridOrchestrator {
       if (!res.ok) {
         const errBody = await res.text().catch(() => '');
         if (res.status === 401 || res.status === 402 || res.status === 403 || isOutOfCreditsError(errBody)) markGatewayOutOfCredits(base); // v12.164:401 同冷却
-        throw createError('ENGINE_FAILED', `flux.1-kontext-pro 失败 (${res.status})`, {
+        throw createError('ENGINE_FAILED', this.pipe('kontextFailed', { status: res.status }), {
           stage: 'storyboard', retryable: true,
           details: { status: res.status, body: errBody.slice(0, 120), label },
         });
@@ -1196,7 +1203,7 @@ export class HybridOrchestrator {
         console.log(`[ImageRouter] ✅ flux.1-kontext-pro succeeded for: ${label}`);
         return json.data[0].url;
       }
-      throw createError('INVALID_RESPONSE', 'flux.1-kontext-pro 未返回图像 URL', {
+      throw createError('INVALID_RESPONSE', this.pipe('kontextNoUrl'), {
         stage: 'storyboard', retryable: true, details: { label },
       });
     };
@@ -1358,7 +1365,7 @@ export class HybridOrchestrator {
   async runDirector(idea: string): Promise<DirectorPlan> {
     // v2.20 P0.2: 缓存原始 idea, runWriter 用它检测短剧 trope
     this.originalIdea = idea || '';
-    this.update(AgentRole.DIRECTOR, { status: 'thinking', currentTask: '分析创意，制定拍摄计划', progress: 10 });
+    this.update(AgentRole.DIRECTOR, { status: 'thinking', currentTask: this.pipe('taskDirectorPlan'), progress: 10 });
 
     // ── P3: 检测是否为完整剧本输入 ──
     const isScript = isFullScriptInput(idea);
@@ -1498,7 +1505,7 @@ export class HybridOrchestrator {
         const validation = validateDirectorOutput(parsed);
         if (!validation.passed) {
           console.log(`[Director] 输出验证未通过 (${validation.issues.length}个问题)，请求修正...`);
-          this.update(AgentRole.DIRECTOR, { currentTask: '检查质量标准，补充不足内容', progress: 80 });
+          this.update(AgentRole.DIRECTOR, { currentTask: this.pipe('taskDirectorQuality'), progress: 80 });
           this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: `自检发现${validation.issues.length}处不达标，正在修正...🔧` });
 
           try {
@@ -1539,14 +1546,14 @@ export class HybridOrchestrator {
         console.error('[Director] LLM call failed, using fallback:', errMsg);
         const isQuota = /quota|insufficient|余额|user quota is not enough|429|insufficient_quota/i.test(errMsg);
         const friendly = isQuota
-          ? `⚠️ LLM 余额/quota 不足,无法生成完整剧本。请去 vectorengine 后台充值后重试,或换 OPENAI_API_KEY。当前先按基础模板继续,角色/场景为占位内容。`
-          : `⚠️ LLM 调用失败(${errMsg.slice(0, 80)}),按基础模板继续,角色/场景为占位内容。建议检查 OPENAI_API_KEY / OPENAI_BASE_URL 后重试。`;
+          ? this.pipe('directorQuotaFallback')
+          : this.pipe('directorCallFailed', { msg: errMsg.slice(0, 80) });
         this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: friendly });
         plan = this.fallbackDirectorPlan(idea);
       }
     } else {
       await sleep(1500);
-      this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: '⚠️ 未配置 OPENAI_API_KEY,使用基础模板生成。请在 .env.local 配置 LLM 后重试。' });
+      this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: this.pipe('llmMissingKey') });
       plan = this.fallbackDirectorPlan(idea);
     }
 
@@ -1698,7 +1705,7 @@ export class HybridOrchestrator {
       }
     } catch { /* drama-tropes 加载失败不阻塞 */ }
 
-    this.update(AgentRole.DIRECTOR, { currentTask: '渲染 Style Bible 帧 — 锁定全片视觉锚点', progress: 95 });
+    this.update(AgentRole.DIRECTOR, { currentTask: this.pipe('taskStyleBible'), progress: 95 });
     this.emit('agentTalk', {
       role: AgentRole.DIRECTOR,
       text: '🎨 先画一张 Style Bible — 把整片画风钉死, 后续每个镜头都以它为基准',
@@ -1826,7 +1833,7 @@ export class HybridOrchestrator {
   // 角色设计师（Midjourney 三视图）
   // ══════════════════════════════════════
   async runCharacterDesigner(characters: Character[]): Promise<CharacterDesignerResult[]> {
-    this.update(AgentRole.CHARACTER_DESIGNER, { status: 'working', currentTask: `设计 ${characters.length} 个角色三视图`, progress: 0 });
+    this.update(AgentRole.CHARACTER_DESIGNER, { status: 'working', currentTask: this.pipe('taskDesignChars', { n: characters.length }), progress: 0 });
     this.emit('agentTalk', { role: AgentRole.CHARACTER_DESIGNER, text: '开始画角色三视图，正面侧面背面一个不少~ 🎨' });
 
     // ═══ v2.11 #3 / v2.13.5: 角色多维特征抽取 ═══
@@ -1902,7 +1909,7 @@ export class HybridOrchestrator {
       // 总体进度计算
       const overallProgress = Math.round((i / totalSteps) * 100);
       this.update(AgentRole.CHARACTER_DESIGNER, {
-        currentTask: `设计角色：${char.name}（三视图）`,
+        currentTask: this.pipe('taskDesignChar', { name: char.name }),
         progress: overallProgress
       });
 
@@ -2044,7 +2051,7 @@ export class HybridOrchestrator {
       console.log(`[SceneDesigner] 裁剪场景 ${scenes.length} → ${trimmedScenes.length}（去重 + 限制 ${MAX_SCENES}）`);
     }
 
-    this.update(AgentRole.SCENE_DESIGNER, { status: 'working', currentTask: `设计 ${trimmedScenes.length} 个场景`, progress: 0 });
+    this.update(AgentRole.SCENE_DESIGNER, { status: 'working', currentTask: this.pipe('taskDesignScenes', { n: trimmedScenes.length }), progress: 0 });
     this.emit('agentTalk', { role: AgentRole.SCENE_DESIGNER, text: `场景概念图开画（${trimmedScenes.length}个），画风和角色保持一致 🏔️` });
 
     // P1: 使用主角色参考图作为风格基准（--sref），确保画风一致
@@ -2106,7 +2113,7 @@ export class HybridOrchestrator {
 
       completed++;
       this.update(AgentRole.SCENE_DESIGNER, {
-        currentTask: `已完成 ${completed}/${trimmedScenes.length} 个场景`,
+        currentTask: this.pipe('taskSceneDone', { done: completed, total: trimmedScenes.length }),
         progress: Math.round((completed / trimmedScenes.length) * 100),
       });
 
@@ -2156,7 +2163,7 @@ export class HybridOrchestrator {
   // ══════════════════════════════════════
   async runStoryboardArtist(script: Script, characters: any[], scenes?: any[]): Promise<Storyboard[]> {
     const shots = script.shots || [];
-    this.update(AgentRole.STORYBOARD, { status: 'working', currentTask: `规划 ${shots.length} 个分镜描述`, progress: 0 });
+    this.update(AgentRole.STORYBOARD, { status: 'working', currentTask: this.pipe('taskPlanBoards', { n: shots.length }), progress: 0 });
     this.emit('agentTalk', { role: AgentRole.STORYBOARD, text: `先规划每个分镜的详细视觉描述，稍后统一渲染确保一致性~ 📝` });
 
     let storyboardPlans: any[] = [];
@@ -2352,7 +2359,7 @@ ${shots.map((s, i) => {
     characters: any[],
     scenes?: any[]
   ): Promise<Storyboard[]> {
-    this.update(AgentRole.STORYBOARD, { status: 'working', currentTask: `统一渲染 ${storyboards.length} 个分镜图`, progress: 0 });
+    this.update(AgentRole.STORYBOARD, { status: 'working', currentTask: this.pipe('taskRenderBoards', { n: storyboards.length }), progress: 0 });
     this.emit('agentTalk', { role: AgentRole.STORYBOARD, text: `开始统一渲染分镜图，严格保持角色和画风一致性！🎨` });
 
     // 构建角色名→图片URL映射
@@ -2420,7 +2427,7 @@ ${shots.map((s, i) => {
       const planData = (sb as any).planData || {};
 
       this.update(AgentRole.STORYBOARD, {
-        currentTask: `渲染第 ${sb.shotNumber} 镜（角色一致性 + 画风一致性）`,
+        currentTask: this.pipe('taskRenderShot', { n: sb.shotNumber }),
         progress: Math.round((completedCount / storyboards.length) * 100),
       });
 
@@ -2860,7 +2867,7 @@ ${shots.map((s, i) => {
   ): Promise<VideoClip[]> {
     // ★ 2026-04 priority flip: Veo primary, Minimax fallback (Veo vectorengine more stable)
     const providerLabel = this.veoService ? 'Veo 3.1' : (this.minimaxService ? 'Minimax' : 'Kling');
-    this.update(AgentRole.VIDEO_PRODUCER, { status: 'working', currentTask: `制作 ${storyboards.length} 个视频`, progress: 0 });
+    this.update(AgentRole.VIDEO_PRODUCER, { status: 'working', currentTask: this.pipe('taskMakeVideos', { n: storyboards.length }), progress: 0 });
 
     // v2.11 #1: 向前端报告总 shot 数,让 ConsistencyPanel 算 X/N 时分母准确
     this.emit('runMeta', { totalShots: storyboards.length });
@@ -2944,7 +2951,7 @@ ${shots.map((s, i) => {
       const planData = (board as any).planData || {};
 
       this.update(AgentRole.VIDEO_PRODUCER, {
-        currentTask: `制作第 ${board.shotNumber} 镜视频（${providerLabel}）`,
+        currentTask: this.pipe('taskMakeShot', { n: board.shotNumber, provider: providerLabel }),
         progress: Math.round((i / storyboards.length) * 100),
       });
 
@@ -3414,7 +3421,7 @@ ${shots.map((s, i) => {
                 onProgress: (progress, status) => { this.emit('videoProgress', { shotNumber: board.shotNumber, progress, status }); },
               });
             }
-            throw createError('ENGINE_UNAVAILABLE', `${engine} 引擎未配置`, {
+            throw createError('ENGINE_UNAVAILABLE', this.pipe('engineNotConfigured', { engine }), {
               stage: 'video', retryable: false, details: { engine, shotNumber: board.shotNumber },
             });
           },
@@ -3794,7 +3801,7 @@ ${shots.map((s, i) => {
     // ═══ 关键帧封面图提取（可选，不阻塞管线）═══
     const validClips = videos.filter(v => isValidVideoUrl(v.videoUrl));
     if (validClips.length > 0) {
-      this.update(AgentRole.VIDEO_PRODUCER, { currentTask: '提取关键帧封面图...', progress: 95 });
+      this.update(AgentRole.VIDEO_PRODUCER, { currentTask: this.pipe('taskExtractCover'), progress: 95 });
       this.emit('agentTalk', { role: AgentRole.VIDEO_PRODUCER, text: `正在为 ${validClips.length} 段视频提取封面图 📸` });
       try {
         const { extractKeyFrames } = await import('./video-composer');
@@ -3842,7 +3849,7 @@ ${shots.map((s, i) => {
 
   async runDirectorReview(script: Script, videos: VideoClip[], editResult?: EditResult, storyboards?: Storyboard[]): Promise<DirectorReview> {
     // 制片人负责最终审核（替代原来的导演审核角色）
-    this.update(AgentRole.PRODUCER, { status: 'thinking', currentTask: '100分制全面审核', progress: 10 });
+    this.update(AgentRole.PRODUCER, { status: 'thinking', currentTask: this.pipe('taskReview100'), progress: 10 });
     this.emit('agentTalk', { role: AgentRole.PRODUCER, text: '让我仔细看看成片效果...🧐' });
 
     let review: any;
@@ -4025,7 +4032,7 @@ ${characterBibleBlock}${producerContext}
     // 1. 修复分镜问题
     for (const item of storyboardItems) {
       if (!item.shotNumber) continue;
-      this.update(AgentRole.STORYBOARD, { status: 'working', currentTask: `优化第 ${item.shotNumber} 镜分镜`, progress: 0 });
+      this.update(AgentRole.STORYBOARD, { status: 'working', currentTask: this.pipe('taskPolishBoard', { n: item.shotNumber }), progress: 0 });
       this.emit('agentTalk', {
         role: AgentRole.STORYBOARD,
         text: `🔧 镜头 ${item.shotNumber} 分镜问题：${(item.issue || '').slice(0, 40)}，正在重新生成...`
@@ -4055,7 +4062,7 @@ ${characterBibleBlock}${producerContext}
     }
 
     for (const shotNumber of videoShotsToRegen) {
-      this.update(AgentRole.VIDEO_PRODUCER, { status: 'working', currentTask: `重新生成第 ${shotNumber} 镜视频`, progress: 0 });
+      this.update(AgentRole.VIDEO_PRODUCER, { status: 'working', currentTask: this.pipe('taskRegenVideo', { n: shotNumber }), progress: 0 });
       const board = updated.storyboards.find(s => s.shotNumber === shotNumber);
       if (!board) continue;
 
@@ -4101,7 +4108,7 @@ ${characterBibleBlock}${producerContext}
 
   // 单个分镜重生成（优先 Veo 3.1）
   async regenerateShot(shotNumber: number, storyboard: Storyboard, options?: { duration?: number; videoProvider?: string; tailFrameUrl?: string }): Promise<VideoClip> {
-    this.update(AgentRole.VIDEO_PRODUCER, { status: 'working', currentTask: `重新生成第 ${shotNumber} 镜`, progress: 0 });
+    this.update(AgentRole.VIDEO_PRODUCER, { status: 'working', currentTask: this.pipe('taskRegenShot', { n: shotNumber }), progress: 0 });
     let videoUrl: string;
     const provider = options?.videoProvider || 'veo';
 

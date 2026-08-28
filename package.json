@@ -31,6 +31,7 @@
     "sync-readme": "node scripts/sync-readme-version.mjs",
     "s3:smoke": "tsx scripts/s3-smoke.mjs",
     "gate:consumer": "tsx scripts/consumer-gate.mjs",
+    "gate:cjk-ui": "tsx scripts/cjk-ui-gate.mjs",
     "audit:api": "node scripts/api-health-audit.mjs",
     "sync-doc-stats": "node scripts/sync-doc-stats.mjs",
     "check:doc-stats": "node scripts/sync-doc-stats.mjs --check",

@@ -15,7 +15,7 @@ export interface Settings {
 }
 
 const DEFAULT_SETTINGS: Settings = {
-  language: 'zh-CN',
+  language: 'en',
   theme: 'dark',
   notifications: {
     email: true,

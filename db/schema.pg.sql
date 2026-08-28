@@ -109,6 +109,15 @@ CREATE TABLE IF NOT EXISTS comments (
   updated_at TEXT,                               
   deleted_at TEXT                                
 , attachments TEXT DEFAULT '[]');
+CREATE TABLE IF NOT EXISTS consent_log (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  purpose TEXT NOT NULL,
+  owner_declaration TEXT NOT NULL,
+  ip TEXT,
+  created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS cost_log (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -119,6 +128,26 @@ CREATE TABLE IF NOT EXISTS cost_log (
   cost_cny REAL NOT NULL DEFAULT 0,
   metadata TEXT DEFAULT '{}',
   created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS film_templates (
+  id TEXT PRIMARY KEY,
+  owner_id TEXT,                                
+  title TEXT NOT NULL,
+  style TEXT NOT NULL DEFAULT '',               
+  genre TEXT,
+  pacing_tone TEXT,                             
+  shot_count INTEGER NOT NULL DEFAULT 0,
+  quality INTEGER NOT NULL DEFAULT 60,          
+  elements TEXT NOT NULL DEFAULT '[]',          
+  tags TEXT NOT NULL DEFAULT '[]',              
+  payload TEXT,                                 
+  source_project_id TEXT,
+  visibility TEXT NOT NULL DEFAULT 'public',    
+  use_count INTEGER NOT NULL DEFAULT 0,
+  rating_sum INTEGER NOT NULL DEFAULT 0,        
+  rating_count INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS generations (
   id TEXT PRIMARY KEY,
@@ -155,6 +184,12 @@ CREATE TABLE IF NOT EXISTS invite_codes (
   created_by TEXT NOT NULL,                     
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS model_overrides (
+  env_key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  prev_value TEXT,
+  updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS notifications (
   id TEXT PRIMARY KEY,
   recipient_user_id TEXT NOT NULL,
@@ -166,6 +201,29 @@ CREATE TABLE IF NOT EXISTS notifications (
   preview TEXT,                                  
   read_at TEXT,                                  
   created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS pipeline_job_events (
+  id TEXT PRIMARY KEY,
+  job_id TEXT NOT NULL,
+  ord INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  data TEXT NOT NULL DEFAULT '{}',
+  at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS pipeline_jobs (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL DEFAULT 'create',
+  project_id TEXT NOT NULL,
+  user_id TEXT,
+  state TEXT NOT NULL DEFAULT 'queued',          
+  step TEXT NOT NULL DEFAULT '',                 
+  payload TEXT NOT NULL DEFAULT '{}',
+  progress_log TEXT NOT NULL DEFAULT '[]',
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT NOT NULL DEFAULT '',
+  heartbeat_at TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS pipeline_reruns (
   id TEXT PRIMARY KEY,
@@ -221,6 +279,16 @@ CREATE TABLE IF NOT EXISTS project_collaborators (
   invited_via_token TEXT,
   joined_at TEXT NOT NULL,
   UNIQUE(project_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS project_locked_characters (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  character_name TEXT NOT NULL,
+  image_url TEXT NOT NULL DEFAULT '',
+  cw INTEGER NOT NULL DEFAULT 100,
+  role TEXT NOT NULL DEFAULT 'lead',
+  created_at TEXT NOT NULL,
+  UNIQUE(project_id, character_name)
 );
 CREATE TABLE IF NOT EXISTS project_quality_scores (
   id TEXT PRIMARY KEY,
@@ -281,7 +349,42 @@ CREATE TABLE IF NOT EXISTS projects (
   cover_urls TEXT,
   status TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL, script_data TEXT, director_notes TEXT, pipeline_state TEXT, mode TEXT DEFAULT 'episodic', execution_mode TEXT DEFAULT 'dialogue', style_id TEXT, global_asset_ids TEXT DEFAULT '[]', output_config TEXT, primary_character_ref TEXT, locked_characters TEXT NOT NULL DEFAULT '[]', share_token TEXT, share_created_at TEXT
+  updated_at TEXT NOT NULL, script_data TEXT, director_notes TEXT, pipeline_state TEXT, mode TEXT DEFAULT 'episodic', execution_mode TEXT DEFAULT 'dialogue', style_id TEXT, aspect TEXT DEFAULT '16:9', global_asset_ids TEXT DEFAULT '[]', output_config TEXT, series_id TEXT, episode_number INTEGER, primary_character_ref TEXT, locked_characters TEXT NOT NULL DEFAULT '[]', share_token TEXT, share_created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS publish_records (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'packaged',       
+  share_url TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL DEFAULT '',
+  external_url TEXT,                             
+  published_at TEXT,                             
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS resource_locks (
+  key TEXT PRIMARY KEY,
+  owner TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS scheduled_publishes (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  scheduled_at TEXT NOT NULL,                     
+  status TEXT NOT NULL DEFAULT 'pending',         
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  publish_record_id TEXT,                         
+  created_by TEXT,                                
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS series_anchors (
+  series_id TEXT PRIMARY KEY,
+  data TEXT NOT NULL DEFAULT '{}',
+  updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS shot_vision_audits (
   id TEXT PRIMARY KEY,
@@ -325,6 +428,19 @@ CREATE TABLE IF NOT EXISTS team_invites (
   accepted_by TEXT,                            
   accepted_at TEXT
 );
+CREATE TABLE IF NOT EXISTS template_favorites (
+  user_id TEXT NOT NULL,
+  template_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, template_id)
+);
+CREATE TABLE IF NOT EXISTS template_ratings (
+  template_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  rating INTEGER NOT NULL,                       
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (template_id, user_id)
+);
 CREATE TABLE IF NOT EXISTS template_share_tokens (
   token TEXT PRIMARY KEY,                       
   asset_id TEXT NOT NULL,                       
@@ -333,6 +449,13 @@ CREATE TABLE IF NOT EXISTS template_share_tokens (
   clone_count INTEGER NOT NULL DEFAULT 0,       
   created_at TEXT NOT NULL,
   expires_at TEXT                               
+);
+CREATE TABLE IF NOT EXISTS ui_events (
+  id TEXT PRIMARY KEY,
+  event TEXT NOT NULL,
+  user_id TEXT,
+  meta TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS usage_tracking (
   id TEXT PRIMARY KEY,
@@ -350,9 +473,9 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT NOT NULL,
   role TEXT NOT NULL,
   avatar_url TEXT,
-  locale TEXT DEFAULT 'zh',
+  locale TEXT DEFAULT 'en',
   created_at TEXT NOT NULL
-, invite_code_used TEXT, subscription_tier TEXT NOT NULL DEFAULT 'free', subscription_status TEXT, stripe_customer_id TEXT, email_notify_pref TEXT DEFAULT 'mentions', budget_cap_cny REAL, budget_hard_cap_cny REAL);
+, invite_code_used TEXT, budget_cap_cny REAL, budget_hard_cap_cny REAL, subscription_tier TEXT NOT NULL DEFAULT 'free', subscription_status TEXT, stripe_customer_id TEXT, email_notify_pref TEXT DEFAULT 'mentions');
 CREATE TABLE IF NOT EXISTS waitlist (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL,
@@ -364,60 +487,30 @@ CREATE TABLE IF NOT EXISTS waitlist (
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS yjs_docs (
-  doc_name TEXT PRIMARY KEY,
-  state BYTEA NOT NULL,
+  doc_name TEXT PRIMARY KEY,                     
+  state BYTEA NOT NULL,                           
   update_count INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
--- v9.6.7 (阶段十六 T2 模板市场): 可复用成片模板 (画风+多参元素+节奏+一键起片预填)
-CREATE TABLE IF NOT EXISTS film_templates (
-  id TEXT PRIMARY KEY,
-  owner_id TEXT,
-  title TEXT NOT NULL,
-  style TEXT NOT NULL DEFAULT '',
-  genre TEXT,
-  pacing_tone TEXT,
-  shot_count INTEGER NOT NULL DEFAULT 0,
-  quality INTEGER NOT NULL DEFAULT 60,
-  elements TEXT NOT NULL DEFAULT '[]',
-  tags TEXT NOT NULL DEFAULT '[]',
-  payload TEXT,
-  source_project_id TEXT,
-  visibility TEXT NOT NULL DEFAULT 'public',
-  use_count INTEGER NOT NULL DEFAULT 0,
-  rating_sum INTEGER NOT NULL DEFAULT 0,
-  rating_count INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_film_templates_market ON film_templates(visibility, quality);
-CREATE INDEX IF NOT EXISTS idx_film_templates_owner ON film_templates(owner_id);
--- v9.7.16 (T2 评分/收藏)
-CREATE TABLE IF NOT EXISTS template_ratings (
-  template_id TEXT NOT NULL,
-  user_id TEXT NOT NULL,
-  rating INTEGER NOT NULL,
-  created_at TEXT NOT NULL,
-  PRIMARY KEY (template_id, user_id)
-);
-CREATE TABLE IF NOT EXISTS template_favorites (
-  user_id TEXT NOT NULL,
-  template_id TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  PRIMARY KEY (user_id, template_id)
-);
-CREATE INDEX IF NOT EXISTS idx_template_favorites_user ON template_favorites(user_id);
 CREATE INDEX IF NOT EXISTS idx_api_quota_alerts_active ON api_quota_alerts(provider, acknowledged_at);
 CREATE INDEX IF NOT EXISTS idx_api_quota_alerts_recent ON api_quota_alerts(last_seen_at);
 CREATE INDEX IF NOT EXISTS idx_api_usage_provider_created ON api_usage_events(provider, created_at);
 CREATE INDEX IF NOT EXISTS idx_api_usage_success ON api_usage_events(success, created_at);
+CREATE INDEX IF NOT EXISTS idx_character_library_user ON character_library(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_project ON chat_messages(project_id);
 CREATE INDEX IF NOT EXISTS idx_comments_author ON comments(author_user_id);
 CREATE INDEX IF NOT EXISTS idx_comments_project ON comments(project_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_comments_target ON comments(target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_consent_log_action ON consent_log(action, created_at);
+CREATE INDEX IF NOT EXISTS idx_consent_log_user ON consent_log(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_cost_log_created ON cost_log(created_at);
 CREATE INDEX IF NOT EXISTS idx_cost_log_project ON cost_log(project_id);
 CREATE INDEX IF NOT EXISTS idx_cost_log_user ON cost_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_film_templates_market ON film_templates(visibility, quality);
+CREATE INDEX IF NOT EXISTS idx_film_templates_owner ON film_templates(owner_id);
+CREATE INDEX IF NOT EXISTS idx_generations_project ON generations(project_id);
+CREATE INDEX IF NOT EXISTS idx_generations_user ON generations(user_id);
 CREATE INDEX IF NOT EXISTS idx_global_assets_user_name ON global_assets(user_id, name);
 CREATE INDEX IF NOT EXISTS idx_global_assets_user_type ON global_assets(user_id, type);
 CREATE INDEX IF NOT EXISTS idx_invite_codes_source ON invite_codes(source);
@@ -429,68 +522,38 @@ CREATE INDEX IF NOT EXISTS idx_ip_tokens_owner ON character_ip_tokens(owner_id);
 CREATE INDEX IF NOT EXISTS idx_ip_tokens_visibility ON character_ip_tokens(visibility, status);
 CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient_user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(recipient_user_id, read_at, created_at);
+CREATE INDEX IF NOT EXISTS idx_pipeline_jobs_project ON pipeline_jobs(project_id);
+CREATE INDEX IF NOT EXISTS idx_pipeline_jobs_state ON pipeline_jobs(state, created_at);
 CREATE INDEX IF NOT EXISTS idx_pipeline_reruns_project ON pipeline_reruns(project_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_pje_job ON pipeline_job_events(job_id, at, ord);
+CREATE INDEX IF NOT EXISTS idx_plc_character_name ON project_locked_characters(character_name);
+CREATE INDEX IF NOT EXISTS idx_plc_project ON project_locked_characters(project_id);
 CREATE INDEX IF NOT EXISTS idx_plugin_events_created ON plugin_chain_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_plugin_events_kind ON plugin_chain_events(kind, outcome);
 CREATE INDEX IF NOT EXISTS idx_preview_history_user_created ON preview_history(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_project_assets_project_shot ON project_assets(project_id, shot_number);
+CREATE INDEX IF NOT EXISTS idx_project_assets_project_type ON project_assets(project_id, type);
 CREATE INDEX IF NOT EXISTS idx_project_collaborators_project ON project_collaborators(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_collaborators_user ON project_collaborators(user_id);
 CREATE INDEX IF NOT EXISTS idx_project_quality_scores_created ON project_quality_scores(created_at);
 CREATE INDEX IF NOT EXISTS idx_project_quality_scores_project ON project_quality_scores(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_share_tokens_owner ON project_share_tokens(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_project_share_tokens_project ON project_share_tokens(project_id);
+CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
+CREATE INDEX IF NOT EXISTS idx_projects_user_created ON projects(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_publish_records_project ON publish_records(project_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_resource_locks_expires ON resource_locks(expires_at);
 CREATE INDEX IF NOT EXISTS idx_review_status_status ON project_review_status(status, updated_at);
+CREATE INDEX IF NOT EXISTS idx_scheduled_publishes_due ON scheduled_publishes(status, scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_scheduled_publishes_project ON scheduled_publishes(project_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_shot_audits_project ON shot_vision_audits(project_id, shot_number);
 CREATE INDEX IF NOT EXISTS idx_team_invites_owner ON team_invites(owner_user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_template_favorites_user ON template_favorites(user_id);
 CREATE INDEX IF NOT EXISTS idx_template_share_tokens_asset ON template_share_tokens(asset_id);
 CREATE INDEX IF NOT EXISTS idx_template_share_tokens_owner ON template_share_tokens(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_track_edits_project ON project_track_edits(project_id, track_type);
+CREATE INDEX IF NOT EXISTS idx_ui_events_event ON ui_events(event, created_at);
 CREATE INDEX IF NOT EXISTS idx_waitlist_email ON waitlist(email);
 CREATE INDEX IF NOT EXISTS idx_waitlist_status ON waitlist(status);
 CREATE INDEX IF NOT EXISTS idx_workflows_user ON agent_workflows(user_id, updated_at);
 CREATE INDEX IF NOT EXISTS idx_yjs_docs_updated ON yjs_docs(updated_at);
-
--- v12.2.5 (阶段二十一 B): 锁脸角色归一表(projects.locked_characters JSON 的索引镜像)
-CREATE TABLE IF NOT EXISTS project_locked_characters (
-  id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL,
-  character_name TEXT NOT NULL,
-  image_url TEXT NOT NULL DEFAULT '',
-  cw INTEGER NOT NULL DEFAULT 100,
-  role TEXT NOT NULL DEFAULT 'lead',
-  created_at TEXT NOT NULL,
-  UNIQUE(project_id, character_name)
-);
-CREATE INDEX IF NOT EXISTS idx_plc_project ON project_locked_characters(project_id);
-CREATE INDEX IF NOT EXISTS idx_plc_character_name ON project_locked_characters(character_name);
-
--- v12.3.1 (阶段二十二): 发布记录
-CREATE TABLE IF NOT EXISTS publish_records (
-  id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL,
-  platform TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'packaged',
-  share_url TEXT NOT NULL DEFAULT '',
-  title TEXT NOT NULL DEFAULT '',
-  external_url TEXT,
-  published_at TEXT,
-  created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_publish_records_project ON publish_records(project_id, created_at);
-
--- v12.3.3 (阶段二十二): 定时发布
-CREATE TABLE IF NOT EXISTS scheduled_publishes (
-  id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL,
-  platform TEXT NOT NULL,
-  scheduled_at TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending',
-  attempts INTEGER NOT NULL DEFAULT 0,
-  last_error TEXT,
-  publish_record_id TEXT,
-  created_by TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_scheduled_publishes_due ON scheduled_publishes(status, scheduled_at);
-CREATE INDEX IF NOT EXISTS idx_scheduled_publishes_project ON scheduled_publishes(project_id, created_at);

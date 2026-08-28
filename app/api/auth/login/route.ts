@@ -3,12 +3,14 @@ import bcrypt from 'bcryptjs';
 import { signToken, sessionCookieHeader } from '../lib';
 import { findUserByEmail } from '@/lib/repos/user-repo';
 import { rateLimit, clientIp, isRateLimitActive } from '@/lib/rate-limit';
+import { apiT, localeFromRequest } from '@/lib/api-i18n';
 
 export async function POST(request: Request) {
+  const locale = localeFromRequest(request);
   const body = await request.json().catch(() => ({}));
   const { email, password } = body;
   if (!email || !password) {
-    return NextResponse.json({ message: 'Missing credentials' }, { status: 400 });
+    return NextResponse.json({ message: apiT(locale, 'missingCredentials') }, { status: 400 });
   }
 
   // 限流:防暴力撞库 —— per(IP+邮箱)10 次/15 分,另设 per IP 粗粒度 50 次/15 分(挡撒网喷洒)。
@@ -20,7 +22,7 @@ export async function POST(request: Request) {
     if (!perPair.allowed || !perIp.allowed) {
       const retry = Math.max(perPair.retryAfterSec, perIp.retryAfterSec);
       return NextResponse.json(
-        { message: '登录尝试过于频繁,请稍后再试' },
+        { message: apiT(locale, 'loginTooMany') },
         { status: 429, headers: { 'Retry-After': String(retry) } },
       );
     }

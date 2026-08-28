@@ -84,16 +84,16 @@ export async function monthSpentCny(userId: string, now: Date = new Date()): Pro
  * 无预算上限 → 永远放行 (level 'none')。pendingCostCny = 本次操作预估成本。
  */
 export async function assertBudget(
-  opts: { userId: string; pendingCostCny?: number },
+  opts: { userId: string; pendingCostCny?: number; locale?: import('./i18n').Locale },
   now: Date = new Date(),
 ): Promise<{ allow: boolean; guard: BudgetGuardResult }> {
   const { capCny, hardCapCny } = await getUserBudget(opts.userId);
   // 无软上限直接放行, 省一次花费查询
   if (capCny == null || capCny <= 0) {
-    const guard = evaluateBudgetGuard({ spentCny: 0, capCny: null, pendingCostCny: opts.pendingCostCny });
+    const guard = evaluateBudgetGuard({ spentCny: 0, capCny: null, pendingCostCny: opts.pendingCostCny, locale: opts.locale });
     return { allow: true, guard };
   }
   const spentCny = await monthSpentCny(opts.userId, now);
-  const guard = evaluateBudgetGuard({ spentCny, capCny, hardCapCny, pendingCostCny: opts.pendingCostCny });
+  const guard = evaluateBudgetGuard({ spentCny, capCny, hardCapCny, pendingCostCny: opts.pendingCostCny, locale: opts.locale });
   return { allow: guard.allow, guard };
 }

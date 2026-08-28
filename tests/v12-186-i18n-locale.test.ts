@@ -5,11 +5,11 @@ import { describe, it, expect } from 'vitest';
 import { normalizeLocale, getTranslations, LOCALES } from '@/lib/i18n';
 
 describe('v12.186 · i18n locale', () => {
-  it('ko/ru 识别;未知语言回退 en(俄语用户不再看全中文);空输入保持 zh-CN', () => {
+  it('ko/ru 识别;未知语言回退 en(俄语用户不再看全中文);空输入默认 en', () => {
     expect(normalizeLocale('ko-KR')).toBe('ko');
     expect(normalizeLocale('ru')).toBe('ru');
     expect(normalizeLocale('fr-FR')).toBe('en');   // 未知 → en(原 zh-CN)
-    expect(normalizeLocale('')).toBe('zh-CN');
+    expect(normalizeLocale('')).toBe('en');
     expect(normalizeLocale('zh-HK')).toBe('zh-TW');
     expect(LOCALES).toContain('ko');
   });

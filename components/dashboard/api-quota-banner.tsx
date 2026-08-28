@@ -17,6 +17,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { Warning as AlertTriangle, X, Lightning as Zap, WifiHigh as Wifi, Clock, Lock } from '@phosphor-icons/react';
+import { useLocale } from '@/hooks/use-locale';
 
 interface AlertItem {
   provider: string;
@@ -25,30 +26,28 @@ interface AlertItem {
   count: number;
 }
 
-const PROVIDER_LABEL: Record<string, string> = {
-  minimax: 'Minimax (视频/图片/TTS/音乐)',
-  midjourney: 'Midjourney (人物/场景/分镜)',
-  openai: 'Claude/OpenAI (剧本)',
-  veo: 'Veo (视频备选)',
-  kling: '可灵 (视频)',
-  vidu: 'Vidu (长视频)',
-  fal: 'Fal/Flux (图片备选)',
-  comfyui: 'ComfyUI (图片备选)',
-  qingyuntop: '青云顶 (聚合网关)',
-};
-
-const ALERT_LABEL: Record<AlertItem['alertType'], { text: string; icon: any; tone: 'red' | 'amber' }> = {
-  exhausted: { text: '余额耗尽', icon: Zap, tone: 'red' },
-  saturated: { text: '上游饱和', icon: Wifi, tone: 'amber' },
-  rate_limited: { text: '触发限流', icon: Clock, tone: 'amber' },
-  auth_failed: { text: '鉴权失败', icon: Lock, tone: 'red' },
-  // v2.22: 套餐不支持某模型 — 不是鉴权问题, 提示用户改模型 / 升级套餐
-  model_unavailable: { text: '套餐不支持此模型', icon: Lock, tone: 'amber' },
-};
-
 const DISMISS_KEY = 'apiQuotaBanner.dismissed';
 
 export function ApiQuotaBanner() {
+  const { t } = useLocale();
+  const PROVIDER_LABEL: Record<string, string> = {
+    minimax: 'Minimax (video/image/TTS/music)',
+    midjourney: 'Midjourney (cast/scene/board)',
+    openai: 'Claude/OpenAI (script)',
+    veo: 'Veo (video fallback)',
+    kling: t.dashBanner.kling,
+    vidu: 'Vidu (long video)',
+    fal: 'Fal/Flux (image fallback)',
+    comfyui: 'ComfyUI (image fallback)',
+    qingyuntop: t.dashBanner.qingyuntop,
+  };
+  const ALERT_LABEL: Record<AlertItem['alertType'], { text: string; icon: any; tone: 'red' | 'amber' }> = {
+    exhausted: { text: t.dashBanner.exhausted, icon: Zap, tone: 'red' },
+    saturated: { text: t.dashBanner.saturated, icon: Wifi, tone: 'amber' },
+    rate_limited: { text: t.dashBanner.rateLimited, icon: Clock, tone: 'amber' },
+    auth_failed: { text: t.dashBanner.authFailed, icon: Lock, tone: 'red' },
+    model_unavailable: { text: t.dashBanner.modelUnavailable, icon: Lock, tone: 'amber' },
+  };
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [dismissed, setDismissed] = useState(false);
 
@@ -99,7 +98,7 @@ export function ApiQuotaBanner() {
       <AlertTriangle className={`w-4 h-4 mt-0.5 shrink-0 ${hasRed ? 'text-rose-300' : 'text-amber-300'}`} />
       <div className="flex-1 min-w-0">
         <div className="text-[11px] font-semibold tracking-wide opacity-80 uppercase">
-          API 状态告警 · {alerts.length} 项
+          {t.dashBanner.title} · {alerts.length} {t.dashBanner.itemsUnit}
         </div>
         <ul className="mt-1 space-y-0.5">
           {alerts.map((a) => {
@@ -119,14 +118,14 @@ export function ApiQuotaBanner() {
           })}
         </ul>
         <p className="text-[10.5px] opacity-60 mt-1.5">
-          创作流程会自动降级到备选引擎; 如需充值, 请联系管理员或查看
-          <a href="/dashboard/billing" className="underline mx-1 opacity-90 hover:opacity-100">计费页</a>
+          {t.dashBanner.autoFallback}
+          <a href="/dashboard/billing" className="underline mx-1 opacity-90 hover:opacity-100">{t.dashBanner.billingLink}</a>
         </p>
       </div>
       <button
         onClick={handleDismiss}
         className="shrink-0 p-1 rounded hover:bg-white/10 opacity-60 hover:opacity-100"
-        title="本次会话不再提示"
+        title={t.dashBanner.dismiss}
       >
         <X className="w-3.5 h-3.5" />
       </button>

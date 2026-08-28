@@ -80,7 +80,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   // 3. 计费 gate —— 发布锁 creator+
   const planGate = checkPlan(request, 'creator');
-  if (!planGate.ok) return planRejection(planGate.current, planGate.required);
+  if (!planGate.ok) return planRejection(planGate.current, planGate.required, request);
 
   // 4. 质量门禁硬拦(block → 422,不再只是 advisory 徽章)
   const audits = await getProjectAudits(id);

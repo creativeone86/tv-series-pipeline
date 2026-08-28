@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT NOT NULL,
   role TEXT NOT NULL,
   avatar_url TEXT,
-  locale TEXT DEFAULT 'zh',
+  locale TEXT DEFAULT 'en',
   created_at TEXT NOT NULL
 );
 
@@ -923,7 +923,7 @@ export function seed() {
       const demoRole = wantAdmin && !isProd ? 'admin' : 'member';
 
       db.prepare(`INSERT INTO users (id, email, password_hash, name, role, avatar_url, locale, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
-        demoUserId, 'demo@qfmanju.ai', passwordHash, '青枫漫剧 Demo', demoRole, AVATAR, 'zh', now()
+        demoUserId, 'demo@qfmanju.ai', passwordHash, '青枫漫剧 Demo', demoRole, AVATAR, 'en', now()
       );
 
       const projectStmt = db.prepare(`INSERT INTO projects (id, user_id, title, description, cover_urls, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);

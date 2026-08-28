@@ -37,9 +37,9 @@ export default function SettingsPage() {
   }
 
   const handleReset = () => {
-    setLocale('zh-CN')
+    setLocale('en')
     updateSettings({
-      language: 'zh-CN',
+      language: 'en',
       theme: 'dark',
       notifications: { email: true, push: true, updates: true },
       privacy: { profilePublic: false, showActivity: true },

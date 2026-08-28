@@ -7,22 +7,15 @@ import { signToken, sessionCookieHeader } from '../lib';
 import {
   consumeInviteCodeTx,
   isInviteRequired,
-  type InviteCodeError,
 } from '@/lib/repos/invite-repo'; // v9.0.3: invite-repo (async, 双驱动)
 import { findUserByEmail } from '@/lib/repos/user-repo';
 import { rateLimit, clientIp, isRateLimitActive } from '@/lib/rate-limit';
+import { apiT, authInviteMessage, localeFromRequest } from '@/lib/api-i18n';
 
 const DEFAULT_AVATAR = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" rx="40" fill="#2d1b69"/><circle cx="40" cy="30" r="14" fill="rgba(255,255,255,0.3)"/><ellipse cx="40" cy="68" rx="22" ry="18" fill="rgba(255,255,255,0.2)"/></svg>`)}`;
 
-const INVITE_ERROR_MESSAGES: Record<InviteCodeError, string> = {
-  NOT_FOUND: '邀请码不存在，请检查拼写',
-  ALREADY_USED: '该邀请码已被使用',
-  EXPIRED: '邀请码已过期',
-  REVOKED: '邀请码已被撤销',
-  INVALID: '邀请码格式无效',
-};
-
 export async function POST(request: Request) {
+  const locale = localeFromRequest(request);
   const body = await request.json().catch(() => ({}));
   const { email, password, name, inviteCode } = body as {
     email?: string;
@@ -32,7 +25,7 @@ export async function POST(request: Request) {
   };
 
   if (!email || !password || !name) {
-    return NextResponse.json({ message: '缺少必填字段' }, { status: 400 });
+    return NextResponse.json({ message: apiT(locale, 'registerMissing') }, { status: 400 });
   }
 
   // 限流:防注册刷量 —— per IP 10 次/小时。
@@ -40,7 +33,7 @@ export async function POST(request: Request) {
     const rl = rateLimit(`register-ip:${clientIp(request)}`, { limit: 10, windowMs: 60 * 60_000 });
     if (!rl.allowed) {
       return NextResponse.json(
-        { message: '注册过于频繁,请稍后再试' },
+        { message: apiT(locale, 'registerTooMany') },
         { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
       );
     }
@@ -52,7 +45,7 @@ export async function POST(request: Request) {
     if (!inviteCode || String(inviteCode).trim().length === 0) {
       return NextResponse.json(
         {
-          message: 'Beta 版需要邀请码才能注册，可在首页申请 waitlist',
+          message: apiT(locale, 'inviteRequiredBody'),
           code: 'INVITE_REQUIRED',
         },
         { status: 403 },
@@ -62,7 +55,7 @@ export async function POST(request: Request) {
 
   const existing = await findUserByEmail(email);
   if (existing) {
-    return NextResponse.json({ message: '该邮箱已被注册' }, { status: 409 });
+    return NextResponse.json({ message: apiT(locale, 'emailTaken') }, { status: 409 });
   }
 
   const passwordHash = bcrypt.hashSync(password, 10);
@@ -75,12 +68,12 @@ export async function POST(request: Request) {
       await tx.run(
         `INSERT INTO users (id, email, password_hash, name, role, avatar_url, locale, created_at, invite_code_used)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [userId, email, passwordHash, name, 'member', DEFAULT_AVATAR, 'zh', now(), null],
+        [userId, email, passwordHash, name, 'member', DEFAULT_AVATAR, 'en', now(), null],
       );
       if (inviteRequired) {
         const result = await consumeInviteCodeTx(tx, String(inviteCode), userId);
         if (!result.ok) {
-          const msg = INVITE_ERROR_MESSAGES[result.error ?? 'INVALID'];
+          const msg = authInviteMessage(locale, result.error ?? 'INVALID');
           throw Object.assign(new Error(msg), { kind: 'invite', code: result.error });
         }
         await tx.run('UPDATE users SET invite_code_used = ? WHERE id = ?', [result.invite!.code, userId]);
@@ -95,7 +88,7 @@ export async function POST(request: Request) {
       );
     }
     console.error('[register] failed:', e);
-    return NextResponse.json({ message: '注册失败，请稍后重试' }, { status: 500 });
+    return NextResponse.json({ message: apiT(locale, 'registerFailed') }, { status: 500 });
   }
 
   const token = signToken({ id: userId, role: 'member' });
@@ -103,7 +96,7 @@ export async function POST(request: Request) {
   const res = NextResponse.json(
     {
       token,
-      user: { id: userId, email, name, role: 'member', avatarUrl: DEFAULT_AVATAR, locale: 'zh' },
+      user: { id: userId, email, name, role: 'member', avatarUrl: DEFAULT_AVATAR, locale: 'en' },
     },
     { status: 201 },
   );

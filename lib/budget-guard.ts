@@ -10,6 +10,9 @@
  * 纯函数, 单测 tests/v9-3-3-budget-guard.test.ts。
  */
 
+import { apiT } from './api-i18n';
+import type { Locale } from './i18n';
+
 export type BudgetGuardLevel = 'none' | 'ok' | 'warn' | 'soft_over' | 'hard_block';
 
 export interface BudgetGuardInput {
@@ -23,6 +26,8 @@ export interface BudgetGuardInput {
   pendingCostCny?: number;
   /** 软上限内的告警阈值 0..1, 默认 0.8 */
   warnThreshold?: number;
+  /** UI locale for `message`. Defaults to English. */
+  locale?: Locale;
 }
 
 export interface BudgetGuardResult {
@@ -37,7 +42,7 @@ export interface BudgetGuardResult {
   hardCapCny: number | null;
   /** spent / cap; 无上限 → null */
   pctUsed: number | null;
-  /** 给用户的中文提示 */
+  /** User-facing hint (localized via input.locale) */
   message: string;
   /** 引导(调预算 / 去计费), 借鉴 plan-gate */
   upgradeUrl: string;
@@ -55,6 +60,7 @@ const UPGRADE_URL = '/dashboard/billing';
 
 /** 评估当月花费 + 本次操作成本对预算护栏的裁决。 */
 export function evaluateBudgetGuard(input: BudgetGuardInput): BudgetGuardResult {
+  const locale = input.locale ?? 'en';
   const spentCny = round2(Math.max(0, num(input.spentCny)));
   const pendingCostCny = round2(Math.max(0, num(input.pendingCostCny)));
   const projectedAfterCny = round2(spentCny + pendingCostCny);
@@ -66,7 +72,7 @@ export function evaluateBudgetGuard(input: BudgetGuardInput): BudgetGuardResult 
     return {
       allow: true, level: 'none', spentCny, pendingCostCny, projectedAfterCny,
       capCny: null, hardCapCny: null, pctUsed: null,
-      message: '未设预算上限', upgradeUrl: UPGRADE_URL,
+      message: apiT(locale, 'budgetNone'), upgradeUrl: UPGRADE_URL,
     };
   }
 
@@ -81,19 +87,19 @@ export function evaluateBudgetGuard(input: BudgetGuardInput): BudgetGuardResult 
 
   if (spentCny >= hardCap) {
     allow = false; level = 'hard_block';
-    message = `本月已达硬上限 ¥${round2(hardCap)},已暂停消耗,请调高预算或前往计费`;
+    message = apiT(locale, 'budgetHardReached', { hard: round2(hardCap) });
   } else if (projectedAfterCny > hardCap) {
     allow = false; level = 'hard_block';
-    message = `本次预估 ¥${pendingCostCny} 将越过硬上限 ¥${round2(hardCap)}(当前 ¥${spentCny}),已拦截`;
+    message = apiT(locale, 'budgetWouldExceed', { pending: pendingCostCny, hard: round2(hardCap), spent: spentCny });
   } else if (projectedAfterCny >= cap) {
     allow = true; level = 'soft_over';
-    message = `本次将触及预算上限 ¥${round2(cap)}(预计 ¥${projectedAfterCny}),仍放行但请留意`;
+    message = apiT(locale, 'budgetSoftOver', { cap: round2(cap), projected: projectedAfterCny });
   } else if (pctUsed >= warnThreshold) {
     allow = true; level = 'warn';
-    message = `本月已用 ${Math.round(pctUsed * 100)}%(¥${spentCny}/¥${round2(cap)}),接近预算`;
+    message = apiT(locale, 'budgetWarn', { pct: Math.round(pctUsed * 100), spent: spentCny, cap: round2(cap) });
   } else {
     allow = true; level = 'ok';
-    message = `预算健康(¥${spentCny}/¥${round2(cap)})`;
+    message = apiT(locale, 'budgetOk', { spent: spentCny, cap: round2(cap) });
   }
 
   return {

@@ -42,7 +42,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" className={`${jakarta.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" className={`${jakarta.variable} ${jetbrainsMono.variable}`}>
       <body className="antialiased">
         {/* v10.3.5 a11y: 跳到主内容 —— 键盘第一个可聚焦元素,平时 sr-only,聚焦才显形 */}
         <SkipLink />

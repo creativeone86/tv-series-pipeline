@@ -68,7 +68,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const gate = checkPlan(request, 'pro');
   if (!gate.ok) {
     console.warn(`[regen-4k] plan-gate blocked: user=${gate.userId} tier=${gate.current}`);
-    return planRejection(gate.current, gate.required);
+    return planRejection(gate.current, gate.required, request);
   }
 
   let body: any = {};

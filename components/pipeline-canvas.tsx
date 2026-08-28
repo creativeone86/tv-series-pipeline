@@ -124,7 +124,10 @@ function getEdgeStyle(edgeId: string, sourceStatus: PipelineNodeStatus, targetSt
 }
 
 // 初始节点布局
-export function buildInitialNodes(assets: ProjectAsset[]): Node<PipelineNodeData>[] {
+export function buildInitialNodes(assets: ProjectAsset[], labels?: {
+  director?: string; writer?: string; characterDesign?: string; sceneDesign?: string;
+  storyboard?: string; videoGen?: string; editor?: string; producer?: string;
+}): Node<PipelineNodeData>[] {
   const getAssets = (type: string) => assets.filter(a => a.type === type);
 
   return [
@@ -135,7 +138,7 @@ export function buildInitialNodes(assets: ProjectAsset[]): Node<PipelineNodeData
       data: {
         id: 'node-director',
         agentRole: AgentRole.DIRECTOR,
-        label: '导演',
+        label: labels?.director || 'Director',
         status: 'pending',
         progress: 0,
         assets: [],
@@ -146,43 +149,43 @@ export function buildInitialNodes(assets: ProjectAsset[]): Node<PipelineNodeData
       id: 'node-writer',
       type: 'script',
       position: { x: 0, y: 0 },
-      data: { id: 'node-writer', agentRole: AgentRole.WRITER, label: '编剧', status: 'pending', progress: 0, assets: [...getAssets('script'), ...getAssets('character')] },
+      data: { id: 'node-writer', agentRole: AgentRole.WRITER, label: labels?.writer || 'Writer', status: 'pending', progress: 0, assets: [...getAssets('script'), ...getAssets('character')] },
     },
     {
       id: 'node-character',
       type: 'character',
       position: { x: 480, y: -120 },
-      data: { id: 'node-character', agentRole: AgentRole.CHARACTER_DESIGNER, label: '角色设计', status: 'pending', progress: 0, assets: getAssets('character') },
+      data: { id: 'node-character', agentRole: AgentRole.CHARACTER_DESIGNER, label: labels?.characterDesign || 'Character Design', status: 'pending', progress: 0, assets: getAssets('character') },
     },
     {
       id: 'node-scene',
       type: 'scene',
       position: { x: 480, y: 220 },
-      data: { id: 'node-scene', agentRole: AgentRole.SCENE_DESIGNER, label: '场景设计', status: 'pending', progress: 0, assets: getAssets('scene') },
+      data: { id: 'node-scene', agentRole: AgentRole.SCENE_DESIGNER, label: labels?.sceneDesign || 'Scene Design', status: 'pending', progress: 0, assets: getAssets('scene') },
     },
     {
       id: 'node-storyboard',
       type: 'storyboard',
       position: { x: 960, y: 0 },
-      data: { id: 'node-storyboard', agentRole: AgentRole.STORYBOARD, label: '分镜', status: 'pending', progress: 0, assets: getAssets('storyboard') },
+      data: { id: 'node-storyboard', agentRole: AgentRole.STORYBOARD, label: labels?.storyboard || 'Storyboard', status: 'pending', progress: 0, assets: getAssets('storyboard') },
     },
     {
       id: 'node-video',
       type: 'video',
       position: { x: 1440, y: 0 },
-      data: { id: 'node-video', agentRole: AgentRole.VIDEO_PRODUCER, label: '视频生成', status: 'pending', progress: 0, assets: getAssets('video') },
+      data: { id: 'node-video', agentRole: AgentRole.VIDEO_PRODUCER, label: labels?.videoGen || 'Video', status: 'pending', progress: 0, assets: getAssets('video') },
     },
     {
       id: 'node-editor',
       type: 'editor',
       position: { x: 1920, y: 0 },
-      data: { id: 'node-editor', agentRole: AgentRole.EDITOR, label: '剪辑师', status: 'pending', progress: 0, assets: [] },
+      data: { id: 'node-editor', agentRole: AgentRole.EDITOR, label: labels?.editor || 'Editor', status: 'pending', progress: 0, assets: [] },
     },
     {
       id: 'node-producer',
       type: 'review',
       position: { x: 2400, y: 0 },
-      data: { id: 'node-producer', agentRole: AgentRole.PRODUCER, label: '制片人', status: 'pending', progress: 0, assets: [] },
+      data: { id: 'node-producer', agentRole: AgentRole.PRODUCER, label: labels?.producer || 'Producer', status: 'pending', progress: 0, assets: [] },
     },
   ];
 }

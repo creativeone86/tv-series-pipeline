@@ -50,6 +50,7 @@ import { computeEmotionCurve } from '@/lib/emotion-curve';
 import { MonitorTab } from '@/components/project/monitor-tab';
 import { ParamLinkagePanel } from '@/components/project/param-linkage-panel';
 import { useToast } from '@/components/ui/toast-provider';
+import { useLocale } from '@/hooks/use-locale';
 
 // 代码分割:时间线是 projects 详情页里最重的组件(~1182 行 + 拖拽/音频依赖),
 // 且仅在 activeTab==='timeline' 时渲染 → 动态懒加载,移出首屏 bundle。
@@ -69,6 +70,7 @@ function isVideoUrl(url: string): boolean {
 }
 
 export default function ProjectDetailPage() {
+  const { t } = useLocale();
   const params = useParams();
   const id = params.id as string;
   const { user } = useAuth();
@@ -353,43 +355,33 @@ export default function ProjectDetailPage() {
 
   const tabs = [
     // v6.4: 导演台 — 全链路环节总览 + 跳转编辑
-    { key: 'director', label: '导演台', icon: MonitorPlay, count: 0 },
-    { key: 'script', label: '剧本', icon: FileText, count: script?.shots?.length || 0 },
-    { key: 'characters', label: '角色', icon: Users, count: characters.length },
-    { key: 'scenes', label: '场景', icon: Mountain, count: scenes.length },
-    { key: 'storyboard', label: '分镜', icon: Film, count: storyboards.length },
-    // v7.3: 连贯性 + 种子锁控制台 (对标 Continuity Pro)
-    { key: 'continuity', label: '连贯性', icon: Link2, count: 0 },
-    { key: 'videos', label: '视频', icon: Video, count: videos.length },
-    // v2.16 P1.4: 镜头工坊 — 4K 重渲 / 首尾帧 / 多分辨率导出 集中入口
-    { key: 'workshop', label: '镜头工坊', icon: Scissors, count: videos.length },
-    // v3.1 F: Cinema 时间线 — 拖拽重排 + 时长调整
-    { key: 'timeline', label: 'Cinema 时间线', icon: Clapperboard, count: script?.shots?.length || 0 },
-    // v2.21 P1.4: 节奏分析 — 每镜冲突分 + 反转标记 + 警告/建议
-    { key: 'pacing', label: '节奏分析', icon: BarChart3, count: script?.pacingReport?.warnings?.length || 0 },
-    // v11.1.0: 拉片 — 出厂参数真值逐镜五栏(阶段十九)
-    { key: 'pullsheet', label: '拉片', icon: Clapperboard, count: 0 },
-    // v3.4.1: 成片质检 — 每镜画面对剧本的 Vision 评分
-    { key: 'vision-audit', label: '成片质检', icon: ScanEye, count: 0 },
-    { key: 'oneclick', label: '一键成片', icon: MagicWand, count: 0 },
-    // v8.0: 技术监看台 — 视频示波器 + EDL/XML 出片对接
-    { key: 'monitor', label: '技术监看', icon: Gauge, count: 0 },
-    // v8.2: 参数联动 — JSON ↔ 可视化同步
-    { key: 'param-linkage', label: '参数联动', icon: Braces, count: 0 },
-    // v3.0 P0.1: 评论协作 — 项目级讨论 + 提及通知
-    { key: 'comments', label: '评论协作', icon: MessageCircle, count: 0 },
-    // v9.1.2: 多平台分发 / 变现
-    { key: 'distribution', label: '分发', icon: Megaphone, count: 0 },
-    { key: 'play', label: '完整播放', icon: Play, count: 0 },
+    { key: 'director', label: t.product.tabDirector, icon: MonitorPlay, count: 0 },
+    { key: 'script', label: t.product.tabScript, icon: FileText, count: script?.shots?.length || 0 },
+    { key: 'characters', label: t.product.tabCharacters, icon: Users, count: characters.length },
+    { key: 'scenes', label: t.product.tabScenes, icon: Mountain, count: scenes.length },
+    { key: 'storyboard', label: t.product.tabStoryboard, icon: Film, count: storyboards.length },
+    { key: 'continuity', label: t.product.tabContinuity, icon: Link2, count: 0 },
+    { key: 'videos', label: t.product.tabVideos, icon: Video, count: videos.length },
+    { key: 'workshop', label: t.product.tabWorkshop, icon: Scissors, count: videos.length },
+    { key: 'timeline', label: t.product.tabTimeline, icon: Clapperboard, count: script?.shots?.length || 0 },
+    { key: 'pacing', label: t.product.tabPacing, icon: BarChart3, count: script?.pacingReport?.warnings?.length || 0 },
+    { key: 'pullsheet', label: t.product.tabPullsheet, icon: Clapperboard, count: 0 },
+    { key: 'vision-audit', label: t.product.tabVision, icon: ScanEye, count: 0 },
+    { key: 'oneclick', label: t.product.tabOneclick, icon: MagicWand, count: 0 },
+    { key: 'monitor', label: t.product.tabMonitor, icon: Gauge, count: 0 },
+    { key: 'param-linkage', label: t.product.tabParam, icon: Braces, count: 0 },
+    { key: 'comments', label: t.product.tabComments, icon: MessageCircle, count: 0 },
+    { key: 'distribution', label: t.product.tabDistribution, icon: Megaphone, count: 0 },
+    { key: 'play', label: t.product.tabPlay, icon: Play, count: 0 },
   ];
 
   // v12.42 工作流主轴:把 18 个平铺 Tab 收成两级 IA(创作 → 精修 → 审校 → 交付)。
   // activeGroup 纯派生自 activeTab(含程序化 setActiveTab,如导演台跳转),无需额外状态。
   const TAB_GROUPS: { key: string; label: string; en: string; tabKeys: string[] }[] = [
-    { key: 'create',  label: '创作', en: 'CREATE',  tabKeys: ['director', 'script', 'characters', 'scenes', 'storyboard', 'videos', 'oneclick'] },
-    { key: 'refine',  label: '精修', en: 'REFINE',  tabKeys: ['workshop', 'continuity', 'timeline', 'param-linkage'] },
-    { key: 'review',  label: '审校', en: 'REVIEW',  tabKeys: ['pacing', 'pullsheet', 'vision-audit', 'monitor'] },
-    { key: 'deliver', label: '交付', en: 'DELIVER', tabKeys: ['play', 'comments', 'distribution'] },
+    { key: 'create',  label: t.product.groupCreate, en: 'CREATE',  tabKeys: ['director', 'script', 'characters', 'scenes', 'storyboard', 'videos', 'oneclick'] },
+    { key: 'refine',  label: t.product.groupRefine, en: 'REFINE',  tabKeys: ['workshop', 'continuity', 'timeline', 'param-linkage'] },
+    { key: 'review',  label: t.product.groupReview, en: 'REVIEW',  tabKeys: ['pacing', 'pullsheet', 'vision-audit', 'monitor'] },
+    { key: 'deliver', label: t.product.groupDeliver, en: 'DELIVER', tabKeys: ['play', 'comments', 'distribution'] },
   ];
   const tabByKey: Record<string, typeof tabs[number]> = Object.fromEntries(tabs.map((t) => [t.key, t]));
   const activeGroup = TAB_GROUPS.find((g) => g.tabKeys.includes(activeTab))?.key || 'create';
@@ -468,10 +460,10 @@ export default function ProjectDetailPage() {
           </div>
           <dl className="lg:border-l lg:border-[var(--cinema-border)] lg:pl-8 grid grid-cols-2 lg:grid-cols-1 gap-x-8 gap-y-3 shrink-0">
             {[
-              { label: '镜头', value: String(script?.shots?.length ?? 0) },
-              { label: '角色', value: String(Array.isArray(project.lockedCharacters) ? project.lockedCharacters.length : 0) },
-              { label: '评分', value: review ? `${review.overallScore}/100` : '—' },
-              { label: '状态', value: project.status === 'completed' ? '已完成' : '制作中' },
+              { label: t.product.statShots, value: String(script?.shots?.length ?? 0) },
+              { label: t.product.statCast, value: String(Array.isArray(project.lockedCharacters) ? project.lockedCharacters.length : 0) },
+              { label: t.product.statScore, value: review ? `${review.overallScore}/100` : '—' },
+              { label: t.product.statStatus, value: project.status === 'completed' ? t.product.statusDone : t.product.statusMaking },
             ].map((m) => (
               <div key={m.label}>
                 <dt className="cinema-eyebrow !text-[9px] opacity-50">{m.label}</dt>
@@ -684,7 +676,7 @@ export default function ProjectDetailPage() {
           {/* 角色 */}
           {activeTab === 'characters' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {characters.length === 0 && <div className="col-span-full"><EmptyState icon={Users} title="还没有角色" hint="生成剧本后,AI 角色设计师会自动产出角色设定与立绘" /></div>}
+              {characters.length === 0 && <div className="col-span-full"><EmptyState icon={Users} title={t.product.emptyCharacters} hint="生成剧本后,AI 角色设计师会自动产出角色设定与立绘" /></div>}
               {characters.map((c: any) => (
                 <div key={c.id} className="cinema-card overflow-hidden">
                   {c.mediaUrls?.[0] && (
@@ -726,7 +718,7 @@ export default function ProjectDetailPage() {
           {/* 场景 */}
           {activeTab === 'scenes' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {scenes.length === 0 && <div className="col-span-full"><EmptyState icon={Mountain} title="还没有场景" hint="生成剧本后,AI 场景设计师会自动产出场景视觉方案" /></div>}
+              {scenes.length === 0 && <div className="col-span-full"><EmptyState icon={Mountain} title={t.product.emptyScenes} hint="生成剧本后,AI 场景设计师会自动产出场景视觉方案" /></div>}
               {scenes.map((s: any) => (
                 <div key={s.id} className="cinema-card overflow-hidden">
                   {s.mediaUrls?.[0] && (
@@ -917,7 +909,7 @@ export default function ProjectDetailPage() {
               );
             })()}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {videos.length === 0 && <div className="col-span-full"><EmptyState icon={Video} title="还没有镜头视频" hint="完成分镜后,在镜头工坊或主管线生成每镜视频" /></div>}
+              {videos.length === 0 && <div className="col-span-full"><EmptyState icon={Video} title={t.product.emptyVideos} hint="完成分镜后,在镜头工坊或主管线生成每镜视频" /></div>}
               {videos.map((v: any) => {
                 const url = v.mediaUrls?.[0];
                 const isVid = url && isVideoUrl(url);
