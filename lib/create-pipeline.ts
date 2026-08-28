@@ -487,7 +487,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
           const ctaFix = ensureCtaEnding((script as any).shots, (script as any).title || '', detectLanguage(idea));
           if (ctaFix.added) {
             console.log(`[create] v12.72 CTA 收尾已补: ${ctaFix.cta}`);
-            send('status', { message: st('stAdCta', { cta: ctaFix.cta }) });
+            send('status', { message: st('stAdCta', { cta: ctaFix.cta ?? '' }) });
           }
         }
       } catch (e) { console.warn('[create] 广告合规检查失败(非阻塞):', e instanceof Error ? e.message : e); }

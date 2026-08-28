@@ -2427,7 +2427,7 @@ ${shots.map((s, i) => {
       const planData = (sb as any).planData || {};
 
       this.update(AgentRole.STORYBOARD, {
-        currentTask: this.pipe('taskRenderShot', { n: sb.shotNumber }),
+        currentTask: this.pipe('taskRenderShot', { n: sb.shotNumber ?? 0 }),
         progress: Math.round((completedCount / storyboards.length) * 100),
       });
 
@@ -2951,7 +2951,7 @@ ${shots.map((s, i) => {
       const planData = (board as any).planData || {};
 
       this.update(AgentRole.VIDEO_PRODUCER, {
-        currentTask: this.pipe('taskMakeShot', { n: board.shotNumber, provider: providerLabel }),
+        currentTask: this.pipe('taskMakeShot', { n: board.shotNumber ?? 0, provider: providerLabel }),
         progress: Math.round((i / storyboards.length) * 100),
       });
 
