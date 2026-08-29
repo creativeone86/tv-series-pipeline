@@ -7,6 +7,8 @@
  */
 
 import { API_CONFIG } from './config';
+// .mjs 共享:同一套参数方言规则也被 scripts/llm-call.mjs(子进程,不能引 TS)使用
+import { buildChatBody, retryBodyForParamError } from './llm-params.mjs';
 
 export interface LLMAttempt { baseURL: string; apiKey: string; model: string; label: string; }
 
@@ -114,21 +116,33 @@ export async function callLLMWithFallback(opts: LLMCallOpts): Promise<LLMCallRes
       const ctl = new AbortController();
       const tm = setTimeout(() => ctl.abort(), timeoutMs);
       try {
-        const body: Record<string, any> = {
+        // v12.346:max_tokens vs max_completion_tokens 按模型家族选(见 lib/llm-params.mjs)——
+        // 此前硬编码 max_tokens,把整个 gpt-5 / o 系列锁在门外(400 Unsupported parameter)。
+        const body: Record<string, any> = buildChatBody({
           model: a.model,
-          messages: [{ role: 'system', content: opts.system }, { role: 'user', content: opts.user }],
-          max_tokens: opts.maxTokens ?? 4096,
-        };
-        if (opts.temperature != null) body.temperature = opts.temperature;
-        if (opts.jsonMode) body.response_format = { type: 'json_object' };
-        const r = await fetch(`${a.baseURL}/chat/completions`, {
+          system: opts.system,
+          user: opts.user,
+          maxTokens: opts.maxTokens ?? 4096,
+          temperature: opts.temperature,
+          jsonMode: opts.jsonMode,
+        });
+        const post = (b: Record<string, any>) => fetch(`${a.baseURL}/chat/completions`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${a.apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: JSON.stringify(b),
           signal: ctl.signal,
         });
+        let r = await post(body);
+        let j = await r.json().catch(() => null);
+        // 网关语义与模型名不一致时,拿它自己的报错纠一次(而不是整条尝试白丢)
+        if (!r.ok && r.status === 400) {
+          const fixed = retryBodyForParamError(body, j?.error?.message || '');
+          if (fixed) {
+            r = await post(fixed);
+            j = await r.json().catch(() => null);
+          }
+        }
         clearTimeout(tm);
-        const j = await r.json().catch(() => null);
         const content = stripThink(j?.choices?.[0]?.message?.content || '');
         if (r.ok && content) {
           return { ok: true, content, model: a.model, usedFallback: i > 0, attemptsTried: tried };

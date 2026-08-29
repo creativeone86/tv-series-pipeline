@@ -102,9 +102,9 @@ export interface VideoDispatchResult {
  */
 export function isTransientVideoError(msg: string): boolean {
   const m = (msg || '').toLowerCase();
-  if (/(^|\D)(401|403|402|400|429)(\D|$)/.test(m)) return false; // 鉴权/额度/限流 → 熔断/下家,重试无意义
+  if (/(^|\D)(401|403|402|400)(\D|$)/.test(m)) return false; // 鉴权/额度/参数 → 熔断/下家,重试无意义
   if (/invalid[_ ]api[_ ]key|unauthor|forbidden|余额不足|insufficient|quota|配额|exclusive|param|审核|sensitive|policy|no available channel|saturated/i.test(msg)) return false;
-  return /video-01 error|minimax-fast error|timeout|timed out|econnreset|socket hang|fetch failed|network|(^|\D)(500|502|504)(\D|$)|internal error|server error/i.test(msg);
+  return /video-01 error|minimax-fast error|timeout|timed out|econnreset|socket hang|fetch failed|network|(^|\D)(429|500|502|504|529)(\D|$)|rate.?limit|overloaded|internal error|server error/i.test(msg);
 }
 
 const VIDEO_TRANSIENT_RETRY_DELAY_MS = 3000;

@@ -17,11 +17,15 @@ describe('v12.63 · isTransientVideoError', () => {
     ]) expect(isTransientVideoError(m), m).toBe(true);
   });
 
-  it('鉴权/额度/限流/参数/审核/无通道 → 非瞬时(不重试)', () => {
+  it('429/529 限流/过载 → 瞬时(同引擎重试,避免熔断唯一引擎)', () => {
+    expect(isTransientVideoError('HTTP 429 rate limited')).toBe(true);
+    expect(isTransientVideoError('h3 HTTP 529: overloaded')).toBe(true);
+  });
+
+  it('鉴权/额度/参数/审核/无通道 → 非瞬时(不重试)', () => {
     for (const m of [
       'HTTP 401: Invalid token',
       'HTTP 402 Payment Required',
-      'HTTP 429 rate limited',
       'Minimax账户余额不足',
       "model S2V-01 and param 'first_frame_image' are mutually exclusive",
       'Veo API error (503): No available channel for model veo_3_1_vip',

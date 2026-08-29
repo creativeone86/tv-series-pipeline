@@ -18,11 +18,8 @@
  *   - 请求:{ model, prompt, size, n:1 }
  *   - 响应:`data[0].b64_json`(gpt-image-1 固定返 base64)或 `data[0].url`(部分兼容网关)
  *
- * 参考图(i2i):OpenAI 的图生图走的是**另一个端点** `/images/edits` 且要求 multipart 上传
- * 真实图片字节,与本 provider 的 JSON 形态不同。当前实现**只做文生图**并如实声明
- * `supportsRefs:false` —— 于是 registry 的 selectProviders 在有参考图时会自动跳过它,
- * 交给 MJ/Kontext/falFlux 那些真支持 i2i 的档。宁可少声明能力,也不要在有参考图时静默丢掉参考
- * (那是 v12.133 已经踩过的坑:minimax-single 静默丢 refs 导致角色一致性全崩)。
+ * 参考图(i2i):有 refs 时走 `POST /images/edits` multipart(`image[]` + prompt + model),
+ * 无 refs 仍走 `/images/generations` JSON。gpt-image-1 官方最多 16 张参考图。
  */
 import { registerImageProvider } from './registry';
 import type { ImageGenerateInput, AspectRatio } from './types';
@@ -63,6 +60,33 @@ export function extractGptImageUrl(data: unknown): string {
   return '';
 }
 
+export const GPT_IMAGE_MAX_REFS = 16;
+
+export function collectGptImageRefs(input: ImageGenerateInput): string[] {
+  const refs = [
+    ...(input.referenceImages || []),
+    ...(input.cref ? [input.cref] : []),
+    ...(input.sref ? [input.sref] : []),
+  ].filter((u) => !!u && (/^https?:\/\//.test(u) || /^data:image\//.test(u)));
+  return Array.from(new Set(refs)).slice(0, GPT_IMAGE_MAX_REFS);
+}
+
+async function fetchImageBlob(url: string): Promise<{ blob: Blob; filename: string }> {
+  if (url.startsWith('data:image/')) {
+    const m = url.match(/^data:([^;,]+);base64,(.+)$/);
+    if (!m) throw new Error('gpt-image: bad data URL');
+    const buf = Buffer.from(m[2], 'base64');
+    const mime = m[1] || 'image/png';
+    const ext = mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' : 'png';
+    return { blob: new Blob([buf], { type: mime }), filename: `ref.${ext}` };
+  }
+  const r = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+  if (!r.ok) throw new Error(`gpt-image ref fetch ${r.status}`);
+  const mime = r.headers.get('content-type') || 'image/png';
+  const ext = mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' : 'png';
+  return { blob: new Blob([await r.arrayBuffer()], { type: mime }), filename: `ref.${ext}` };
+}
+
 export function hasGptImage(env: NodeJS.ProcessEnv = process.env): boolean {
   // 显式开关优先:很多用户的 OPENAI_BASE_URL 指向只做文本的聚合网关,贸然把图像请求打过去
   // 会白白 404/400 拖慢整条链。所以默认关,设 OPENAI_IMAGE_ENABLED=1 才入链。
@@ -79,25 +103,45 @@ export function hasGptImage(env: NodeJS.ProcessEnv = process.env): boolean {
 registerImageProvider({
   id: 'openai-gpt-image',
   name: 'GPT Image (gpt-image-1)',
-  supportsRefs: false, // 见文件头:i2i 需 /images/edits multipart,当前不做 → 有参考图时自动跳过
-  maxRefImages: 0,
+  supportsRefs: true,
+  maxRefImages: GPT_IMAGE_MAX_REFS,
   priority: 60, // 内置默认 100;设 60 = 用户显式开启时优先于内置链,但让位于更专精的自定义档
   available: () => hasGptImage(),
   async generate(input: ImageGenerateInput) {
     const env = process.env;
     const base = (env.OPENAI_IMAGE_BASE_URL || env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
     const key = env.OPENAI_API_KEY || ''; // v12.239:不再回落 CREATIVE_API_KEY(见 hasGptImage 注释)
-    const body = buildGptImageRequest(input, env);
+    const refs = collectGptImageRefs(input);
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 120_000);
     try {
-      const r = await fetch(`${base}/images/generations`, {
-        method: 'POST',
-        signal: controller.signal,
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-        body: JSON.stringify(body),
-      });
+      let r: Response;
+      if (refs.length > 0) {
+        const form = new FormData();
+        form.set('model', env.OPENAI_IMAGE_MODEL || 'gpt-image-1');
+        form.set('prompt', input.prompt);
+        form.set('size', gptImageSize(input.aspectRatio));
+        form.set('n', '1');
+        for (const url of refs) {
+          const { blob, filename } = await fetchImageBlob(url);
+          form.append('image[]', blob, filename);
+        }
+        r = await fetch(`${base}/images/edits`, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: { Authorization: `Bearer ${key}` },
+          body: form,
+        });
+      } else {
+        const body = buildGptImageRequest(input, env);
+        r = await fetch(`${base}/images/generations`, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+          body: JSON.stringify(body),
+        });
+      }
       if (!r.ok) {
         const txt = await r.text().catch(() => '');
         throw new Error(`gpt-image ${r.status}: ${txt.slice(0, 160)}`);

@@ -1,6 +1,10 @@
 /**
  * v3.2 P2 — TTSProvider 二开范本: ElevenLabs.
  *
+ * ⚠️ 这是**范本**,不是生产实现。真正接线的是 `./elevenlabs.ts`(已被 builtins 导入)。
+ * 本文件保留作为第三方接入模板(docs/tts-providers.md 引用),**不要再 import 它** ——
+ * 两处都注册 id='elevenlabs' 会互相覆盖。
+ *
  * 接入步骤:
  *   1. .env.local: ENABLE_ELEVENLABS=1, ELEVENLABS_API_KEY=xxx
  *   2. import './example-elevenlabs' 一次 (或扔 TTS_PROVIDERS_DIR 由 autoDiscover 加载)

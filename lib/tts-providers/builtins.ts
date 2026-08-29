@@ -3,12 +3,13 @@
  *   1. minimax-tts    (Minimax T2A-v2 / speech-2.8-hd, 默认)
  *
  * Minimax 一家就够覆盖 99% 短剧 TTS 场景 (中文 + 4 个 default voice + emotion).
- * 其他引擎 (ElevenLabs / OpenAI gpt-4o-mini-tts) 在 example-elevenlabs.ts 里给二开范本.
+ * 多语种旁白 (保加利亚语等) 走 elevenlabs;第三方二开范本见 example-elevenlabs.ts.
  */
 
 import { registerTTSProvider } from './registry';
 import type { TTSGenerateInput } from './types';
 import './vectorengine-tts'; // v6.9: vectorengine gpt-4o-mini-tts (主), minimax 兜底
+import './elevenlabs'; // 多语种旁白 (ElevenLabs multilingual v2);available() 只认 ELEVENLABS_API_KEY
 import '@/lib/mock-providers'; // v10.4.0: mock 三件套常驻注册(MOCK_ENGINES=1 才 available)
 
 let ttsSvc: any = null;
@@ -30,7 +31,7 @@ registerTTSProvider({
   supportsStreaming: false,
   maxTextLen: 5_000,
   supportedLanguages: [],  // v12.168:[] = 任意语种(T2A-v2 多语模型;此前只列 zh/en 导致 ja/ko/ru 被 registry 过滤掉)
-  available: () => !!process.env.MINIMAX_API_KEY,
+  available: () => process.env.ENABLE_MINIMAX_TTS === '1' && !!process.env.MINIMAX_API_KEY,
   async generate(input: TTSGenerateInput) {
     const svc = await getTTSService();
     if (!svc) throw new Error('Minimax TTS service unavailable');

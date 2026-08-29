@@ -491,7 +491,7 @@ transitionDuration: 0.0-1.5 (cut 类用 0, fade 类用 0.5-1.2)`,
                   if (d.result?.audioUrl) {
                     return { audioUrl: d.result.audioUrl, duration: d.result.duration ?? 0, subtitle: d.result.subtitle ?? [], provider: d.result.provider ?? 'registry' };
                   }
-                  if (ctx.minimaxService) {
+                  if (ctx.minimaxService && process.env.ENABLE_MINIMAX_TTS === '1') {
                     const audioUrl = await ctx.minimaxService.generateSpeech(cleanedDialogue, {
                       emotion: t.emotion, gender: _gender, speed: prosody.speed, pitch: prosody.pitch, vol: prosody.vol,
                     });

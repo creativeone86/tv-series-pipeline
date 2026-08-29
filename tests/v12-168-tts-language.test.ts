@@ -41,6 +41,7 @@ describe('v12.168 · TTS 语种链(v12.271 转真行为断言)', () => {
 
   it('行为:ja/ko/ru 选路时 minimax-tts 不被 registry 滤掉(病根就在这条过滤)', async () => {
     process.env.MINIMAX_API_KEY = process.env.MINIMAX_API_KEY || 'test-key';
+    process.env.ENABLE_MINIMAX_TTS = '1';
     await import('@/lib/tts-providers/builtins'); // 副作用注册(provider 未导出,只能经 registry 观察)
     const { selectProviders, getTTSProvider } = await import('@/lib/tts-providers/registry');
     expect(getTTSProvider('minimax-tts'), 'minimax-tts 应已注册').toBeTruthy();

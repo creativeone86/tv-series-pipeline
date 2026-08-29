@@ -24,6 +24,7 @@
     "generate:hero": "node scripts/generate-hero-cover.mjs",
     "generate:assets": "node scripts/generate-marketing-assets.mjs",
     "release": "bash scripts/release.sh",
+    "tts:smoke": "tsx scripts/tts-smoke.ts",
     "pg:smoke": "node scripts/pg-smoke.mjs",
     "pg:migrate": "tsx scripts/pg-migrate.ts",
     "pg:verify": "tsx scripts/pg-verify.ts",
@@ -41,7 +42,9 @@
     "gate:fake-green": "node scripts/fake-green-gate.mjs",
     "media:check": "node scripts/optimize-media.mjs --check",
     "media:optimize": "node scripts/optimize-media.mjs",
-    "ms:sync": "node scripts/modelscope-sync.mjs"
+    "ms:sync": "node scripts/modelscope-sync.mjs",
+    "llm:smoke": "tsx scripts/llm-smoke.ts",
+    "h3:smoke": "tsx scripts/h3-smoke.ts"
   },
   "keywords": [
     "ai",

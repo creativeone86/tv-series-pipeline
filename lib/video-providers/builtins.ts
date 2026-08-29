@@ -11,6 +11,7 @@
 import { registerVideoProvider } from './registry';
 import type { VideoGenerateInput } from './types';
 import '@/lib/mock-providers'; // v10.4.0: mock 三件套常驻注册(MOCK_ENGINES=1 才 available)
+import './minimax-h3';
 
 // ─── Lazy service factories — 启动不预热, 第一次调时实例化 ─────────────────
 let veoSvc: any = null;
@@ -208,6 +209,7 @@ registerVideoProvider({
   supportsSubjectReference: true,  // ← 独家
   maxDurationSec: 10,
   available: () => {
+    if (process.env.ENABLE_MINIMAX_V1_VIDEO !== '1') return false;
     try {
       const m = require('@/services/minimax.service');
       const has = m.hasMinimax?.() ?? !!process.env.MINIMAX_API_KEY;

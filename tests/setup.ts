@@ -1,3 +1,15 @@
+/**
+ * Vitest 必须在任何业务模块读 env 之前把 DB 钉死在 sqlite。
+ * 否则 `set -a && . ./.env.local` 后跑 vitest 会让 getDbDriver() 连上
+ * 开发机 Postgres,把 fixture 写进 api_quota_alerts(实测发生过)。
+ * 个别测试要验工厂选型可以自己再设 DB_DRIVER=pg,但 DATABASE_URL 已被摘掉,
+ * 连不上 localhost:5434/wind。真要打 PG 设 QFMJ_TEST_ALLOW_PG=1。
+ */
+if (process.env.QFMJ_TEST_ALLOW_PG !== '1') {
+  delete process.env.DB_DRIVER;
+  delete process.env.DATABASE_URL;
+}
+
 import '@testing-library/jest-dom';
 import { cleanup } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';

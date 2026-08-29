@@ -117,14 +117,12 @@ describe('v12.238 两个 provider 接入 registry 的链路行为', () => {
     expect(picked.indexOf('gemini-image')).toBeLessThan(picked.indexOf('openai-gpt-image'));
   });
 
-  it('有参考图时 gpt-image 被自动排除 —— 宁可不参与,也不静默丢掉参考图', () => {
-    // v12.133 踩过的坑:minimax-single 静默丢 refs 导致角色一致性全崩。
-    // 所以 gpt-image 如实声明 supportsRefs:false,registry 在 refCount>0 时会跳过它。
+  it('有参考图时 gpt-image 仍入链 —— /images/edits 吃参考图,不再静默丢 refs', () => {
     process.env.OPENAI_IMAGE_ENABLED = '1';
     process.env.OPENAI_API_KEY = 'sk-test';
     process.env.GEMINI_API_KEY = 'g-test';
     const picked = selectProviders({ refCount: 2 }).map((p) => p.id);
-    expect(picked).not.toContain('openai-gpt-image');
-    expect(picked).toContain('gemini-image'); // Gemini 原生 i2i,能吃参考图
+    expect(picked).toContain('openai-gpt-image');
+    expect(picked).toContain('gemini-image');
   });
 });

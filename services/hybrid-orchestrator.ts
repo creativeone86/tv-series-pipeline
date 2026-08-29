@@ -11,6 +11,7 @@ import {
   EditResult, DirectorReview, CharacterDesignerResult, SceneDesignerResult, GateData, GateResult,
 } from '@/types/agents';
 import { MinimaxService } from './minimax.service';
+import { MinimaxH3Service, hasMinimaxH3, takeLastH3Result } from './minimax-h3.service';
 import { VeoService, hasVeo } from './veo.service';
 import { MidjourneyService, hasMidjourney } from './midjourney.service';
 import { KlingService, hasKling } from './kling.service';
@@ -76,7 +77,7 @@ import { extractLastFrame, extractMiddleFrame } from '@/lib/last-frame-extractor
 import { deriveProsody } from '@/lib/tts-prosody';
 import { getLatestQualityScore, buildWriterFeedbackHint } from '@/lib/quality-scores';
 // v12.4.0(阶段二十三):主管线视频/图像成本落库 —— 此前从不记,cost-attribution 视频/图像类目永远 0。
-import { recordCostLog, estimateVideoCostCny, estimateImageCostCny, videoRateForProvider } from '@/lib/repos/cost-log-repo';
+import { recordCostLog, estimateVideoCostCny, estimateImageCostCny, videoRateForProvider, estimateH3CostUsd, usdToCny } from '@/lib/repos/cost-log-repo';
 // v12.6.1(#2):目标语种检测 —— 锁台词/旁白/TTS/口型语种,visualPrompt 仍英文。
 import { detectLanguage, ttsLangCode, lipsyncLangCode, buildLanguageDirective, SUPPORTED_LANGUAGES, type TargetLanguage } from '@/lib/language-detect';
 // v12.7.0:editor TTS 走注册表(vectorengine-tts 50 > minimax-tts 100),vectorengine 进主路径。
@@ -145,7 +146,7 @@ type ProgressCallback = (type: string, data: any) => void;
 // ═══════════════════════════════════════════
 // v12.272:与 lib/engine-order.ts 的 VideoEngineName 保持同一集合 —— 两处此前各写各的,
 // 漏改任一处都会让新引擎「配置得上、永远派发不到」。
-type VideoEngine = 'veo' | 'minimax' | 'kling' | 'happyhorse';
+type VideoEngine = 'veo' | 'minimax' | 'kling' | 'happyhorse' | 'h3';
 
 interface EngineRouteResult {
   primary: VideoEngine;
@@ -307,6 +308,7 @@ export class HybridOrchestrator {
   private agents: Map<AgentRole, Agent>;
   private openai: OpenAI | null;
   private minimaxService: MinimaxService | null;
+  private minimaxH3Service: MinimaxH3Service | null;
   private veoService: VeoService | null;
   private mjService: MidjourneyService | null;
   private klingService: KlingService | null;
@@ -708,6 +710,7 @@ export class HybridOrchestrator {
     this.agents = new Map();
     this.openai = hasLLM ? new OpenAI({ apiKey: API_CONFIG.openai.apiKey, baseURL: API_CONFIG.openai.baseURL, timeout: 180_000, maxRetries: 1 }) : null;
     this.minimaxService = hasMinimax ? new MinimaxService() : null;
+    this.minimaxH3Service = hasMinimaxH3() ? new MinimaxH3Service() : null;
     this.veoService = hasVeo() ? new VeoService() : null;
     this.mjService = hasMidjourney() ? new MidjourneyService() : null;
     this.klingService = hasKling() ? new KlingService() : null;
@@ -722,7 +725,7 @@ export class HybridOrchestrator {
     const minimaxLabel = this.minimaxService
       ? (minimaxCaps.length > 0 ? minimaxCaps.join('+') : 'TTS-ONLY')
       : 'OFF';
-    console.log(`[Hybrid] LLM: ${this.openai ? 'Claude' : 'OFF'}, MJ: ${this.mjService ? 'ON' : 'OFF'}, Minimax: ${minimaxLabel}, Veo: ${this.veoService ? 'ON' : 'OFF'}, Kling: ${this.klingService ? 'ON' : 'OFF'}, HappyHorse: ${this.happyhorseService ? 'ON' : 'OFF'}, FalFlux: ${this.falFluxService ? 'ON' : 'OFF'}, ComfyUI: ${this.comfyuiService ? 'ON' : 'OFF'}`);
+    console.log(`[Hybrid] LLM: ${this.openai ? 'Claude' : 'OFF'}, MJ: ${this.mjService ? 'ON' : 'OFF'}, Minimax: ${minimaxLabel}, H3: ${this.minimaxH3Service ? 'ON' : 'OFF'}, Veo: ${this.veoService ? 'ON' : 'OFF'}, Kling: ${this.klingService ? 'ON' : 'OFF'}, HappyHorse: ${this.happyhorseService ? 'ON' : 'OFF'}, FalFlux: ${this.falFluxService ? 'ON' : 'OFF'}, ComfyUI: ${this.comfyuiService ? 'ON' : 'OFF'}`);
 
     // v3.2 P1: 注册内置 image providers + 自动加载 IMAGE_PROVIDERS_DIR.
     // 异步 fire-and-forget — 不阻塞 orchestrator 创建.
@@ -3257,7 +3260,8 @@ ${shots.map((s, i) => {
       const availableEngines: VideoEngine[] = [];
       // ★ Veo 官方优先（vectorengine.ai 通道，实测稳定性最佳）
       if (this.veoService) availableEngines.push('veo');
-      if (this.minimaxService?.isVideoAvailable()) availableEngines.push('minimax');
+      if (this.minimaxService?.isVideoAvailable() && process.env.ENABLE_MINIMAX_V1_VIDEO === '1') availableEngines.push('minimax');
+      if (this.minimaxH3Service) availableEngines.push('h3');
       if (this.klingService) availableEngines.push('kling');
       // v12.272:HappyHorse(阿里)—— 有 key 即登记;默认链序不含它,
       // 需 VIDEO_ENGINE_ORDER 显式列出或用户显式选择才会打头(不改变既有用户的出片结果)。
@@ -3298,11 +3302,28 @@ ${shots.map((s, i) => {
 
         // v12.8.1: 引擎兜底链(含软熔断)走抽出来的纯控制流 runVideoEngineChain —— 可单测坐实「跳过冷却引擎」。
         //   每个引擎的具体调用(minimax/veo/kling 各自参数)留在 attempt 回调;控制流(跳过/试/校验/熔断/下一个)在 helper。
-        const _engineLabel = (engine: string) => engine === 'veo' ? 'Veo 3.1' : engine === 'kling' ? '可灵 AI' : engine === 'happyhorse' ? 'HappyHorse 1.1(阿里)' : (hasCharRef ? 'Minimax(I2V+角色)' : hasFirstFrame ? 'Minimax I2V-01' : 'Minimax Hailuo-2.3');
+        const _engineLabel = (engine: string) => engine === 'veo' ? 'Veo 3.1' : engine === 'kling' ? '可灵 AI' : engine === 'happyhorse' ? 'HappyHorse 1.1(阿里)' : engine === 'h3' ? 'MiniMax H3' : (hasCharRef ? 'Minimax(I2V+角色)' : hasFirstFrame ? 'Minimax I2V-01' : 'Minimax Hailuo-2.3');
         const _chain = await runVideoEngineChain(
           engineOrder,
           async (engine) => {
-            if (engine === 'minimax' && this.minimaxService) {
+            if (engine === 'h3' && this.minimaxH3Service) {
+              const subjectRefs = mrBundle.subjectImages.map((url, idx) => ({
+                imageUrl: url, name: mrBundle.characterNames[idx],
+              }));
+              const tailRaw = (shot as any)?.tailFrameUrl;
+              const r = await this.minimaxH3Service.generateVideo({
+                prompt: enhancedPrompt,
+                firstFrameUrl: firstFrameUrl || undefined,
+                lastFrameUrl: typeof tailRaw === 'string' && tailRaw.trim() ? tailRaw.trim() : undefined,
+                subjectReferences: subjectRefs.length > 0 ? subjectRefs : undefined,
+                referenceImages: mrBundle.referenceImages.length > 0 ? mrBundle.referenceImages : undefined,
+                aspectRatio: this.videoAspect(),
+                durationSec: shot?.duration ?? 8,
+                label: `shot-${board.shotNumber}`,
+                onProgress: (progress, status) => { this.emit('videoProgress', { shotNumber: board.shotNumber, progress, status }); },
+              });
+              return r.videoUrl;
+            } else if (engine === 'minimax' && this.minimaxService) {
               // ★ v2.8 (Seedance 2.0 同款): 多主体 + 场景/风格辅助参考图
               const subjectRefs = mrBundle.subjectImages.map((url, idx) => ({
                 type: 'character' as const, imageUrl: url, name: mrBundle.characterNames[idx],
@@ -3508,12 +3529,19 @@ ${shots.map((s, i) => {
 
       // v12.4.0:视频成本落库(每个真出片的镜头记一笔;mock 模式零成本不记)。fire-and-forget。
       if (videoUrl && isValidVideoUrl(videoUrl) && process.env.MOCK_ENGINES !== '1') {
+        const maybeH3 = takeLastH3Result();
+        const h3 = (usedVideoEngine === 'h3' || /h3/.test(ranVideoProvider || '')) ? maybeH3 : null;
+        const usd = h3 ? estimateH3CostUsd(h3.usage, h3.resolution || '2K') : undefined;
+        const durationSec = h3?.totalSeconds ?? 8;
         void recordCostLog({
           userId: this.userId, projectId: this.projectId,
-          engine: `video-${usedVideoEngine || 'engine'}`,
-          durationSec: 8,
-          costCny: estimateVideoCostCny(8, videoRateForProvider(usedVideoEngine)),
-          metadata: { shotNumber: board.shotNumber },
+          engine: `video-${usedVideoEngine || ranVideoProvider || 'engine'}`,
+          durationSec,
+          costCny: usd != null ? usdToCny(usd) : estimateVideoCostCny(durationSec, videoRateForProvider(usedVideoEngine || ranVideoProvider)),
+          metadata: {
+            shotNumber: board.shotNumber,
+            ...(usd != null ? { usd, usage: h3?.usage, resolution: h3?.resolution, fxRate: Number(process.env.USD_CNY_RATE || 7.2), priceRetrieved: '2026-08-28' } : {}),
+          },
         });
       }
 
@@ -4129,12 +4157,21 @@ ${characterBibleBlock}${producerContext}
     // v12.156:链序与主管线统一(显式 provider > env VIDEO_ENGINE_ORDER > Veo 默认)
     const { resolveEngineOrder, parseEngineOrderEnv } = await import('@/lib/engine-order');
     const availForRegen = ([
-      this.veoService && 'veo', this.minimaxService && 'minimax', this.klingService && 'kling',
-    ].filter(Boolean)) as Array<'veo' | 'minimax' | 'kling'>;
+      this.veoService && 'veo', this.minimaxService && process.env.ENABLE_MINIMAX_V1_VIDEO === '1' && 'minimax', this.minimaxH3Service && 'h3', this.klingService && 'kling',
+    ].filter(Boolean)) as Array<'veo' | 'minimax' | 'kling' | 'h3'>;
     const regenOrder = resolveEngineOrder(provider, availForRegen, parseEngineOrderEnv(process.env.VIDEO_ENGINE_ORDER));
     const genByEngine: Record<string, () => Promise<string>> = {
       veo: () => this.veoService!.generateVideo(engineFrame, storyboard.prompt, { duration, aspectRatio: this.videoAspect() }),
       minimax: () => this.minimaxService!.generateVideo(engineFrame, storyboard.prompt, minimaxOpts),
+      h3: async () => {
+        const r = await this.minimaxH3Service!.generateVideo({
+          prompt: storyboard.prompt,
+          firstFrameUrl: engineFrame || undefined,
+          durationSec: duration,
+          aspectRatio: this.videoAspect(),
+        });
+        return r.videoUrl;
+      },
       kling: () => {
         // v12.197:显式尾帧 → 首尾帧融合(锁切镜构图);无尾帧走单图 i2v
         const tailImg = options?.tailFrameUrl ? toEngineImage(options.tailFrameUrl) : null;

@@ -77,6 +77,7 @@ registerImageProvider({
   maxRefImages: 4,
   priority: 90,   // ref ≥ 3 时比 MJ 更适合 — 优先级稍高
   available: () => {
+    if (process.env.ENABLE_MINIMAX_IMAGE !== '1') return false;
     try {
       const m = require('@/services/minimax.service');
       const has = m.hasMinimax?.() ?? !!process.env.MINIMAX_API_KEY;
@@ -109,6 +110,7 @@ registerImageProvider({
   maxRefImages: 0,
   priority: 120,
   available: () => {
+    if (process.env.ENABLE_MINIMAX_IMAGE !== '1') return false;
     try {
       const m = require('@/services/minimax.service');
       const has = m.hasMinimax?.() ?? !!process.env.MINIMAX_API_KEY;
@@ -133,7 +135,7 @@ registerImageProvider({
   supportsRefs: true,
   maxRefImages: 4,
   priority: 110,
-  available: () => !!process.env.QINGYUNTOP_API_KEY || !!process.env.VEO_API_KEY || !!process.env.OPENAI_API_KEY,
+  available: () => !!process.env.QINGYUNTOP_API_KEY || !!process.env.VEO_API_KEY,
   async generate(input: ImageGenerateInput) {
     // v6.8: 走 OpenAI 兼容 /v1/images/generations 的最强图像模型 (IMAGE_MODEL, 默认 flux.1-kontext-pro).
     // key 与 base 必须配对 (之前 OPENAI_API_KEY 被假定=vectorengine, 现已可指向 qingyuntop → 修正).

@@ -7,6 +7,8 @@
  * 输出: stdout JSON { ok: true, content: "..." } 或 { ok: false, error: "..." }
  */
 
+import { buildChatBody, retryBodyForParamError } from '../lib/llm-params.mjs';
+
 const chunks = [];
 process.stdin.on('data', c => chunks.push(c));
 process.stdin.on('end', async () => {
@@ -18,31 +20,49 @@ process.stdin.on('end', async () => {
     const timer = setTimeout(() => controller.abort(), timeout);
 
     const startTime = Date.now();
-    const resp = await fetch(`${baseURL}/chat/completions`, {
+    const post = (body) => fetch(`${baseURL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-        max_tokens: maxTokens,
-      }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
+
+    // max_tokens vs max_completion_tokens is model-family dependent — see lib/llm-params.mjs
+    let body = buildChatBody({ model, system, user, maxTokens });
+    let resp = await post(body);
+
+    if (!resp.ok) {
+      // A gateway may disagree with the name-based guess; let its own complaint correct us once.
+      const firstErr = await resp.text();
+      const retryBody = resp.status === 400 ? retryBodyForParamError(body, firstErr) : null;
+      if (retryBody) {
+        resp = await post(retryBody);
+        if (!resp.ok) {
+          clearTimeout(timer);
+          const errBody = await resp.text();
+          process.stdout.write(JSON.stringify({
+            ok: false,
+            error: `HTTP ${resp.status}: ${errBody.slice(0, 500)}`,
+            elapsed: ((Date.now() - startTime) / 1000).toFixed(1),
+          }));
+          process.exit(0);
+        }
+      } else {
+        clearTimeout(timer);
+        process.stdout.write(JSON.stringify({
+          ok: false,
+          error: `HTTP ${resp.status}: ${firstErr.slice(0, 500)}`,
+          elapsed: ((Date.now() - startTime) / 1000).toFixed(1),
+        }));
+        process.exit(0);
+      }
+    }
     clearTimeout(timer);
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-
-    if (!resp.ok) {
-      const errBody = await resp.text();
-      process.stdout.write(JSON.stringify({ ok: false, error: `HTTP ${resp.status}: ${errBody.slice(0, 500)}`, elapsed }));
-      process.exit(0);
-    }
 
     const data = await resp.json();
     const content = data?.choices?.[0]?.message?.content || '';

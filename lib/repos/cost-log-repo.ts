@@ -88,13 +88,46 @@ export function estimateLipsyncCostCny(provided?: number, durationSec?: number):
 // v12.4.0(阶段二十三):主管线视频/图像成本此前从不落库 → cost-attribution 两大类目永远 0、
 // 预算护栏对主创作链零拦截。下面两个估算器堵这个洞;费率保守(宁高勿低,上线前对账单校准)。
 
-/** 视频引擎 → ¥/s 保守费率(Veo 0.6 / Kling Master 0.2 / Minimax 0.1 / Vidu 0.3),未知 0.3 兜底。 */
-const VIDEO_RATE_CNY_PER_SEC: Record<string, number> = { veo: 0.6, kling: 0.2, minimax: 0.1, vidu: 0.3 };
+/** 视频引擎 → ¥/s 保守费率。精确匹配先于子串,避免 minimax-h3 命中旧 minimax 档。 */
+const VIDEO_RATE_CNY_PER_SEC_EXACT: Record<string, number> = {
+  veo: 0.6,
+  kling: 0.2,
+  minimax: 0.33,
+  vidu: 0.3,
+  grok: 0.08,
+  h3: 0.94,
+  'minimax-h3': 0.94,
+};
+const VIDEO_RATE_CNY_PER_SEC: Record<string, number> = { veo: 0.6, kling: 0.2, 'minimax-h3': 0.94, h3: 0.94, minimax: 0.33, vidu: 0.3, grok: 0.08 };
 export function videoRateForProvider(providerId?: string): number {
   if (!providerId) return 0.3;
   const id = providerId.toLowerCase();
-  for (const k of Object.keys(VIDEO_RATE_CNY_PER_SEC)) if (id.includes(k)) return VIDEO_RATE_CNY_PER_SEC[k];
+  if (VIDEO_RATE_CNY_PER_SEC_EXACT[id] != null) return VIDEO_RATE_CNY_PER_SEC_EXACT[id];
+  // 较长的键先匹配,避免 'minimax-h3'.includes('minimax') 落到旧档。
+  const keys = Object.keys(VIDEO_RATE_CNY_PER_SEC).sort((a, b) => b.length - a.length);
+  for (const k of keys) if (id.includes(k)) return VIDEO_RATE_CNY_PER_SEC[k];
   return 0.3;
+}
+
+export function estimateH3CostUsd(
+  usage?: { total_seconds?: number; input_image_count?: number } | null,
+  resolution: '768P' | '2K' = '2K',
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  const sec = Number(usage?.total_seconds);
+  const images = Number(usage?.input_image_count) || 0;
+  const rate = resolution === '768P'
+    ? (Number(env.MINIMAX_H3_USD_PER_SEC_768P) || 0.08)
+    : (Number(env.MINIMAX_H3_USD_PER_SEC_2K) || 0.13);
+  const extraImg = Number(env.MINIMAX_H3_USD_PER_EXTRA_IMAGE) || 0.04;
+  const freeImages = Number(env.MINIMAX_H3_FREE_INPUT_IMAGES ?? 5);
+  const seconds = Number.isFinite(sec) && sec > 0 ? sec : 0;
+  return Number((seconds * rate + Math.max(0, images - freeImages) * extraImg).toFixed(4));
+}
+
+export function usdToCny(usd: number, env: NodeJS.ProcessEnv = process.env): number {
+  const fx = Number(env.USD_CNY_RATE) || 7.2;
+  return round2(usd * fx);
 }
 
 /** 视频成本估算(¥):durationSec × ¥/s 费率(缺时长按 5s、缺费率按 ¥0.3/s 保守兜底)。 */

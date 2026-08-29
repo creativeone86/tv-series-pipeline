@@ -24,6 +24,10 @@ function sweepTestDbs() {
 }
 
 export default function setup() {
+  if (process.env.QFMJ_TEST_ALLOW_PG !== '1') {
+    delete process.env.DB_DRIVER;
+    delete process.env.DATABASE_URL;
+  }
   sweepTestDbs(); // 跑前: 清上一次 run 的残留
   // 返回的函数是 globalSetup 的 teardown: 整批测试结束、worker 退出后在主进程跑一次,
   // 把本次 run 产生的一堆 qfmj.test.<pid>.<id>.db 收掉, 避免堆积在 data/.
