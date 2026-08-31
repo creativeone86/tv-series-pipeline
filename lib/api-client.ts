@@ -40,6 +40,9 @@ export const api = {
     request('/api/projects', { method: 'POST', body: JSON.stringify(payload) }),
   getProject: (id: string) => request(`/api/projects/${id}`),
   cases: () => request('/api/cases'),
+  styleKits: () => request('/api/style-kits'),
+  tweakStyleKit: (id: string, payload: { patch?: Record<string, unknown>; instruction?: string }) =>
+    request(`/api/style-kits/${encodeURIComponent(id)}/tweak`, { method: 'POST', body: JSON.stringify(payload) }),
   generations: () => request('/api/generations'),
   createGeneration: (payload: { prompt: string; style: string; projectId?: string }) =>
     request('/api/generations', { method: 'POST', body: JSON.stringify(payload) }),

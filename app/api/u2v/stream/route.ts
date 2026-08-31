@@ -21,9 +21,9 @@ export const maxDuration = 360;
 const EXPECTED: Record<number, number> = { 5: 120, 6: 120, 10: 150, 15: 180 };
 
 export async function POST(request: NextRequest) {
-  // v12.232(对抗复检 CRITICAL 补漏):此前**零鉴权零预算** —— Minimax/Kling 图生视频,单次 ¥0.5–3,
+  // v12.232(对抗复检 CRITICAL 补漏):此前**零鉴权零预算** —— Minimax/Kling 图生视频,单次 €0.5–3,
   // 匿名循环调用即可持续烧额度。登录 + 预算一并前置,拦下才花钱。
-  const _pg = await guardPaidEndpoint(request, { pendingCostCny: 1.8 });
+  const _pg = await guardPaidEndpoint(request, { pendingCostEur: 0.23 });
   if (!_pg.ok) return _pg.response;
   let body: any = {};
   try { body = await request.json(); } catch {}

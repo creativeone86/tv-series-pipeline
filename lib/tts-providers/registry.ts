@@ -12,6 +12,7 @@ import type {
   TTSSelectInput,
 } from './types';
 import { isProviderHealthy, markProviderDownIfFatal } from '../provider-health-cache';
+import { lookupTtsCache, persistAndStoreTts, ttsCacheKey } from '@/lib/tts-cache';
 
 const providers = new Map<string, TTSProvider>();
 
@@ -95,18 +96,32 @@ export async function dispatchTTSGenerate(
 
   const tried: TTSDispatchResult['tried'] = [];
   for (const p of chain) {
+    const key = ttsCacheKey({
+      text: input.text,
+      provider: p.id,
+      voiceId: input.voiceId,
+      language: input.language,
+      speed: input.speed,
+      pitch: input.pitch,
+      emotion: input.emotion,
+    });
+    const cached = await lookupTtsCache(key);
+    if (cached) {
+      return { result: cached, tried: [...tried, { id: p.id, error: 'cache-hit' }] };
+    }
     try {
       const r = await p.generate(input);
       if (!r || !r.audioUrl) {
         tried.push({ id: p.id, error: 'empty result' });
         continue;
       }
-      const ok = r.audioUrl.startsWith('http') || r.audioUrl.startsWith('data:audio');
+      const ok = r.audioUrl.startsWith('http') || r.audioUrl.startsWith('data:audio') || r.audioUrl.startsWith('/api/serve-file');
       if (!ok) {
         tried.push({ id: p.id, error: `invalid audioUrl: ${r.audioUrl.slice(0, 40)}` });
         continue;
       }
-      return { result: r, tried };
+      const stored = await persistAndStoreTts({ cacheKey: key, input, result: r });
+      return { result: stored, tried };
     } catch (e) {
       const _msg = e instanceof Error ? e.message : String(e);
       markProviderDownIfFatal(p.id, _msg); // v12.8.0: auth/配额/饱和 → 熔断冷却

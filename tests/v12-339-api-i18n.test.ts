@@ -29,8 +29,8 @@ describe('v12.339 · api-i18n', () => {
   });
 
   it('budget + plan messages default to English', async () => {
-    expect(evaluateBudgetGuard({ spentCny: 0, capCny: null }).message).toBe(apiT('en', 'budgetNone'));
-    expect(evaluateBudgetGuard({ spentCny: 0, capCny: null, locale: 'zh-CN' }).message).toBe(apiT('zh-CN', 'budgetNone'));
+    expect(evaluateBudgetGuard({ spentEur: 0, capEur: null }).message).toBe(apiT('en', 'budgetNone'));
+    expect(evaluateBudgetGuard({ spentEur: 0, capEur: null, locale: 'zh-CN' }).message).toBe(apiT('zh-CN', 'budgetNone'));
     const body = await planRejection('free', 'pro').json();
     expect(body.message).toBe(apiT('en', 'planRequired', { required: 'pro', current: 'free' }));
   });

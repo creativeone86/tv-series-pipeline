@@ -2,8 +2,8 @@
  * lib/budget-enforce (v9.3.4) — 预算护栏服务端强制: 读用户预算 + 当月花费 → 裁决.
  *
  * 把 v9.3.3 的纯逻辑 evaluateBudgetGuard 接到服务端真实数据:
- *   - 用户预算: users.budget_cap_cny / budget_hard_cap_cny (v9.3.4 加列, null = 不设防)
- *   - 当月花费: cost_log 当月该用户 SUM(cost_cny)
+ *   - 用户预算: users.budget_cap_eur / budget_hard_cap_eur (v9.3.4 加列, null = 不设防)
+ *   - 当月花费: cost_log 当月该用户 SUM(cost_eur)
  * 生成端点调 assertBudget() → 到硬上限拦截 (preview-shot 起接, 核心管线留后续)。
  *
  * 走 DbDriver 双驱动 (SQLite/PG); now 可注入保持可测。
@@ -14,8 +14,8 @@ import { getDbDriver } from './db-driver';
 import { evaluateBudgetGuard, type BudgetGuardResult } from './budget-guard';
 
 export interface UserBudget {
-  capCny: number | null;
-  hardCapCny: number | null;
+  capEur: number | null;
+  hardCapEur: number | null;
 }
 
 /**
@@ -23,7 +23,7 @@ export interface UserBudget {
  *
  * v12.232(对抗复检补漏 —— 这是整轮加固最尴尬的一处):
  * v12.223 建了订阅档位月度成本上限(免费 5 / 创作 60 / 专业 200),写了纯函数、写了单测、
- * 还做了 UI 配额环 —— **唯独没接进 assertBudget**。而 assertBudget 只认 `users.budget_cap_cny`,
+ * 还做了 UI 配额环 —— **唯独没接进 assertBudget**。而 assertBudget 只认 `users.budget_cap_eur`,
  * 该列默认 null → `assertBudget` 直接放行(见下方 line 66 的早退)。
  * 结果:**档位上限从头到尾没拦住过任何一次调用**,「有单测、有 UI、就是不执法」。
  *
@@ -33,47 +33,52 @@ export interface UserBudget {
  */
 export async function getUserBudget(userId: string): Promise<UserBudget> {
   const row = (await getDbDriver().get(
-    'SELECT budget_cap_cny, budget_hard_cap_cny, subscription_tier FROM users WHERE id = ?',
+    'SELECT budget_cap_eur, budget_hard_cap_eur, subscription_tier FROM users WHERE id = ?',
     [userId],
-  )) as { budget_cap_cny: number | null; budget_hard_cap_cny: number | null; subscription_tier?: string | null } | undefined;
+  )) as { budget_cap_eur: number | null; budget_hard_cap_eur: number | null; subscription_tier?: string | null } | undefined;
 
-  const selfCap = row?.budget_cap_cny != null ? Number(row.budget_cap_cny) : null;
-  let capCny = selfCap;
-  if (capCny == null) {
-    // v12.234(二轮对抗复检 · 根因):此处原写 `if (capCny == null && row)`。那个 `&& row` 是致命的 ——
-    // **查不到用户时反而完全不设防**:row=undefined → 跳过回落 → capCny 保持 null →
-    // assertBudget 的 `capCny == null` 分支直接 allow:true,连本月已花多少都不查。
+  const selfCap = row?.budget_cap_eur != null ? Number(row.budget_cap_eur) : null;
+  let capEur = selfCap;
+  // Single-operator deployments (e.g. the comic project) can turn the subscription-tier
+  // account ceiling OFF so it never walls generation. The per-episode budget governor
+  // (capEur/hardCapEur passed per render) remains the real cost control. When ON we still
+  // honor an explicit self-set budget_cap_eur if the operator chose one.
+  const accountLimitOff = process.env.DISABLE_ACCOUNT_BUDGET_LIMIT === '1';
+  if (capEur == null && !accountLimitOff) {
+    // v12.234(二轮对抗复检 · 根因):此处原写 `if (capEur == null && row)`。那个 `&& row` 是致命的 ——
+    // **查不到用户时反而完全不设防**:row=undefined → 跳过回落 → capEur 保持 null →
+    // assertBudget 的 `capEur == null` 分支直接 allow:true,连本月已花多少都不查。
     // 而 `'__no_auth__'` 这个匿名哨兵在 20+ 路由里用,它永远查不到 DB 行 ——
     // 等于「匿名 = 无限额度」,把刚建的预算护栏在匿名场景下整个架空。
     // 现在:查不到行 → 按 free 档兜底(最严),而不是按「不设防」兜底。护栏要 fail-closed。
-    const { tierMonthlyCeilingCny } = await import('./usage-quota');
-    const tierCap = tierMonthlyCeilingCny(row?.subscription_tier || 'free');
-    if (tierCap > 0) capCny = tierCap;   // -1(企业)= 显式不设防,保持 null
+    const { tierMonthlyCeilingEur } = await import('./usage-quota');
+    const tierCap = tierMonthlyCeilingEur(row?.subscription_tier || 'free');
+    if (tierCap > 0) capEur = tierCap;   // -1(企业)= 显式不设防,保持 null
   }
   return {
-    capCny,
-    hardCapCny: row?.budget_hard_cap_cny != null ? Number(row.budget_hard_cap_cny) : null,
+    capEur,
+    hardCapEur: row?.budget_hard_cap_eur != null ? Number(row.budget_hard_cap_eur) : null,
   };
 }
 
-/** 设用户月预算; capCny/hardCapCny 传 null 即清除(不设防)。 */
+/** 设用户月预算; capEur/hardCapEur 传 null 即清除(不设防)。 */
 export async function setUserBudget(
   userId: string,
-  b: { capCny: number | null; hardCapCny?: number | null },
+  b: { capEur: number | null; hardCapEur?: number | null },
 ): Promise<void> {
-  const cap = b.capCny != null && Number.isFinite(b.capCny) && b.capCny > 0 ? Number(b.capCny) : null;
-  const hard = b.hardCapCny != null && Number.isFinite(b.hardCapCny) && b.hardCapCny > 0 ? Number(b.hardCapCny) : null;
+  const cap = b.capEur != null && Number.isFinite(b.capEur) && b.capEur > 0 ? Number(b.capEur) : null;
+  const hard = b.hardCapEur != null && Number.isFinite(b.hardCapEur) && b.hardCapEur > 0 ? Number(b.hardCapEur) : null;
   await getDbDriver().run(
-    'UPDATE users SET budget_cap_cny = ?, budget_hard_cap_cny = ? WHERE id = ?',
+    'UPDATE users SET budget_cap_eur = ?, budget_hard_cap_eur = ? WHERE id = ?',
     [cap, hard, userId],
   );
 }
 
-/** 当月该用户 cost_log 花费 (CNY)。 */
-export async function monthSpentCny(userId: string, now: Date = new Date()): Promise<number> {
+/** 当月该用户 cost_log 花费 (EUR)。 */
+export async function monthSpentEur(userId: string, now: Date = new Date()): Promise<number> {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const row = (await getDbDriver().get(
-    'SELECT COALESCE(SUM(cost_cny), 0) AS spent FROM cost_log WHERE user_id = ? AND created_at >= ?',
+    'SELECT COALESCE(SUM(cost_eur), 0) AS spent FROM cost_log WHERE user_id = ? AND created_at >= ?',
     [userId, monthStart],
   )) as { spent: number | string } | undefined;
   return Number(row?.spent ?? 0);
@@ -81,19 +86,19 @@ export async function monthSpentCny(userId: string, now: Date = new Date()): Pro
 
 /**
  * 生成前置护栏: 读预算 + 当月花费 → evaluateBudgetGuard 裁决。
- * 无预算上限 → 永远放行 (level 'none')。pendingCostCny = 本次操作预估成本。
+ * 无预算上限 → 永远放行 (level 'none')。pendingCostEur = 本次操作预估成本。
  */
 export async function assertBudget(
-  opts: { userId: string; pendingCostCny?: number; locale?: import('./i18n').Locale },
+  opts: { userId: string; pendingCostEur?: number; locale?: import('./i18n').Locale },
   now: Date = new Date(),
 ): Promise<{ allow: boolean; guard: BudgetGuardResult }> {
-  const { capCny, hardCapCny } = await getUserBudget(opts.userId);
+  const { capEur, hardCapEur } = await getUserBudget(opts.userId);
   // 无软上限直接放行, 省一次花费查询
-  if (capCny == null || capCny <= 0) {
-    const guard = evaluateBudgetGuard({ spentCny: 0, capCny: null, pendingCostCny: opts.pendingCostCny, locale: opts.locale });
+  if (capEur == null || capEur <= 0) {
+    const guard = evaluateBudgetGuard({ spentEur: 0, capEur: null, pendingCostEur: opts.pendingCostEur, locale: opts.locale });
     return { allow: true, guard };
   }
-  const spentCny = await monthSpentCny(opts.userId, now);
-  const guard = evaluateBudgetGuard({ spentCny, capCny, hardCapCny, pendingCostCny: opts.pendingCostCny, locale: opts.locale });
+  const spentEur = await monthSpentEur(opts.userId, now);
+  const guard = evaluateBudgetGuard({ spentEur, capEur, hardCapEur, pendingCostEur: opts.pendingCostEur, locale: opts.locale });
   return { allow: guard.allow, guard };
 }

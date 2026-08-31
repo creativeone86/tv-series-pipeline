@@ -58,7 +58,7 @@ function TierCard({ tier }: { tier: PricingTier }) {
           </div>
         ) : (
           <div className="flex items-end gap-1">
-            {!isFree && <span className="text-lg text-[var(--muted)] mb-1">¥</span>}
+            {!isFree && <span className="text-lg text-[var(--muted)] mb-1">€</span>}
             <span
               className="text-4xl font-bold"
               style={{ color: isRecommended ? '#E8C547' : 'white' }}

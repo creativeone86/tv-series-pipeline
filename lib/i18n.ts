@@ -97,6 +97,7 @@ export interface Translations {
     myProjects: string;
     workshop: string;
     shortVideo: string;
+    explainer: string;
     storyIntake: string;
     series: string;
     polish: string;
@@ -220,6 +221,7 @@ export interface Translations {
     tabContinuity: string;
     tabVideos: string;
     tabWorkshop: string;
+    tabExplainer: string;
     tabTimeline: string;
     tabPacing: string;
     tabPullsheet: string;
@@ -789,6 +791,13 @@ export interface Translations {
     modeIpF3: string;
     modeIpEst: string;
     modeIpFor: string;
+    modeExplainer: string;
+    modeExplainerDesc: string;
+    modeExplainerF1: string;
+    modeExplainerF2: string;
+    modeExplainerF3: string;
+    modeExplainerEst: string;
+    modeExplainerFor: string;
     resolutionTitle: string;
     resolutionHint: string;
     tier360Desc: string;
@@ -3373,6 +3382,7 @@ const zhCN: Translations = {
     myProjects: '我的项目',
     workshop: '创作工坊',
     shortVideo: '极速分镜台',
+    explainer: '旁白讲解',
     storyIntake: '长篇拆解',
     series: '我的系列',
     polish: '剧本润色',
@@ -3476,7 +3486,7 @@ const zhCN: Translations = {
     untitled: '未命名项目', creating: '创作中', collapseChat: '收起对话面板', expandChat: '展开对话面板',
     timeline: '时间线', shotsUnit: '镜头', generating: '生成中...', pending: '待生成', shotN: '镜头 {n}',
     tabDirector: '导演台', tabScript: '剧本', tabCharacters: '角色', tabScenes: '场景', tabStoryboard: '分镜',
-    tabContinuity: '连贯性', tabVideos: '视频', tabWorkshop: '镜头工坊', tabTimeline: 'Cinema 时间线',
+    tabContinuity: '连贯性', tabVideos: '视频', tabWorkshop: '镜头工坊', tabExplainer: '讲解节拍', tabTimeline: 'Cinema 时间线',
     tabPacing: '节奏分析', tabPullsheet: '拉片', tabVision: '成片质检', tabOneclick: '一键成片',
     tabMonitor: '技术监看', tabParam: '参数联动', tabComments: '评论协作', tabDistribution: '分发', tabPlay: '完整播放',
     groupCreate: '创作', groupRefine: '精修', groupReview: '审校', groupDeliver: '交付',
@@ -3734,7 +3744,7 @@ const zhCN: Translations = {
     usagePage: {
       eyebrow: "用量与成本",
       headline: "成本可观测",
-      budgetLabel: "月预算 ¥",
+      budgetLabel: "月预算 €",
       budgetPlaceholder: "不限",
       nearDays: "近",
       daySuffix: "天",
@@ -4031,6 +4041,13 @@ const zhCN: Translations = {
     modeIpF3: "多场景批产",
     modeIpEst: "8-15 分钟",
     modeIpFor: "粉丝二创 / IP 拓展",
+    modeExplainer: "旁白讲解",
+    modeExplainerDesc: "选题 → 旁白 → 语义节拍 → 插画成片",
+    modeExplainerF1: "旁白驱动节拍",
+    modeExplainerF2: "视觉词汇复用",
+    modeExplainerF3: "不生成视频",
+    modeExplainerEst: "8–20 分钟",
+    modeExplainerFor: "YouTube 讲解 / Simply Explained",
     resolutionTitle: "分辨率",
     resolutionHint: "创建最高 720P · 成片后单镜可「4K 重渲」(Kling Master · plan-gated)",
     tier360Desc: "草稿档，快速验证分镜",
@@ -4882,17 +4899,17 @@ const zhCN: Translations = {
     costTitle: "成本归因 · 这一单花在哪",
     noCostTitle: "暂无成本数据",
     noCostHint: "生成成片后即可看每阶段花销与省钱建议",
-    budgetCap: "预算上限 ¥",
+    budgetCap: "预算上限 €",
     capUnset: "未设",
     perSec: "秒",
     perCall: "次",
     cogsTitle: "COGS 报告 · 单片销货成本与毛利",
-    salePrice: "参考售价 ¥",
+    salePrice: "参考售价 €",
     salePlaceholder: "填单片售价算毛利",
     unitQtySec: "{n}s",
     unitQtyCall: "{n}次",
     totalCogs: "总 COGS",
-    marginLine: "售价 ¥{sale} − COGS ¥{cogs} = 毛利 ¥{profit}",
+    marginLine: "售价 €{sale} − COGS €{cogs} = 毛利 €{profit}",
     marginPct: " · 毛利率 {n}%",
     inspectorAria: "镜头 {n} 检查器",
     closeInspector: "关闭检查器",
@@ -5062,7 +5079,7 @@ const zhCN: Translations = {
     emotionChartTitle: "情感曲线 · 节奏热力图",
     climaxShot: "▲ 高潮 第 {n} 镜",
     decisionLogTitle: "决策日志(逐镜引擎/成本/一致性)",
-    decisionLogMeta: "({n} 镜 · ¥{cost})",
+    decisionLogMeta: "({n} 镜 · €{cost})",
     querying: "查询中…",
     noDecisionData: "暂无逐镜决策数据(生成成片后自动积累)。",
     colShot: "镜",
@@ -5929,7 +5946,7 @@ const zhCN: Translations = {
     marketIntro: "浏览创作者公开的角色 IP。可二创/可商用的角色直接复用；仅查看的需申请作者授权。",
     loadingMarket: "加载市场…",
     marketEmpty: "市场还没有公开的角色 IP。",
-    perUse: "¥{n}/次",
+    perUse: "€{n}/次",
     reusedN: "· 已复用 {n}",
     importToLibrary: "导入到角色库",
     requestGrant: "申请授权",
@@ -6627,6 +6644,7 @@ const en: Translations = {
     myProjects: 'My Projects',
     workshop: 'Workshop',
     shortVideo: 'Storyboard Desk',
+    explainer: 'Explainer',
     storyIntake: 'Long-form Split',
     series: 'My Series',
     polish: 'Script Polish',
@@ -6730,7 +6748,7 @@ const en: Translations = {
     untitled: 'Untitled project', creating: 'In production', collapseChat: 'Collapse chat', expandChat: 'Expand chat',
     timeline: 'Timeline', shotsUnit: 'shots', generating: 'Generating...', pending: 'Pending', shotN: 'Shot {n}',
     tabDirector: 'Director', tabScript: 'Script', tabCharacters: 'Cast', tabScenes: 'Scenes', tabStoryboard: 'Boards',
-    tabContinuity: 'Continuity', tabVideos: 'Video', tabWorkshop: 'Shot Workshop', tabTimeline: 'Cinema Timeline',
+    tabContinuity: 'Continuity', tabVideos: 'Video', tabWorkshop: 'Shot Workshop', tabExplainer: 'Explainer beats', tabTimeline: 'Cinema Timeline',
     tabPacing: 'Pacing', tabPullsheet: 'Pull sheet', tabVision: 'QC', tabOneclick: 'One-click film',
     tabMonitor: 'Monitor', tabParam: 'Params', tabComments: 'Comments', tabDistribution: 'Distribute', tabPlay: 'Play',
     groupCreate: 'Create', groupRefine: 'Refine', groupReview: 'Review', groupDeliver: 'Deliver',
@@ -6988,7 +7006,7 @@ const en: Translations = {
     usagePage: {
       eyebrow: "Usage & Cost",
       headline: "Cost Observability",
-      budgetLabel: "Monthly Budget ¥",
+      budgetLabel: "Monthly Budget €",
       budgetPlaceholder: "Unlimited",
       nearDays: "Last",
       daySuffix: "days",
@@ -7285,6 +7303,13 @@ const en: Translations = {
     modeIpF3: "Multi-scene batch",
     modeIpEst: "8–15 min",
     modeIpFor: "Fan works / IP expand",
+    modeExplainer: "Narrated Explainer",
+    modeExplainerDesc: "Topic → narration → semantic beats → illustrated film",
+    modeExplainerF1: "Narration-first beats",
+    modeExplainerF2: "Visual vocabulary reuse",
+    modeExplainerF3: "No video generation",
+    modeExplainerEst: "8–20 min",
+    modeExplainerFor: "YouTube explainers / Simply Explained",
     resolutionTitle: "Resolution",
     resolutionHint: "Create max 720P · per-shot 4K re-render after film (Kling Master · plan-gated)",
     tier360Desc: "Draft tier, fast board checks",
@@ -8136,17 +8161,17 @@ const en: Translations = {
     costTitle: "Cost attribution · where this job spent",
     noCostTitle: "No cost data yet",
     noCostHint: "After you generate a film, see per-stage spend and savings tips",
-    budgetCap: "Budget cap ¥",
+    budgetCap: "Budget cap €",
     capUnset: "Unset",
     perSec: "sec",
     perCall: "call",
     cogsTitle: "COGS report · unit cost and margin",
-    salePrice: "Ref. sale ¥",
+    salePrice: "Ref. sale €",
     salePlaceholder: "Sale price for margin",
     unitQtySec: "{n}s",
     unitQtyCall: "{n} calls",
     totalCogs: "Total COGS",
-    marginLine: "Sale ¥{sale} − COGS ¥{cogs} = profit ¥{profit}",
+    marginLine: "Sale €{sale} − COGS €{cogs} = profit €{profit}",
     marginPct: " · margin {n}%",
     inspectorAria: "Shot {n} inspector",
     closeInspector: "Close inspector",
@@ -8316,7 +8341,7 @@ const en: Translations = {
     emotionChartTitle: "Emotion curve · rhythm heatmap",
     climaxShot: "▲ Climax shot {n}",
     decisionLogTitle: "Decision log (per-shot engine / cost / consistency)",
-    decisionLogMeta: "({n} shots · ¥{cost})",
+    decisionLogMeta: "({n} shots · €{cost})",
     querying: "Querying…",
     noDecisionData: "No per-shot decisions yet (accumulates after the film is generated).",
     colShot: "Shot",
@@ -9183,7 +9208,7 @@ const en: Translations = {
     marketIntro: "Browse characters creators made public. Remix/commercial ones can be reused directly; view-only needs the author's grant.",
     loadingMarket: "Loading market…",
     marketEmpty: "No public character IPs yet.",
-    perUse: "¥{n}/use",
+    perUse: "€{n}/use",
     reusedN: "· reused {n}",
     importToLibrary: "Import to library",
     requestGrant: "Request grant",
@@ -9858,7 +9883,7 @@ const zhTW: DeepPartial<Translations> = {
     waitlistNetworkError: '網路錯誤',
   },
   sidebar: {
-    overview: '創作總覽', myProjects: '我的專案', workshop: '創作工坊', shortVideo: '極速分鏡台',
+    overview: '創作總覽', myProjects: '我的專案', workshop: '創作工坊', shortVideo: '極速分鏡台', explainer: '旁白講解',
     storyIntake: '長篇拆解', series: '我的系列', polish: '劇本潤色', u2v: '單圖變影片',
     mv: 'MV 卡點', comic: '漫轉影片', editChat: '對話式編輯', assets: '素材庫',
     characters: '角色庫', ipMarket: 'IP 市場', workflows: '工作流', masterPrompt: 'MasterPrompt',
@@ -9905,7 +9930,7 @@ const zhTW: DeepPartial<Translations> = {
     untitled: '未命名專案', creating: '創作中', collapseChat: '收起對話面板', expandChat: '展開對話面板',
     timeline: '時間線', shotsUnit: '鏡頭', generating: '生成中...', pending: '待生成', shotN: '鏡頭 {n}',
     tabDirector: '導演台', tabScript: '劇本', tabCharacters: '角色', tabScenes: '場景', tabStoryboard: '分鏡',
-    tabContinuity: '連貫性', tabVideos: '影片', tabWorkshop: '鏡頭工坊', tabTimeline: 'Cinema 時間線',
+    tabContinuity: '連貫性', tabVideos: '影片', tabWorkshop: '鏡頭工坊', tabExplainer: '講解節拍', tabTimeline: 'Cinema 時間線',
     tabPacing: '節奏分析', tabPullsheet: '拉片', tabVision: '成片質檢', tabOneclick: '一鍵成片',
     tabMonitor: '技術監看', tabParam: '參數聯動', tabComments: '評論協作', tabDistribution: '分發', tabPlay: '完整播放',
     groupCreate: '創作', groupRefine: '精修', groupReview: '審校', groupDeliver: '交付',
@@ -10156,7 +10181,7 @@ const zhTW: DeepPartial<Translations> = {
     usagePage: {
       eyebrow: "用量與成本",
       headline: "成本可觀測",
-      budgetLabel: "月預算 ¥",
+      budgetLabel: "月預算 €",
       budgetPlaceholder: "不限",
       nearDays: "近",
       daySuffix: "天",
@@ -10353,7 +10378,7 @@ const ja: DeepPartial<Translations> = {
     waitlistSubmitFailed: 'Submit failed, try again later', waitlistNetworkError: 'Network error',
   },
   sidebar: {
-    overview: 'Overview', myProjects: 'My Projects', workshop: 'Workshop', shortVideo: 'Storyboard Desk',
+    overview: 'Overview', myProjects: 'My Projects', workshop: 'Workshop', shortVideo: 'Storyboard Desk', explainer: 'Explainer',
     storyIntake: 'Long-form Split', series: 'My Series', polish: 'Script Polish', u2v: 'Image to Video',
     mv: 'MV Beats', comic: 'Comic to Video', editChat: 'Edit Chat', assets: 'Assets',
     characters: 'Characters', ipMarket: 'IP Market', workflows: 'Workflows', masterPrompt: 'MasterPrompt',
@@ -10400,7 +10425,7 @@ const ja: DeepPartial<Translations> = {
     untitled: 'Untitled project', creating: 'In production', collapseChat: 'Collapse chat', expandChat: 'Expand chat',
     timeline: 'Timeline', shotsUnit: 'shots', generating: 'Generating...', pending: 'Pending', shotN: 'Shot {n}',
     tabDirector: 'Director', tabScript: 'Script', tabCharacters: 'Cast', tabScenes: 'Scenes', tabStoryboard: 'Boards',
-    tabContinuity: 'Continuity', tabVideos: 'Video', tabWorkshop: 'Shot Workshop', tabTimeline: 'Cinema Timeline',
+    tabContinuity: 'Continuity', tabVideos: 'Video', tabWorkshop: 'Shot Workshop', tabExplainer: 'Explainer beats', tabTimeline: 'Cinema Timeline',
     tabPacing: 'Pacing', tabPullsheet: 'Pull sheet', tabVision: 'QC', tabOneclick: 'One-click film',
     tabMonitor: 'Monitor', tabParam: 'Params', tabComments: 'Comments', tabDistribution: 'Distribute', tabPlay: 'Play',
     groupCreate: 'Create', groupRefine: 'Refine', groupReview: 'Review', groupDeliver: 'Deliver',
@@ -10651,7 +10676,7 @@ const ja: DeepPartial<Translations> = {
     usagePage: {
       eyebrow: "使用量とコスト",
       headline: "コスト可観測性",
-      budgetLabel: "月次予算 ¥",
+      budgetLabel: "月次予算 €",
       budgetPlaceholder: "上限なし",
       nearDays: "過去",
       daySuffix: "日間",
@@ -11227,7 +11252,7 @@ const ko: DeepPartial<Translations> = {
   "usagePage": {
     "eyebrow": "사용량 및 비용",
     "headline": "비용 가시성",
-    "budgetLabel": "월 예산 ¥",
+    "budgetLabel": "월 예산 €",
     "budgetPlaceholder": "무제한",
     "nearDays": "최근",
     "daySuffix": "일",
@@ -11800,7 +11825,7 @@ const ru: DeepPartial<Translations> = {
   "usagePage": {
     "eyebrow": "Использование и стоимость",
     "headline": "Наблюдаемость затрат",
-    "budgetLabel": "Месячный бюджет ¥",
+    "budgetLabel": "Месячный бюджет €",
     "budgetPlaceholder": "Без ограничений",
     "nearDays": "За",
     "daySuffix": "дн.",
@@ -12028,13 +12053,30 @@ function deepMergeFallback(base: any, over: any): any {
   return out;
 }
 
+/**
+ * locale → 合并结果缓存。
+ *
+ * deepMergeFallback 每次调用都新建一整棵对象树, 而 useLocale 在 render 里直接
+ * `t: getTranslations(locale)` —— 于是 `t` 每次 render 都是新引用, 所有
+ * `useEffect(..., [t])` 每次 render 都重跑。effect 里若无条件 setState
+ * (如 components/mascot.tsx 随机取一句 quip) 就会 render→effect→setState→render
+ * 死循环, React 抛 "Maximum update depth exceeded"。
+ *
+ * translations / en 都是模块级常量, 合并结果是确定性的, 因此可以缓存。
+ * 返回值被所有调用方共享, 不可原地修改。
+ */
+const translationsCache = new Map<Locale, Translations>();
+
 export function getTranslations(locale: Locale): Translations {
+  const cached = translationsCache.get(locale);
+  if (cached) return cached;
   // v12.186:ko/ru 文案包未成 —— 以 en 字典兜底(键级渐进补真文案零结构改动)
   const effective = (locale === 'ko' || locale === 'ru') ? 'en' : locale;
   const t = translations[effective as keyof typeof translations];
-  if (!t) return en;
   // 以 en 为底回退, 防某 locale 漏 key 时出现中文(或 undefined)
-  return deepMergeFallback(en, t) as Translations;
+  const merged = (t ? deepMergeFallback(en, t) : en) as Translations;
+  translationsCache.set(locale, merged);
+  return merged;
 }
 
 /** 点路径取翻译 (e.g. t('ja', 'nav.projects')). 缺失回退英文, 再缺回 path. */

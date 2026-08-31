@@ -2,8 +2,8 @@ export interface PricingTier {
   id: string;
   name: string;
   nameEn: string;
-  price: number;        // Monthly price in CNY, 0 for free
-  priceUnit: string;    // '元/月'
+  price: number;        // Monthly price in EUR, 0 for free
+  priceUnit: string;    // 'EUR/mo'
   features: string[];
   limits: {
     projectsPerMonth: number;   // -1 means unlimited
@@ -13,10 +13,10 @@ export interface PricingTier {
     apiAccess: boolean;
     priorityQueue: boolean;
     commercialLicense: boolean;
-    // v12.223 用量护栏:各档**月度真实生成成本上限(¥)**。-1=不设上限(企业定制)。
-    // 病根(🔴-6):Pro ¥298/月原本无用量上限,单个 4K 重度用户月成本可超订阅价数倍。
+    // v12.223 用量护栏:各档**月度真实生成成本上限(€)**。-1=不设上限(企业定制)。
+    // 病根(🔴-6):Pro €298/月原本无用量上限,单个 4K 重度用户月成本可超订阅价数倍。
     // 上限按「订阅价留毛利」定:超额触发降级/提示充值(见 lib/usage-quota)。
-    monthlyCostCeilingCny: number;
+    monthlyCostCeilingEur: number;
   };
   recommended?: boolean;
   color: string;
@@ -28,7 +28,7 @@ export const PRICING_TIERS: PricingTier[] = [
     name: '免费版',
     nameEn: 'Free',
     price: 0,
-    priceUnit: '元/月',
+    priceUnit: 'EUR/mo',
     color: '#6B7280',
     features: [
       '每月 3 个项目',
@@ -46,15 +46,15 @@ export const PRICING_TIERS: PricingTier[] = [
       apiAccess: false,
       priorityQueue: false,
       commercialLicense: false,
-      monthlyCostCeilingCny: 5,     // 免费档:轻量试用,约 5 元算力
+      monthlyCostCeilingEur: 0.64,     // 免费档:轻量试用,约 €0.64 算力
     },
   },
   {
     id: 'creator',
     name: '创作版',
     nameEn: 'Creator',
-    price: 98,
-    priceUnit: '元/月',
+    price: 12.52,
+    priceUnit: 'EUR/mo',
     color: '#4A7EBB',
     features: [
       '无限项目数量',
@@ -72,15 +72,15 @@ export const PRICING_TIERS: PricingTier[] = [
       apiAccess: false,
       priorityQueue: false,
       commercialLicense: false,
-      monthlyCostCeilingCny: 60,    // 创作版 ¥98/月:留毛利上限 ¥60
+      monthlyCostCeilingEur: 7.67,    // 创作版 €12.52/月:留毛利上限 €7.67
     },
   },
   {
     id: 'pro',
     name: '专业版',
     nameEn: 'Pro',
-    price: 298,
-    priceUnit: '元/月',
+    price: 38.08,
+    priceUnit: 'EUR/mo',
     color: '#E8C547',
     recommended: true,
     features: [
@@ -101,7 +101,7 @@ export const PRICING_TIERS: PricingTier[] = [
       apiAccess: true,
       priorityQueue: true,
       commercialLicense: true,
-      monthlyCostCeilingCny: 200,   // 专业版 ¥298/月:留毛利上限 ¥200(堵 4K 重度亏损)
+      monthlyCostCeilingEur: 25.56,   // 专业版 €38.08/月:留毛利上限 €25.56(堵 4K 重度亏损)
     },
   },
   {
@@ -129,7 +129,7 @@ export const PRICING_TIERS: PricingTier[] = [
       apiAccess: true,
       priorityQueue: true,
       commercialLicense: true,
-      monthlyCostCeilingCny: -1,    // 企业定制:不设固定上限(私有化/合约计费)
+      monthlyCostCeilingEur: -1,    // 企业定制:不设固定上限(私有化/合约计费)
     },
   },
 ];

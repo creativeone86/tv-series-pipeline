@@ -35,24 +35,24 @@ describe('v9.6.5 · classifyEngineCategory', () => {
 describe('v9.6.5 · costEventsFromCostLog + 端到端归因', () => {
   it('cost_log 行 → 事件(category 由 engine 归类 + label)', () => {
     const ev = costEventsFromCostLog([
-      { engine: 'minimax/video-01', costCny: 7 },
-      { engine: 'gpt-4o', costCny: 1 },
+      { engine: 'minimax/video-01', costEur: 7 },
+      { engine: 'gpt-4o', costEur: 1 },
     ]);
-    expect(ev[0]).toMatchObject({ category: 'video', costCny: 7, label: 'minimax/video-01' });
+    expect(ev[0]).toMatchObject({ category: 'video', costEur: 7, label: 'minimax/video-01' });
     expect(ev[1].category).toBe('llm');
   });
   it('容错空 / 缺字段', () => {
     expect(costEventsFromCostLog([])).toEqual([]);
     expect(costEventsFromCostLog(undefined as never)).toEqual([]);
-    expect(costEventsFromCostLog([{ engine: null, costCny: null }])[0]).toMatchObject({ category: 'other', costCny: 0 });
+    expect(costEventsFromCostLog([{ engine: null, costEur: null }])[0]).toMatchObject({ category: 'other', costEur: 0 });
   });
   it('接 attributeCost → 总价 + 降序占比', () => {
     const a = attributeCost(costEventsFromCostLog([
-      { engine: 'minimax/video-01', costCny: 7 },
-      { engine: 'minimax/image-01', costCny: 2 },
-      { engine: 'gpt-4o', costCny: 1 },
+      { engine: 'minimax/video-01', costEur: 7 },
+      { engine: 'minimax/image-01', costEur: 2 },
+      { engine: 'gpt-4o', costEur: 1 },
     ]));
-    expect(a.totalCny).toBe(10);
+    expect(a.totalEur).toBe(10);
     expect(a.byCategory[0].category).toBe('video');
     expect(a.byCategory[0].pct).toBe(70);
     expect(a.topCategory?.category).toBe('video');

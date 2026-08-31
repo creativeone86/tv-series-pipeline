@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS api_usage_events (
   duration_ms INTEGER NOT NULL DEFAULT 0,       
   project_id TEXT,                              
   user_id TEXT,                                 
-  est_cost_cny REAL DEFAULT 0,                  
+  est_cost_eur REAL DEFAULT 0,                  
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS cases (
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS character_ip_tokens (
   visibility TEXT NOT NULL DEFAULT 'private',    
   license TEXT NOT NULL DEFAULT 'view',          
   terms TEXT DEFAULT '',                         
-  royalty_cny REAL DEFAULT 0,                    
+  royalty_eur REAL DEFAULT 0,                    
   status TEXT NOT NULL DEFAULT 'active',         
   use_count INTEGER NOT NULL DEFAULT 0,          
   created_at TEXT NOT NULL,
@@ -125,7 +125,7 @@ CREATE TABLE IF NOT EXISTS cost_log (
   engine TEXT NOT NULL,                         
   resolution TEXT NOT NULL,                     
   duration_sec REAL NOT NULL DEFAULT 0,
-  cost_cny REAL NOT NULL DEFAULT 0,
+  cost_eur REAL NOT NULL DEFAULT 0,
   metadata TEXT DEFAULT '{}',
   created_at TEXT NOT NULL
 );
@@ -450,6 +450,20 @@ CREATE TABLE IF NOT EXISTS template_share_tokens (
   created_at TEXT NOT NULL,
   expires_at TEXT                               
 );
+CREATE TABLE IF NOT EXISTS tts_cache (
+  cache_key TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL DEFAULT '',
+  voice_id TEXT NOT NULL DEFAULT '',
+  language TEXT NOT NULL DEFAULT '',
+  normalized_text TEXT NOT NULL,
+  audio_url TEXT NOT NULL,
+  audio_key TEXT,
+  duration_sec REAL NOT NULL DEFAULT 0,
+  est_cost_eur REAL NOT NULL DEFAULT 0,
+  settings TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL
+, alignment TEXT);
 CREATE TABLE IF NOT EXISTS ui_events (
   id TEXT PRIMARY KEY,
   event TEXT NOT NULL,
@@ -473,9 +487,9 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT NOT NULL,
   role TEXT NOT NULL,
   avatar_url TEXT,
-  locale TEXT DEFAULT 'en',
+  locale TEXT DEFAULT 'zh',
   created_at TEXT NOT NULL
-, invite_code_used TEXT, budget_cap_cny REAL, budget_hard_cap_cny REAL, subscription_tier TEXT NOT NULL DEFAULT 'free', subscription_status TEXT, stripe_customer_id TEXT, email_notify_pref TEXT DEFAULT 'mentions');
+, invite_code_used TEXT, budget_cap_cny REAL, budget_hard_cap_cny REAL, subscription_tier TEXT NOT NULL DEFAULT 'free', subscription_status TEXT, stripe_customer_id TEXT, email_notify_pref TEXT DEFAULT 'mentions', budget_cap_eur REAL, budget_hard_cap_eur REAL);
 CREATE TABLE IF NOT EXISTS waitlist (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL,
@@ -552,6 +566,7 @@ CREATE INDEX IF NOT EXISTS idx_template_favorites_user ON template_favorites(use
 CREATE INDEX IF NOT EXISTS idx_template_share_tokens_asset ON template_share_tokens(asset_id);
 CREATE INDEX IF NOT EXISTS idx_template_share_tokens_owner ON template_share_tokens(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_track_edits_project ON project_track_edits(project_id, track_type);
+CREATE INDEX IF NOT EXISTS idx_tts_cache_created ON tts_cache(created_at);
 CREATE INDEX IF NOT EXISTS idx_ui_events_event ON ui_events(event, created_at);
 CREATE INDEX IF NOT EXISTS idx_waitlist_email ON waitlist(email);
 CREATE INDEX IF NOT EXISTS idx_waitlist_status ON waitlist(status);

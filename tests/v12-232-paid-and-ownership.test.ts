@@ -107,46 +107,46 @@ describe('v12.232 付费端点守卫', () => {
   });
 
   it('已登录且未超额 → 放行并给出 userId', async () => {
-    const g = await guardPaidEndpoint(req(tok(owner)), { pendingCostCny: 0.1 });
+    const g = await guardPaidEndpoint(req(tok(owner)), { pendingCostEur: 0.1 });
     expect(g.ok).toBe(true);
     if (g.ok) expect(g.userId).toBe(owner);
   });
 
-  it('已登录但超档位上限 → 402(free 档 ¥5,已花 ¥20)', async () => {
+  it('已登录但超档位上限 → 402(free 档 €5,已花 €20)', async () => {
     db.prepare(
-      `INSERT INTO cost_log (id, user_id, project_id, engine, resolution, duration_sec, cost_cny, created_at)
+      `INSERT INTO cost_log (id, user_id, project_id, engine, resolution, duration_sec, cost_eur, created_at)
        VALUES (?, ?, NULL, 'kling', '1080p', 5, 20, ?)`,
     ).run('cl_' + nanoid(8), owner, new Date().toISOString());
-    const g = await guardPaidEndpoint(req(tok(owner)), { pendingCostCny: 1.8 });
+    const g = await guardPaidEndpoint(req(tok(owner)), { pendingCostEur: 1.8 });
     expect(g.ok).toBe(false);
     if (!g.ok) expect(g.response.status).toBe(402);
   });
 });
 
 describe('v12.232 档位上限首次具备执法力', () => {
-  it('未自设预算 → 回落订阅档位上限(free ¥5),不再是"不设防"', async () => {
-    expect((await getUserBudget(owner)).capCny).toBe(5);
+  it('未自设预算 → 回落订阅档位上限(free €0.64),不再是"不设防"', async () => {
+    expect((await getUserBudget(owner)).capEur).toBe(0.64);
   });
 
   it('自设预算优先于档位上限', async () => {
-    await setUserBudget(owner, { capCny: 100 });
-    expect((await getUserBudget(owner)).capCny).toBe(100);
+    await setUserBudget(owner, { capEur: 100 });
+    expect((await getUserBudget(owner)).capEur).toBe(100);
   });
 
-  it('pro 档回落 ¥200', async () => {
+  it('pro 档回落 €25.56', async () => {
     const pro = mkUser('pro', 'pro');
-    expect((await getUserBudget(pro)).capCny).toBe(200);
+    expect((await getUserBudget(pro)).capEur).toBe(25.56);
   });
 
   it('企业档(-1)仍不设防', async () => {
     const ent = mkUser('ent', 'enterprise');
-    expect((await getUserBudget(ent)).capCny).toBeNull();
+    expect((await getUserBudget(ent)).capEur).toBeNull();
     expect((await assertBudget({ userId: ent })).guard.level).toBe('none');
   });
 
-  it('free 档花超 ¥5 → assertBudget 真的拦(此前永远放行)', async () => {
+  it('free 档花超 €5 → assertBudget 真的拦(此前永远放行)', async () => {
     db.prepare(
-      `INSERT INTO cost_log (id, user_id, project_id, engine, resolution, duration_sec, cost_cny, created_at)
+      `INSERT INTO cost_log (id, user_id, project_id, engine, resolution, duration_sec, cost_eur, created_at)
        VALUES (?, ?, NULL, 'kling', '1080p', 5, 30, ?)`,
     ).run('cl_' + nanoid(8), owner, new Date().toISOString());
     expect((await assertBudget({ userId: owner })).allow).toBe(false);

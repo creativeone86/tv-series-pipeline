@@ -15,7 +15,7 @@ import { effectiveVoice } from '@/lib/voice-routing';
 import { resolveAndPersistCast } from '@/lib/voice-cast';
 import { getDbDriver } from '@/lib/db-driver';
 import { getUserFromRequest } from '../../../auth/lib';
-import { recordCostLog, estimateTtsCostCny } from '@/lib/repos/cost-log-repo';
+import { recordCostLog, estimateTtsCostEur } from '@/lib/repos/cost-log-repo';
 import type { ScriptShot } from '@/types/agents';
 import { requireProjectAccess } from '@/lib/auth-guard';
 import { detectLanguage, ttsLangCode } from '@/lib/language-detect';
@@ -109,7 +109,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       await recordCostLog({
         userId, projectId: id, engine: `tts-${r.result.provider}`,
         durationSec: r.result.duration,
-        costCny: estimateTtsCostCny(r.result.duration, (s.dialogue || '').length),
+        costEur: estimateTtsCostEur(r.result.duration, (s.dialogue || '').length),
         metadata: { kind: 'shot-audio', shotNumber: s.shotNumber, voiceId },
       });
     } catch (e) {

@@ -1,18 +1,9 @@
 /**
- * v3.x P0.3 E.3 — Project version approval state machine.
- *
- * 状态机:
- *   draft (默认) → in_review (提交) → approved | changes_requested
- *   approved/changes_requested → draft (重新创作)
- *
- * 设计:
- *   - 1 个项目 1 个 review status (project_review_status PK = project_id)
- *   - 不存历史 (要 history 走 audit log v3.x P1)
- *   - 状态转换有 actor: submitted_by / reviewed_by
- *   - 只有项目所有者 + admin 能 review (即审批不能自己审自己)
+ * Project version approval state machine. Async via getDbDriver()
+ * so Postgres-backed projects actually persist review state.
  */
 
-import { db, now } from '@/lib/db';
+import { getDbDriver } from '@/lib/db-driver';
 
 export type ReviewStatus = 'draft' | 'in_review' | 'approved' | 'changes_requested';
 
@@ -53,20 +44,12 @@ function rowToStatus(row: ReviewDbRow): ProjectReviewStatus {
 
 const ALLOWED_TRANSITIONS: Record<ReviewStatus, ReviewStatus[]> = {
   draft: ['in_review'],
-  in_review: ['approved', 'changes_requested', 'draft'],     // 提交者可撤回到 draft
+  in_review: ['approved', 'changes_requested', 'draft'],
   approved: ['draft'],
-  changes_requested: ['in_review', 'draft'],                  // 修改后再提交
+  changes_requested: ['in_review', 'draft'],
 };
 
-/**
- * 获取项目当前审批状态. 没记录 → 返默认 (draft).
- */
-export function getReviewStatus(projectId: string): ProjectReviewStatus {
-  const row = db.prepare(
-    'SELECT * FROM project_review_status WHERE project_id = ?',
-  ).get(projectId) as ReviewDbRow | undefined;
-  if (row) return rowToStatus(row);
-  // 默认: 没记录 = draft
+function emptyStatus(projectId: string): ProjectReviewStatus {
   return {
     projectId,
     status: 'draft',
@@ -75,8 +58,17 @@ export function getReviewStatus(projectId: string): ProjectReviewStatus {
     reviewedByUserId: null,
     reviewedAt: null,
     reviewNote: null,
-    updatedAt: now(),
+    updatedAt: new Date().toISOString(),
   };
+}
+
+export async function getReviewStatus(projectId: string): Promise<ProjectReviewStatus> {
+  const row = await getDbDriver().get<ReviewDbRow>(
+    'SELECT * FROM project_review_status WHERE project_id = ?',
+    [projectId],
+  );
+  if (row) return rowToStatus(row);
+  return emptyStatus(projectId);
 }
 
 export interface TransitionInput {
@@ -92,14 +84,8 @@ export interface TransitionResult {
   error?: string;
 }
 
-/**
- * 状态转换. 校验:
- *   - 转换路径合法 (按 ALLOWED_TRANSITIONS)
- *   - approve/request changes 时, actor != 提交者 (防自审)
- *   - 转 in_review 必须有 actor (提交者)
- */
-export function transitionReviewStatus(input: TransitionInput): TransitionResult {
-  const current = getReviewStatus(input.projectId);
+export async function transitionReviewStatus(input: TransitionInput): Promise<TransitionResult> {
+  const current = await getReviewStatus(input.projectId);
   const allowed = ALLOWED_TRANSITIONS[current.status] || [];
   if (!allowed.includes(input.toStatus)) {
     return {
@@ -108,21 +94,19 @@ export function transitionReviewStatus(input: TransitionInput): TransitionResult
     };
   }
 
-  // approve / request_changes 时禁止自审
   if (
-    (input.toStatus === 'approved' || input.toStatus === 'changes_requested') &&
-    current.submittedByUserId === input.actorUserId
+    (input.toStatus === 'approved' || input.toStatus === 'changes_requested')
+    && current.submittedByUserId === input.actorUserId
   ) {
     return { ok: false, error: '不能自审自己提交的版本' };
   }
 
-  // note 校验
   const note = (input.note || '').trim().slice(0, 500);
   if (input.toStatus === 'changes_requested' && !note) {
     return { ok: false, error: 'request_changes 时必须填留言, 告诉提交者改哪里' };
   }
 
-  const ts = now();
+  const ts = new Date().toISOString();
   let submittedByUserId = current.submittedByUserId;
   let submittedAt = current.submittedAt;
   let reviewedByUserId = current.reviewedByUserId;
@@ -140,15 +124,13 @@ export function transitionReviewStatus(input: TransitionInput): TransitionResult
     reviewedAt = ts;
     reviewNote = note || null;
   } else if (input.toStatus === 'draft') {
-    // 撤回到 draft — 清审阅信息但保留 submitted (作历史)
     reviewedByUserId = null;
     reviewedAt = null;
     reviewNote = note || null;
   }
 
-  // UPSERT
-  db.prepare(`
-    INSERT INTO project_review_status
+  await getDbDriver().run(
+    `INSERT INTO project_review_status
       (project_id, status, submitted_by_user_id, submitted_at, reviewed_by_user_id, reviewed_at, review_note, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(project_id) DO UPDATE SET
@@ -158,11 +140,12 @@ export function transitionReviewStatus(input: TransitionInput): TransitionResult
       reviewed_by_user_id = excluded.reviewed_by_user_id,
       reviewed_at = excluded.reviewed_at,
       review_note = excluded.review_note,
-      updated_at = excluded.updated_at
-  `).run(
-    input.projectId, input.toStatus, submittedByUserId, submittedAt,
-    reviewedByUserId, reviewedAt, reviewNote, ts,
+      updated_at = excluded.updated_at`,
+    [
+      input.projectId, input.toStatus, submittedByUserId, submittedAt,
+      reviewedByUserId, reviewedAt, reviewNote, ts,
+    ],
   );
 
-  return { ok: true, status: getReviewStatus(input.projectId) };
+  return { ok: true, status: await getReviewStatus(input.projectId) };
 }

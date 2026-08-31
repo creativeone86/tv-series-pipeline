@@ -35,20 +35,20 @@ export function classifyEngineCategory(engine: string): CostCategory {
   return 'other';
 }
 
-/** 把 cost_log 行(engine + costCny)映射成计费事件(category 由 engine 归类)。 */
+/** 把 cost_log 行(engine + costEur)映射成计费事件(category 由 engine 归类)。 */
 export function costEventsFromCostLog(
-  rows: Array<{ engine?: string | null; costCny?: number | null }>,
+  rows: Array<{ engine?: string | null; costEur?: number | null }>,
 ): CostEvent[] {
   return (Array.isArray(rows) ? rows : []).map((r) => ({
     category: classifyEngineCategory(r?.engine || ''),
-    costCny: num(r?.costCny),
+    costEur: num(r?.costEur),
     label: (r?.engine || '').trim() || undefined,
   }));
 }
 
 export interface CostEvent {
   category: CostCategory;
-  costCny: number;
+  costEur: number;
   /** 可选:哪一步 / 哪镜 */
   label?: string;
 }
@@ -56,7 +56,7 @@ export interface CostEvent {
 export interface CategoryCost {
   category: CostCategory;
   label: string;
-  costCny: number;
+  costEur: number;
   /** 占总价百分比(0-100,1 位小数) */
   pct: number;
   /** 该类目有效计费事件数 */
@@ -64,7 +64,7 @@ export interface CategoryCost {
 }
 
 export interface CostAttribution {
-  totalCny: number;
+  totalEur: number;
   /** 降序(贵的在前),只含 >0 的类目 */
   byCategory: CategoryCost[];
   topCategory: CategoryCost | null;
@@ -109,7 +109,7 @@ export function attributeCost(events: CostEvent[]): CostAttribution {
   for (const e of list) {
     if (!e) continue;
     const cat: CostCategory = ALL_CATS.includes(e.category) ? e.category : 'other';
-    const c = num(e.costCny);
+    const c = num(e.costEur);
     sums[cat].cost += c;
     if (c > 0) sums[cat].count += 1;
   }
@@ -118,15 +118,15 @@ export function attributeCost(events: CostEvent[]): CostAttribution {
     .map((c) => ({
       category: c,
       label: COST_CATEGORY_LABEL[c],
-      costCny: round2(sums[c].cost),
+      costEur: round2(sums[c].cost),
       pct: total > 0 ? round1((sums[c].cost / total) * 100) : 0,
       count: sums[c].count,
     }))
-    .filter((c) => c.costCny > 0)
-    .sort((a, b) => b.costCny - a.costCny);
+    .filter((c) => c.costEur > 0)
+    .sort((a, b) => b.costEur - a.costEur);
 
   return {
-    totalCny: round2(total),
+    totalEur: round2(total),
     byCategory,
     topCategory: byCategory[0] ?? null,
     hints: buildHints(byCategory, total),
@@ -139,11 +139,11 @@ export type CostGuardLevel = 'none' | 'ok' | 'warn' | 'over';
 
 export interface CostGuard {
   level: CostGuardLevel;
-  capCny: number | null;
-  totalCny: number;
+  capEur: number | null;
+  totalEur: number;
   /** 已用占比 0-100+(无上限 → null) */
   pctUsed: number | null;
-  remainingCny: number | null;
+  remainingEur: number | null;
   /** 告警阈值 0..1(默认 0.8) */
   warnThreshold: number;
   message: string;
@@ -153,19 +153,19 @@ export interface CostGuard {
  * 项目级成本预算护栏:已花 vs 上限 → ok / warn(≥阈值)/ over(≥上限);无上限 → none。
  * 与 cost-rollup.computeBudget(周期+线性预测)正交:这是单项目累计花费的硬上限护栏。
  */
-export function evaluateCostGuard(input: { totalCny: number; capCny?: number | null; warnThreshold?: number }): CostGuard {
-  const total = round2(num(input.totalCny));
-  const cap = input.capCny == null ? null : num(input.capCny);
+export function evaluateCostGuard(input: { totalEur: number; capEur?: number | null; warnThreshold?: number }): CostGuard {
+  const total = round2(num(input.totalEur));
+  const cap = input.capEur == null ? null : num(input.capEur);
   const warn = typeof input.warnThreshold === 'number' && input.warnThreshold > 0 && input.warnThreshold <= 1 ? input.warnThreshold : 0.8;
   if (cap == null || cap <= 0) {
-    return { level: 'none', capCny: cap, totalCny: total, pctUsed: null, remainingCny: null, warnThreshold: warn, message: '未设预算上限' };
+    return { level: 'none', capEur: cap, totalEur: total, pctUsed: null, remainingEur: null, warnThreshold: warn, message: '未设预算上限' };
   }
   const pctUsed = round1((total / cap) * 100);
-  const remainingCny = round2(cap - total);
+  const remainingEur = round2(cap - total);
   const level: CostGuardLevel = total >= cap ? 'over' : total >= cap * warn ? 'warn' : 'ok';
   const message =
-    level === 'over' ? `已超预算 ¥${total} / ¥${cap}(${pctUsed}%)`
-      : level === 'warn' ? `接近预算 ${pctUsed}%(剩 ¥${remainingCny})`
-        : `预算内 ${pctUsed}%(剩 ¥${remainingCny})`;
-  return { level, capCny: cap, totalCny: total, pctUsed, remainingCny, warnThreshold: warn, message };
+    level === 'over' ? `已超预算 €${total} / €${cap}(${pctUsed}%)`
+      : level === 'warn' ? `接近预算 ${pctUsed}%(剩 €${remainingEur})`
+        : `预算内 ${pctUsed}%(剩 €${remainingEur})`;
+  return { level, capEur: cap, totalEur: total, pctUsed, remainingEur, warnThreshold: warn, message };
 }

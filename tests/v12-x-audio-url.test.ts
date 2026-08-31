@@ -2,8 +2,12 @@
  * #4 修复回归 —— 配音 URL 加载分类:成片没人声 的根因是 TTS 返回 data:/serve-file
  * 被当成「非 http」丢弃。锁死三种形态的处理。
  */
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { describe, it, expect } from 'vitest';
 import { audioUrlLoadKind } from '@/lib/audio-url';
+import { resolveServeFilePath } from '@/lib/asset-storage';
 
 describe('#4 · audioUrlLoadKind', () => {
   it('vectorengine-tts 的 data:audio → 解码加载(此前被丢)', () => {
@@ -11,6 +15,9 @@ describe('#4 · audioUrlLoadKind', () => {
   });
   it('minimax 的 /api/serve-file?path= → 下载加载(此前被丢)', () => {
     expect(audioUrlLoadKind('/api/serve-file?path=%2Ftmp%2Fvo.mp3')).toBe('download');
+  });
+  it('persistAsset 的 /api/serve-file?key= → 同样按下载加载', () => {
+    expect(audioUrlLoadKind('/api/serve-file?key=fa25d6fdb7968b0c8b2bc207f98ef902')).toBe('download');
   });
   it('http(s) → 下载', () => {
     expect(audioUrlLoadKind('https://cdn/v.mp3')).toBe('download');
@@ -22,5 +29,20 @@ describe('#4 · audioUrlLoadKind', () => {
     expect(audioUrlLoadKind(undefined)).toBe('skip');
     expect(audioUrlLoadKind('file:///x.mp3')).toBe('skip');
     expect(audioUrlLoadKind('relative/path.mp3')).toBe('skip');
+  });
+});
+
+describe('resolveServeFilePath', () => {
+  it('resolves ?path= when the file exists', () => {
+    const tmp = path.join(os.tmpdir(), `vo-test-${Date.now()}.mp3`);
+    fs.writeFileSync(tmp, 'x');
+    try {
+      expect(resolveServeFilePath(`/api/serve-file?path=${encodeURIComponent(tmp)}`)).toBe(tmp);
+    } finally {
+      fs.unlinkSync(tmp);
+    }
+  });
+  it('does not throw on a missing key-only URL', () => {
+    expect(resolveServeFilePath('/api/serve-file?key=ffffffffffffffffffffffffffffffff')).toBeNull();
   });
 });

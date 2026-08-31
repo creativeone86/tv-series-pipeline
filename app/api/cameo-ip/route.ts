@@ -3,7 +3,7 @@
  *
  * GET  ?scope=market (默认) → 公开市场 token 列表
  *      ?scope=mine            → 当前用户发行的 token
- * POST 发行/更新一个角色的 IP token (body: { characterId, name, coverUrl?, visibility, license, terms?, royaltyCny? })
+ * POST 发行/更新一个角色的 IP token (body: { characterId, name, coverUrl?, visibility, license, terms?, royaltyEur? })
  *
  * Auth: POST 需登录; GET market 公开.
  */
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
       visibility: body?.visibility,
       license: body?.license,
       terms: body?.terms,
-      royaltyCny: body?.royaltyCny,
+      royaltyEur: body?.royaltyEur,
     });
     return NextResponse.json({ token });
   } catch (e) {

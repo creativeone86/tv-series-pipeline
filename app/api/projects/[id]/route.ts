@@ -1,4 +1,4 @@
-import { db, now } from '@/lib/db';
+import { getDbDriver } from '@/lib/db-driver';
 import { getUserFromRequest } from '../../auth/lib';
 import { normalizeAssetRow } from '@/lib/asset-storage';
 import { listProjectAssets, getAsset, updateAssetDataInProject } from '@/lib/repos/asset-repo';
@@ -15,7 +15,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const g = await requireProjectAccess(request, id, 'view');
   if (!g.ok) return NextResponse.json({ message: g.message }, { status: g.status });
 
-  const row = db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as any;
+  // v12.346: must read through the async driver (Postgres/SQLite), not the sync
+  // better-sqlite3 handle — under DB_DRIVER=pg the project lives in Postgres, so a
+  // sync SQLite read always missed it and 404'd even though access checks passed.
+  const row = await getDbDriver().get<any>('SELECT * FROM projects WHERE id = ?', [id]);
   if (!row) return NextResponse.json({ message: 'Not found' }, { status: 404 });
 
   // 加载项目资产 — v4.2.3: 走 async asset-repo (DbDriver), SQLite/PG 双驱动
@@ -59,13 +62,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     assets: parsedAssets,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    mode: row.mode || 'episodic',
+    outputConfig: safeJsonParse<any>(row.output_config, null, { context: `projects.output_config#${row.id}` }),
   });
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(id) as any;
+  const project = await getDbDriver().get<{ id: string }>('SELECT id FROM projects WHERE id = ?', [id]);
   if (!project) return NextResponse.json({ message: 'Not found' }, { status: 404 });
 
   let body: any;

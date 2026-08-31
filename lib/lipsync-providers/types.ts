@@ -29,7 +29,7 @@ export interface LipSyncGenerateResult {
   provider: string;
   durationSec?: number;
   upstreamId?: string;
-  estCostCny?: number;
+  estCostEur?: number;
 }
 
 export interface LipSyncProvider {

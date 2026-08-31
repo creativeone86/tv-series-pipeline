@@ -212,8 +212,30 @@ const SYSTEM_FALLBACK_CJK_FONTS = [
 
 let warnedSystemFont = false;
 
+const OPEN_LICENSE_CYRILLIC_FONTS = [
+  path.join(process.cwd(), 'data', 'fonts', 'SofiaSansExtraCondensed-Black.ttf'),
+  path.join(process.cwd(), 'data', 'fonts', 'SofiaSans-ExtraCondensedBlack.ttf'),
+  path.join(process.cwd(), 'data', 'fonts', 'SofiaSans-Black.ttf'),
+  path.join(process.cwd(), 'data', 'fonts', 'SofiaSans-Bold.ttf'),
+  path.join(process.cwd(), 'data', 'fonts', 'NotoSans-Regular.ttf'),
+  path.join(process.cwd(), 'data', 'fonts', 'NotoSans-Regular.otf'),
+  '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+  '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
+  '/Library/Fonts/Arial Unicode.ttf',
+];
+
+/** Prefer a font with Cyrillic coverage; fall back to the CJK resolver (Noto CJK includes Cyrillic). */
+export function findSubtitleFont(): string | null {
+  const envFont = process.env.SUBTITLE_FONT_FILE || process.env.CJK_FONT_FILE;
+  if (envFont && fs.existsSync(envFont)) return envFont;
+  for (const p of OPEN_LICENSE_CYRILLIC_FONTS) {
+    if (p && fs.existsSync(p)) return p;
+  }
+  return findCjkFont();
+}
+
 export function findCjkFont(): string | null {
-  const envFont = process.env.CJK_FONT_FILE;
+  const envFont = process.env.CJK_FONT_FILE || process.env.SUBTITLE_FONT_FILE;
   if (envFont && fs.existsSync(envFont)) return envFont;
 
   for (const p of OPEN_LICENSE_CJK_FONTS) {

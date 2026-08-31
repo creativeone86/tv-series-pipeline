@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useRef, type CSSProperties } from 'react';
 import { SafeAreaOverlay } from '@/components/ui/safe-area-overlay';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowLeft, FileText, Users, Mountains as Mountain, FilmStrip as Film, Video, Play, Scissors, Star, CheckCircle as CheckCircle2, Warning as AlertTriangle, Pencil, FloppyDisk as Save, X, ChatCircle as MessageCircle, ChartBar as BarChart3, FilmSlate as Clapperboard, Scan as ScanEye, MonitorPlay, LinkSimple as Link2, Gauge, BracketsCurly as Braces, Megaphone, MagicWand, SpeakerHigh, ArrowsOut as Maximize, ArrowsIn as Minimize, UsersThree } from '@phosphor-icons/react';
+import { ArrowLeft, FileText, Users, Mountains as Mountain, FilmStrip as Film, Video, Play, Scissors, Star, CheckCircle as CheckCircle2, Warning as AlertTriangle, Pencil, FloppyDisk as Save, X, ChatCircle as MessageCircle, ChartBar as BarChart3, FilmSlate as Clapperboard, Scan as ScanEye, MonitorPlay, LinkSimple as Link2, Gauge, BracketsCurly as Braces, Megaphone, MagicWand, SpeakerHigh, ArrowsOut as Maximize, ArrowsIn as Minimize, UsersThree, ChalkboardTeacher } from '@phosphor-icons/react';
 import { CameoPanel } from '@/components/CameoPanel';
 import { CharacterCastPanel } from '@/components/project/character-cast-panel';
 import { DistributionPanel } from '@/components/project/distribution-panel';
@@ -31,6 +31,7 @@ import dynamic from 'next/dynamic';
 import { VisionAuditTab } from '@/components/project/vision-audit-tab';
 import { OneClickFilmPanel } from '@/components/project/oneclick-film-panel';
 import { CostAttributionPanel } from '@/components/project/cost-attribution-panel';
+import { ExplainerBeatsTab } from '@/components/project/explainer-beats-tab';
 import { DecisionLogPanel } from '@/components/project/decision-log-panel';
 import { SaveTemplateButton } from '@/components/project/save-template-button';
 import { InviteProjectButton } from '@/components/project/invite-project-button';
@@ -84,6 +85,7 @@ export default function ProjectDetailPage() {
   const { t: tRaw, locale } = useLocale();
   const t = tRaw as typeof tRaw & { projectView: Record<string, string> };
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = params.id as string;
   const { user } = useAuth();
   const { showToast } = useToast();   // v12.300: failures must be visible, not console-only
@@ -137,17 +139,21 @@ export default function ProjectDetailPage() {
     } catch { /* silent if fetch fails */ }
   };
   // v12.190: project cost drill-down (cost_log × rollupByEngine)
-  const [costReport, setCostReport] = useState<{ totalCny: number; entries: number; byEngine: Array<{ engine: string; costCny: number; count: number }> } | null>(null);
+  const [costReport, setCostReport] = useState<{ totalEur: number; entries: number; byEngine: Array<{ engine: string; costEur: number; count: number }> } | null>(null);
   const [costOpen, setCostOpen] = useState(false);
   const loadCost = async () => {
     try {
       const d = await fetch(`/api/projects/${id}/cost`).then((r) => r.json());
-      if (typeof d.totalCny === 'number') setCostReport(d);
+      if (typeof d.totalEur === 'number') setCostReport(d);
     } catch { /* silent */ }
   };
   // v12.1.1 final-film audio check
   const [audioCheck, setAudioCheck] = useState<{ audible: boolean; label: string; hasAudioStream: boolean | null; healed: boolean } | null>(null);
   // v12.153: fetch health when the videos tab is active (authoritative downgrade source; play tab reuses it)
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab) setActiveTab(tab);
+  }, [searchParams]);
   useEffect(() => {
     if ((activeTab === 'videos' || activeTab === 'play') && !healthReport) void loadHealth();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -370,6 +376,7 @@ export default function ProjectDetailPage() {
     // v6.4: director console — full-pipeline overview + jump to edit
     { key: 'director', label: t.product.tabDirector, icon: MonitorPlay, count: 0 },
     { key: 'script', label: t.product.tabScript, icon: FileText, count: script?.shots?.length || 0 },
+    { key: 'explainer', label: t.product.tabExplainer, icon: ChalkboardTeacher, count: script?.shots?.length || 0 },
     { key: 'characters', label: t.product.tabCharacters, icon: Users, count: characters.length },
     { key: 'scenes', label: t.product.tabScenes, icon: Mountain, count: scenes.length },
     { key: 'storyboard', label: t.product.tabStoryboard, icon: Film, count: storyboards.length },
@@ -391,14 +398,19 @@ export default function ProjectDetailPage() {
   // v12.42 workflow spine: fold 18 flat tabs into two-level IA (create → refine → review → deliver).
   // activeGroup is derived from activeTab (including programmatic setActiveTab, e.g. director jumps); no extra state.
   const TAB_GROUPS: { key: string; label: string; en: string; tabKeys: string[] }[] = [
-    { key: 'create',  label: t.product.groupCreate, en: 'CREATE',  tabKeys: ['director', 'script', 'characters', 'scenes', 'storyboard', 'videos', 'oneclick'] },
+    { key: 'create',  label: t.product.groupCreate, en: 'CREATE',  tabKeys: ['director', 'script', 'explainer', 'characters', 'scenes', 'storyboard', 'videos', 'oneclick'] },
     { key: 'refine',  label: t.product.groupRefine, en: 'REFINE',  tabKeys: ['workshop', 'continuity', 'timeline', 'param-linkage'] },
     { key: 'review',  label: t.product.groupReview, en: 'REVIEW',  tabKeys: ['pacing', 'pullsheet', 'vision-audit', 'monitor'] },
     { key: 'deliver', label: t.product.groupDeliver, en: 'DELIVER', tabKeys: ['play', 'comments', 'distribution'] },
   ];
+  const isExplainer = project.mode === 'narrated-explainer';
   const tabByKey: Record<string, typeof tabs[number]> = Object.fromEntries(tabs.map((t) => [t.key, t]));
   const activeGroup = TAB_GROUPS.find((g) => g.tabKeys.includes(activeTab))?.key || 'create';
-  const groupTabs = (TAB_GROUPS.find((g) => g.key === activeGroup)?.tabKeys || []).map((k) => tabByKey[k]).filter(Boolean);
+  const hiddenExplainerTabs = new Set(['characters', 'scenes']);
+  const groupTabs = (TAB_GROUPS.find((g) => g.key === activeGroup)?.tabKeys || [])
+    .filter((k) => !isExplainer || !hiddenExplainerTabs.has(k))
+    .map((k) => tabByKey[k])
+    .filter(Boolean);
 
   return (
     <div className="cinema-page min-h-screen text-white">
@@ -516,15 +528,17 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        {/* v2.10 A: Cameo lead-face lock (single-cast fallback; Phase 1 still sits next to multi-cast) */}
-        <CameoPanel
-          projectId={id}
-          initialUrl={project.primaryCharacterRef}
-          onChange={(nextUrl) => setProject((prev: any) => ({ ...prev, primaryCharacterRef: nextUrl }))}
-        />
-
-        {/* v12.198: multi-cast dossier (add/edit supporting faces after build; writes locked_characters → subject_reference per shot) */}
-        <CharacterCastPanel projectId={id} />
+        {/* Drama-only: cameo / cast face-lock is noise on a narrated explainer. */}
+        {!isExplainer && (
+          <>
+            <CameoPanel
+              projectId={id}
+              initialUrl={project.primaryCharacterRef}
+              onChange={(nextUrl) => setProject((prev: any) => ({ ...prev, primaryCharacterRef: nextUrl }))}
+            />
+            <CharacterCastPanel projectId={id} />
+          </>
+        )}
 
         {/* Tabs — v12.42 two-level workflow spine (create → refine → review → deliver), folding 18 flat tabs */}
         <div className="mb-6 flex flex-col gap-2">
@@ -611,6 +625,15 @@ export default function ProjectDetailPage() {
               onEditStage={(tab) => setActiveTab(tab)}
               projectId={id}
               onReran={() => {
+                fetch(`/api/projects/${id}`).then((r) => r.json()).then((d) => { if (d?.id) setProject(d); }).catch(() => {});
+              }}
+            />
+          )}
+
+          {activeTab === 'explainer' && (
+            <ExplainerBeatsTab
+              projectId={id}
+              onRefresh={() => {
                 fetch(`/api/projects/${id}`).then((r) => r.json()).then((d) => { if (d?.id) setProject(d); }).catch(() => {});
               }}
             />
@@ -1118,14 +1141,14 @@ export default function ProjectDetailPage() {
               {/* v12.190: cost drill-down (fetch on open; per-engine + total) */}
               <div className="mb-3" data-testid="cost-panel">
                 <button type="button" onClick={() => { const o = !costOpen; setCostOpen(o); if (o && !costReport) void loadCost(); }} className="cinema-btn-ghost !text-[11px] !py-1">
-                  {t.projectView.costDetails}{costReport ? `(¥${costReport.totalCny})` : ''}{costOpen ? ' ▲' : ' ▼'}
+                  {t.projectView.costDetails}{costReport ? `(€${costReport.totalEur})` : ''}{costOpen ? ' ▲' : ' ▼'}
                 </button>
                 {costOpen && costReport && (
                   <div className="mt-2 cinema-card p-3 space-y-1">
                     {costReport.byEngine.map((e) => (
-                      <div key={e.engine} className="flex justify-between text-[11px]"><span className="opacity-70">{e.engine}</span><span className="cinema-mono">¥{e.costCny}({t.projectView.costTimes.replace('{n}', String(e.count))})</span></div>
+                      <div key={e.engine} className="flex justify-between text-[11px]"><span className="opacity-70">{e.engine}</span><span className="cinema-mono">€{e.costEur}({t.projectView.costTimes.replace('{n}', String(e.count))})</span></div>
                     ))}
-                    <div className="flex justify-between text-[11px] border-t border-white/10 pt-1 font-medium"><span>{t.projectView.costTotal.replace('{n}', String(costReport.entries))}</span><span className="cinema-mono">¥{costReport.totalCny}</span></div>
+                    <div className="flex justify-between text-[11px] border-t border-white/10 pt-1 font-medium"><span>{t.projectView.costTotal.replace('{n}', String(costReport.entries))}</span><span className="cinema-mono">€{costReport.totalEur}</span></div>
                   </div>
                 )}
                 {costOpen && !costReport && <div className="mt-2 cinema-mono text-[10px] opacity-60">{t.projectView.querying}</div>}

@@ -12,13 +12,14 @@ import {
 
 describe('MODE_PRESETS 配置', () => {
   it('5 种模式齐全（本期决议：不砍）', () => {
-    expect(ALL_MODES).toHaveLength(5);
+    expect(ALL_MODES).toHaveLength(6);
     expect(ALL_MODES).toEqual([
       'episodic',
       'mv',
       'quick',
       'comic-to-video',
       'ip-derivative',
+      'narrated-explainer',
     ]);
   });
 

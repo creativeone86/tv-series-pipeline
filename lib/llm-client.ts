@@ -17,11 +17,14 @@ export interface LLMAttempt { baseURL: string; apiKey: string; model: string; la
  * fast=true 且 useCreative 时, 主用创意"快档"模型 (deepseek-v4-flash) —— 推理 token 少、秒级响应,
  * 适合"快草稿/润色basic"; 默认 false 用 creativeModel (deepseek-v4-pro, 质量优先).
  */
-export function buildLLMAttempts(useCreative: boolean, cfg: any = API_CONFIG.openai, fast = false): LLMAttempt[] {
+export function buildLLMAttempts(useCreative: boolean, cfg: any = API_CONFIG.openai, fast = false, modelPin?: string): LLMAttempt[] {
   const creativeModel = fast
     ? (cfg.creativeFastModel || cfg.creativeModel || cfg.model)
     : (cfg.creativeModel || cfg.model);
-  const primary = useCreative
+  const pinned = (modelPin || '').trim();
+  const primary = pinned
+    ? { baseURL: cfg.baseURL, apiKey: cfg.apiKey, model: pinned, label: `pin·${pinned}` }
+    : useCreative
     ? { baseURL: cfg.creativeBaseURL || cfg.baseURL, apiKey: cfg.creativeApiKey || cfg.apiKey, model: creativeModel, label: fast ? '创意·DeepSeek快' : '创意·DeepSeek' }
     : { baseURL: cfg.baseURL, apiKey: cfg.apiKey, model: cfg.model, label: '通用' };
   const out: LLMAttempt[] = [];
@@ -79,6 +82,8 @@ export interface LLMCallOpts {
   temperature?: number;
   /** 要求 response_format json_object */
   jsonMode?: boolean;
+  /** Pin a specific model for this call (explainer stages). */
+  model?: string;
   /** 每个端点遇"瞬时错误"(过载/限流/5xx)时退避重试次数, 默认 1 (即最多打 2 次该端点再切兜底) */
   retriesPerAttempt?: number;
 }
@@ -100,7 +105,7 @@ export async function callLLMWithFallback(opts: LLMCallOpts): Promise<LLMCallRes
   const { filterHealthyAttempts, markLLMDown, llmKey } = await import('@/lib/llm-health');
   // v12.127:再叠一层配额感知 —— 已破产网关(配额耗尽/欠费)整段跳过,省重复 403 往返。
   const { filterFundedAttempts, markGatewayOutOfCredits, isOutOfCreditsError } = await import('@/lib/gateway-budget');
-  const attempts = filterFundedAttempts(filterHealthyAttempts(buildLLMAttempts(!!opts.useCreative, API_CONFIG.openai, !!opts.fast)));
+  const attempts = filterFundedAttempts(filterHealthyAttempts(buildLLMAttempts(!!opts.useCreative, API_CONFIG.openai, !!opts.fast, opts.model)));
   if (attempts.length === 0) return { ok: false, error: 'LLM 未配置 (缺 DEEPSEEK_API_KEY / OPENAI_API_KEY)' };
   const timeoutMs = opts.timeoutMs ?? 150_000;
   const retries = Math.max(0, opts.retriesPerAttempt ?? 1);

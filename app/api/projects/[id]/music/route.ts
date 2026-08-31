@@ -30,7 +30,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   // v12.4.1 预算护栏(与视频/图同源)—— 生成前拦,超限不发生费用
   const { assertBudget } = await import('@/lib/budget-enforce');
-  const b = await assertBudget({ userId: payload.sub, pendingCostCny: 1.2 }); // music-2.6 单首约 ¥1
+  const b = await assertBudget({ userId: payload.sub, pendingCostEur: 0.15 }); // music-2.6 单首约 €0.15
   if (!b.allow) return NextResponse.json({ message: b.guard.message, code: 'budget_exceeded' }, { status: 402 });
 
   const svc = new MinimaxService();

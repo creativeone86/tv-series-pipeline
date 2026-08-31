@@ -162,7 +162,7 @@ async function generate(input: LipSyncGenerateInput): Promise<LipSyncGenerateRes
       videoUrl: put.url,
       provider: 'local-2d',
       durationSec: dur,
-      estCostCny: 0, // 本地渲染零外部成本
+      estCostEur: 0, // 本地渲染零外部成本
     };
   } finally {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }

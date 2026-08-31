@@ -15,14 +15,14 @@ import { useLocale } from '@/hooks/use-locale';
 interface ShotDecision {
   shotNumber: number;
   videoEngine?: string;
-  costCny: number;
+  costEur: number;
   engines: string[];
   consistencyScore?: number;
 }
 interface DecisionLogResp {
   ok?: boolean;
   shots?: ShotDecision[];
-  totals?: { totalCostCny: number; shotCount: number };
+  totals?: { totalCostEur: number; shotCount: number };
   quality?: { overall?: number } | null;
 }
 
@@ -58,7 +58,7 @@ export function DecisionLogPanel({ projectId }: { projectId: string }) {
         className="cinema-btn-ghost !text-[11px] !py-1 w-full text-left"
       >
         🧾 {t.projectMisc.decisionLogTitle}
-        {data?.totals ? t.projectMisc.decisionLogMeta.replace('{n}', String(data.totals.shotCount)).replace('{cost}', String(data.totals.totalCostCny)) : ''}
+        {data?.totals ? t.projectMisc.decisionLogMeta.replace('{n}', String(data.totals.shotCount)).replace('{cost}', String(data.totals.totalCostEur)) : ''}
         {open ? ' ▲' : ' ▼'}
       </button>
       {open && loading && <div className="mt-2 cinema-mono text-[10px] opacity-60">{t.projectMisc.querying}</div>}
@@ -82,7 +82,7 @@ export function DecisionLogPanel({ projectId }: { projectId: string }) {
                 <tr key={s.shotNumber} className="border-t border-white/10">
                   <td className="py-1 pr-3">S{s.shotNumber}</td>
                   <td className="py-1 pr-3">{s.videoEngine || s.engines.join('/') || '—'}</td>
-                  <td className="py-1 pr-3">¥{s.costCny}</td>
+                  <td className="py-1 pr-3">€{s.costEur}</td>
                   <td className="py-1">{typeof s.consistencyScore === 'number' ? s.consistencyScore : '—'}</td>
                 </tr>
               ))}

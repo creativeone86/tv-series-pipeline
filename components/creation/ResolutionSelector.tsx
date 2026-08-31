@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils';
 import { useLocale } from '@/hooks/use-locale';
 
 // ──────────────────────────────────────────────────────────
-// Cost table (CNY / sec, estimate; backend cost_log writes the real value)
+// Cost table (EUR / sec, estimate; backend cost_log writes the real value)
 // ──────────────────────────────────────────────────────────
 
 interface TierMeta {
@@ -42,20 +42,20 @@ const TIER_META: Record<ResolutionTier, TierMeta> = {
   '360p': {
     label: '360P',
     dim: '640 × 360',
-    pricePerSec: 0.05,
+    pricePerSec: 0.0064,
     descKey: 'tier360Desc',
   },
   '480p': {
     label: '480P',
     dim: '854 × 480',
-    pricePerSec: 0.12,
+    pricePerSec: 0.0153,
     descKey: 'tier480Desc',
     badgeKey: 'tierRecommended',
   },
   '720p': {
     label: '720P',
     dim: '1280 × 720',
-    pricePerSec: 0.22,
+    pricePerSec: 0.0281,
     descKey: 'tier720Desc',
   },
 };
@@ -148,7 +148,7 @@ export function ResolutionSelector({
                 <div className="mt-3 flex items-baseline gap-1 border-t border-white/10 pt-2">
                   <span className="text-xs text-neutral-400">{w.estimated || 'Est.'}</span>
                   <span className="text-sm font-semibold text-[#E8C547]">
-                    ¥{cost.toFixed(2)}
+                    €{cost.toFixed(2)}
                   </span>
                   <span className="text-[10px] text-neutral-500">/ {durationSec}s</span>
                 </div>

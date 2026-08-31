@@ -25,7 +25,7 @@ import { persistAsset } from './asset-storage';
 import { deriveProsody, type ProsodyParams } from './tts-prosody';
 import { effectiveVoice } from './voice-routing';
 import { resolveAndPersistCast } from './voice-cast';
-import { recordCostLog, estimateTtsCostCny } from './repos/cost-log-repo';
+import { recordCostLog, estimateTtsCostEur } from './repos/cost-log-repo';
 
 export const TAKE_TYPE = 'shot-audio-take';
 export const ACTIVE_TYPE = 'shot-audio';
@@ -132,7 +132,7 @@ export async function synthesizeRetake(input: RetakeInput): Promise<RetakeResult
     await recordCostLog({
       userId: input.userId ?? null, projectId, engine: `tts-${r.result.provider}`,
       durationSec: r.result.duration,
-      costCny: estimateTtsCostCny(r.result.duration, shot.text.length),
+      costEur: estimateTtsCostEur(r.result.duration, shot.text.length),
       metadata: { kind: 'voice-retake', shotNumber, voiceId, emotion },
     });
     return { ok: true, shotNumber, takeId, audioUrl: p.url, emotion, prosody };

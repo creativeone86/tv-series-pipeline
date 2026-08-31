@@ -16,7 +16,7 @@ interface MarketToken {
   name: string;
   coverUrl: string | null;
   license: 'view' | 'remix' | 'commercial';
-  royaltyCny: number;
+  royaltyEur: number;
   useCount: number;
   ownerId: string;
 }
@@ -117,7 +117,7 @@ export default function CameoMarketPage() {
                     </span>
                   </div>
                   <div className="mt-1 text-[11px] text-white/40 flex items-center gap-2">
-                    <span>{tok.royaltyCny > 0 ? ui.perUse.replace('{n}', String(tok.royaltyCny)) : t.pricing.free}</span>
+                    <span>{tok.royaltyEur > 0 ? ui.perUse.replace('{n}', String(tok.royaltyEur)) : t.pricing.free}</span>
                     <span>{ui.reusedN.replace('{n}', String(tok.useCount))}</span>
                   </div>
                   {open ? (

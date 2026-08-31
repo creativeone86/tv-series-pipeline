@@ -75,11 +75,11 @@ describe('v4.0 · issueIpToken / get / revoke', () => {
   it('issues a token', () => {
     const charId = 'char-' + nanoid();
     const owner = 'owner-' + nanoid();
-    const t = issueIpToken({ characterId: charId, ownerId: owner, name: '林晚', visibility: 'public', license: 'remix', royaltyCny: 5 });
+    const t = issueIpToken({ characterId: charId, ownerId: owner, name: '林晚', visibility: 'public', license: 'remix', royaltyEur: 5 });
     expect(t.id).toMatch(/^ipt_/);
     expect(t.name).toBe('林晚');
     expect(t.visibility).toBe('public');
-    expect(t.royaltyCny).toBe(5);
+    expect(t.royaltyEur).toBe(5);
     expect(getIpToken(t.id)?.characterId).toBe(charId);
   });
 
@@ -99,8 +99,8 @@ describe('v4.0 · issueIpToken / get / revoke', () => {
   });
 
   it('clamps negative royalty to 0', () => {
-    const t = issueIpToken({ characterId: 'char-' + nanoid(), ownerId: 'o-' + nanoid(), name: 'X', royaltyCny: -99 });
-    expect(t.royaltyCny).toBe(0);
+    const t = issueIpToken({ characterId: 'char-' + nanoid(), ownerId: 'o-' + nanoid(), name: 'X', royaltyEur: -99 });
+    expect(t.royaltyEur).toBe(0);
   });
 
   it('revoke flips status; non-owner cannot revoke', () => {

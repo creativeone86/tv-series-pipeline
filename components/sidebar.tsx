@@ -23,6 +23,7 @@ export function Sidebar() {
     { href: '/dashboard/projects', label: t.sidebar.myProjects, icon: Kanban },
     { href: '/dashboard/create', label: t.sidebar.workshop, icon: Sparkle },
     { href: '/dashboard/short-video', label: t.sidebar.shortVideo, icon: Lightning },
+    { href: '/dashboard/explainer', label: t.sidebar.explainer, icon: FilmSlate },
     { href: '/dashboard/story-intake', label: t.sidebar.storyIntake, icon: Scroll },
     { href: '/dashboard/series', label: t.sidebar.series, icon: FilmSlate },
     { href: '/dashboard/polish', label: t.sidebar.polish, icon: MagicWand },

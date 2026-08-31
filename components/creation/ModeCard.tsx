@@ -97,6 +97,17 @@ export const MODE_PRESETS: Record<CreationMode, ModePreset> = {
     gradient: 'from-violet-500/20 to-fuchsia-500/20',
     recommendedFor: 'Fan works / IP expand',
   },
+  'narrated-explainer': {
+    mode: 'narrated-explainer',
+    icon: '🔭',
+    name: 'Narrated Explainer',
+    nameEn: 'Narrated Explainer',
+    desc: 'Topic → Bulgarian (or any) narration → illustrated beats',
+    features: ['Narration-first beats', 'Visual vocabulary reuse', 'No video generation'],
+    estMinutes: '8–20 min',
+    gradient: 'from-sky-500/20 to-emerald-500/20',
+    recommendedFor: 'YouTube explainers / Simply Explained',
+  },
 };
 
 const MODE_I18N: Record<CreationMode, {
@@ -107,6 +118,7 @@ const MODE_I18N: Record<CreationMode, {
   quick: { name: 'modeQuick', desc: 'modeQuickDesc', f1: 'modeQuickF1', f2: 'modeQuickF2', f3: 'modeQuickF3', est: 'modeQuickEst', rec: 'modeQuickFor' },
   'comic-to-video': { name: 'modeComic', desc: 'modeComicDesc', f1: 'modeComicF1', f2: 'modeComicF2', f3: 'modeComicF3', est: 'modeComicEst', rec: 'modeComicFor' },
   'ip-derivative': { name: 'modeIp', desc: 'modeIpDesc', f1: 'modeIpF1', f2: 'modeIpF2', f3: 'modeIpF3', est: 'modeIpEst', rec: 'modeIpFor' },
+  'narrated-explainer': { name: 'modeExplainer', desc: 'modeExplainerDesc', f1: 'modeExplainerF1', f2: 'modeExplainerF2', f3: 'modeExplainerF3', est: 'modeExplainerEst', rec: 'modeExplainerFor' },
 };
 
 export function modeCopy(preset: ModePreset, workshop: Record<string, string> | undefined) {
@@ -127,6 +139,7 @@ export const ALL_MODES: CreationMode[] = [
   'quick',
   'comic-to-video',
   'ip-derivative',
+  'narrated-explainer',
 ];
 
 // ──────────────────────────────────────────────────────────

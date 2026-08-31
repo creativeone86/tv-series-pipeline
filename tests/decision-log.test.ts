@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { buildDecisionLog } from '@/lib/decision-log';
 import type { CostLogRow } from '@/lib/repos/cost-log-repo';
 
-const row = (engine: string, costCny: number, shotNumber?: number): CostLogRow => ({
-  id: 'c' + Math.round(costCny * 100), engine, resolution: '', durationSec: 8, costCny,
+const row = (engine: string, costEur: number, shotNumber?: number): CostLogRow => ({
+  id: 'c' + Math.round(costEur * 100), engine, resolution: '', durationSec: 8, costEur,
   metadata: shotNumber ? { shotNumber } : {}, createdAt: '2026-06-22T00:00:00Z',
 });
 
@@ -17,22 +17,22 @@ describe('buildDecisionLog', () => {
     });
     expect(log.shots.length).toBe(2);
     const s2 = log.shots.find((s) => s.shotNumber === 2)!;
-    expect(s2.costCny).toBe(5.8);
+    expect(s2.costEur).toBe(5.8);
     expect(s2.engines.sort()).toEqual(['video-kling', 'video-veo']);
     expect(s2.videoEngine).toBe('kling'); // 第一条 video-* 行
   });
 
   it('无镜号成本进 nonShotCosts(项目级)', () => {
     const log = buildDecisionLog({ costRows: [row('tts-minimax', 0.2), row('video-veo', 4.8, 1)] });
-    expect(log.nonShotCosts).toEqual([{ engine: 'tts-minimax', costCny: 0.2 }]);
+    expect(log.nonShotCosts).toEqual([{ engine: 'tts-minimax', costEur: 0.2 }]);
     expect(log.shots.length).toBe(1);
   });
 
   it('totals:总成本 + byEngine 降序 + 镜数', () => {
     const log = buildDecisionLog({ costRows: [row('video-veo', 4.8, 1), row('video-veo', 4.8, 2), row('tts-minimax', 0.2)] });
-    expect(log.totals.totalCostCny).toBe(9.8);
+    expect(log.totals.totalCostEur).toBe(9.8);
     expect(log.totals.shotCount).toBe(2);
-    expect(log.totals.byEngine[0]).toEqual({ engine: 'video-veo', costCny: 9.6, count: 2 });
+    expect(log.totals.byEngine[0]).toEqual({ engine: 'video-veo', costEur: 9.6, count: 2 });
   });
 
   it('合并 storyboard 资产:prompt / 一致性 / 九宫格选定', () => {
@@ -52,7 +52,7 @@ describe('buildDecisionLog', () => {
       assets: [{ type: 'storyboard', shot_number: 5, data: { prompt: 'p' } }, { type: 'final_video', shot_number: 5, data: {} }],
     });
     expect(log.shots.map((s) => s.shotNumber)).toEqual([5]);
-    expect(log.shots[0].costCny).toBe(0);
+    expect(log.shots[0].costEur).toBe(0);
   });
 
   it('quality 兼容 snake/camel;无则 null', () => {

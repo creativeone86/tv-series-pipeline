@@ -1,8 +1,8 @@
 /**
  * GET/POST /api/usage/budget · v9.3.4 — 用户月预算护栏配置.
  *
- * GET  → { capCny, hardCapCny }  (null = 不设防)
- * POST { capCny, hardCapCny? } → 设/清(<=0 或空 → 清)→ 200 { capCny, hardCapCny }
+ * GET  → { capEur, hardCapEur }  (null = 不设防)
+ * POST { capEur, hardCapEur? } → 设/清(<=0 或空 → 清)→ 200 { capEur, hardCapEur }
  *
  * auth: getUserFromRequest; demo 无登录回退首用户(与 /api/usage 一致)。
  */
@@ -19,7 +19,7 @@ async function resolveUserId(request: Request): Promise<string | null> {
   return p?.sub ?? null; // v12.218:删回落首用户
 }
 
-function parseCny(v: unknown): number | null {
+function parseEur(v: unknown): number | null {
   return v != null && v !== '' && Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null;
 }
 
@@ -34,6 +34,6 @@ export async function POST(request: Request) {
   if (!userId) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   let body: any = {};
   try { body = await request.json(); } catch { /* swallow */ }
-  await setUserBudget(userId, { capCny: parseCny(body?.capCny), hardCapCny: parseCny(body?.hardCapCny) });
+  await setUserBudget(userId, { capEur: parseEur(body?.capEur), hardCapEur: parseEur(body?.hardCapEur) });
   return NextResponse.json(await getUserBudget(userId));
 }

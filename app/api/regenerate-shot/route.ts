@@ -34,11 +34,11 @@ export async function POST(request: NextRequest) {
     }
     if (dryRun !== true) {
       const { assertBudget } = await import('@/lib/budget-enforce');
-      const { estimatePipelineCostCny } = await import('@/lib/budget-estimate');
+      const { estimatePipelineCostEur } = await import('@/lib/budget-estimate');
       const pending = shotNumber
-        ? estimatePipelineCostCny({ shotCount: 1, videoShots: 1, videoProvider, secondsPerShot: 8, skipImages: true })
-        : estimatePipelineCostCny({ videoProvider, skipImages: stage === 'failed-videos' });
-      const b = await assertBudget({ userId: g.userId, pendingCostCny: pending });
+        ? estimatePipelineCostEur({ shotCount: 1, videoShots: 1, videoProvider, secondsPerShot: 8, skipImages: true })
+        : estimatePipelineCostEur({ videoProvider, skipImages: stage === 'failed-videos' });
+      const b = await assertBudget({ userId: g.userId, pendingCostEur: pending });
       if (!b.allow) {
         return new Response(JSON.stringify({ error: b.guard.message, code: 'budget_exceeded', guard: b.guard }), { status: 402, headers: { 'Content-Type': 'application/json' } });
       }

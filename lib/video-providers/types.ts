@@ -81,7 +81,7 @@ export interface VideoGenerateResult {
   /** 上游 taskId, 便于事后审计. */
   upstreamId?: string;
   /** 估算花费, 人民币元. provider 可不填. */
-  estCostCny?: number;
+  estCostEur?: number;
 }
 
 export interface VideoProvider {

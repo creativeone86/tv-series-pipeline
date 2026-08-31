@@ -33,12 +33,12 @@ const httpProvider: LipSyncProvider = {
       }),
     });
     if (!res.ok) throw new Error(`口型引擎 HTTP ${res.status}`);
-    const body = (await res.json()) as { videoUrl?: string; durationSec?: number; upstreamId?: string; estCostCny?: number };
+    const body = (await res.json()) as { videoUrl?: string; durationSec?: number; upstreamId?: string; estCostEur?: number };
     if (!body?.videoUrl) throw new Error('口型引擎未返回 videoUrl');
     input.onProgress?.(100, '完成');
     return {
       videoUrl: body.videoUrl, provider: 'wav2lip-http',
-      durationSec: body.durationSec, upstreamId: body.upstreamId, estCostCny: body.estCostCny,
+      durationSec: body.durationSec, upstreamId: body.upstreamId, estCostEur: body.estCostEur,
     };
   },
 };

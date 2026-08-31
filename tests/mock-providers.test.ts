@@ -57,7 +57,7 @@ describe('v10.4.0 · MOCK_ENGINES=1', () => {
     expect(a.result?.imageUrl).toContain('/api/mock-assets/image/');
     expect(a.result?.imageUrl).toMatch(/^http/);
     expect(a.result?.imageUrl).toBe(b.result?.imageUrl); // 同输入同产物
-    expect(a.result?.estCostCny).toBe(0);
+    expect(a.result?.estCostEur).toBe(0);
   });
 
   it('image: 多参考图也吃得下(maxRefImages=8)', async () => {

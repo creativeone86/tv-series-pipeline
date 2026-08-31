@@ -24,8 +24,22 @@
 import { registerImageProvider } from './registry';
 import type { ImageGenerateInput, AspectRatio } from './types';
 
-/** 画幅 → gpt-image-1 支持的 size(它只认这三种;其余按最接近的取)。 */
-export function gptImageSize(aspect?: AspectRatio): string {
+/** gpt-image-1 只认这三种 size;把任意显式尺寸吸附到最接近的合法值。 */
+function snapGptImageSize(size: string): string | null {
+  const s = size.trim().toLowerCase().replace(/\s+/g, '');
+  if (s === '1024x1024' || s === '1024x1536' || s === '1536x1024') return s;
+  return null;
+}
+
+/**
+ * 画幅 → gpt-image-1 支持的 size(它只认这三种;其余按最接近的取)。
+ * 显式 explicitSize(来自 input.size / env)优先,便于省成本默认 1024x1024。
+ */
+export function gptImageSize(aspect?: AspectRatio, explicitSize?: string): string {
+  if (explicitSize) {
+    const snapped = snapGptImageSize(explicitSize);
+    if (snapped) return snapped;
+  }
   switch (aspect) {
     case '9:16':
     case '3:4':
@@ -37,15 +51,22 @@ export function gptImageSize(aspect?: AspectRatio): string {
   }
 }
 
+/** 质量档:input.quality > env EXPLAINER_IMAGE_QUALITY > 'medium'(省成本默认)。 */
+export function gptImageQuality(input: ImageGenerateInput, env: NodeJS.ProcessEnv = process.env): 'low' | 'medium' | 'high' | 'auto' {
+  const raw = (input.quality || env.EXPLAINER_IMAGE_QUALITY || 'medium').toLowerCase();
+  return (['low', 'medium', 'high', 'auto'].includes(raw) ? raw : 'medium') as 'low' | 'medium' | 'high' | 'auto';
+}
+
 /** 纯函数:构造请求体,便于单测(不打网络)。 */
 export function buildGptImageRequest(
   input: ImageGenerateInput,
   env: NodeJS.ProcessEnv = process.env,
-): { model: string; prompt: string; size: string; n: number } {
+): { model: string; prompt: string; size: string; quality: string; n: number } {
   return {
     model: env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
     prompt: input.prompt,
-    size: gptImageSize(input.aspectRatio),
+    size: gptImageSize(input.aspectRatio, input.size || env.EXPLAINER_IMAGE_SIZE),
+    quality: gptImageQuality(input, env),
     n: 1,
   };
 }
@@ -121,7 +142,8 @@ registerImageProvider({
         const form = new FormData();
         form.set('model', env.OPENAI_IMAGE_MODEL || 'gpt-image-1');
         form.set('prompt', input.prompt);
-        form.set('size', gptImageSize(input.aspectRatio));
+        form.set('size', gptImageSize(input.aspectRatio, input.size || env.EXPLAINER_IMAGE_SIZE));
+        form.set('quality', gptImageQuality(input, env));
         form.set('n', '1');
         for (const url of refs) {
           const { blob, filename } = await fetchImageBlob(url);

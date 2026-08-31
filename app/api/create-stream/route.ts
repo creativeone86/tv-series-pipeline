@@ -12,7 +12,7 @@ export { activeOrchestrators };
 
 export async function POST(request: NextRequest) {
   const locale = localeFromRequest(request);
-  const { idea: rawIdea, videoProvider, style, duration, aspect, projectId: clientProjectId, isPreset, enableGates, templateId, primaryCharacterRef, lockedCharacters, cameraDefault, previewSeedImage, references, editStyle, language, sketchLock } = await request.json();
+  const { idea: rawIdea, videoProvider, style, duration, aspect, projectId: clientProjectId, isPreset, enableGates, templateId, primaryCharacterRef, lockedCharacters, cameraDefault, previewSeedImage, references, editStyle, language, sketchLock, mode, explainer } = await request.json();
 
   if (!rawIdea || !rawIdea.trim()) {
     return new Response(JSON.stringify({ error: apiT(locale, 'ideaRequired') }), { status: 400, headers: { 'Content-Type': 'application/json' } });
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   // v12.4.1: 预算硬上限护栏 —— 主创作链路接入(此前只 preview-shot 接,主管线零拦截)。
   // 放在任何 LLM 调用(下面 normalizeIdea 扩写)之前 → 超限前不发生任何费用(成本红线)。
   // v12.232(对抗复检 CRITICAL 补漏):此前整块裹在 `if (uid)` 里 ——
-  // **匿名请求直接跳过预算护栏**,跑完整 8-agent 管线(LLM+图像+视频,单次 ¥3–10)。
+  // **匿名请求直接跳过预算护栏**,跑完整 8-agent 管线(LLM+图像+视频,单次 €3–10)。
   // 「仅对已登录用户生效」这句注释本身就是漏洞说明书。现在:无 uid → 401,不再放行。
   // v12.234:uid 从块级作用域提到函数级 —— 下面入队时要用它填 user_id(见入队处注释)。
   let ownerUserId: string;
@@ -32,9 +32,9 @@ export async function POST(request: NextRequest) {
       return new Response(JSON.stringify({ error: apiT(locale, 'loginRequired'), code: 'unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
     }
     const { assertBudget } = await import('@/lib/budget-enforce');
-    // v12.172:动态估算(镜数×引擎秒单价;创建时剧本未出按 8 镜保守)—— 固定 ¥6 对 Kling 20 镜低估 5-10 倍
-    const { estimatePipelineCostCny } = await import('@/lib/budget-estimate');
-    const b = await assertBudget({ userId: uid, pendingCostCny: estimatePipelineCostCny({ videoProvider }), locale });
+    // v12.172:动态估算(镜数×引擎秒单价;创建时剧本未出按 8 镜保守)—— 固定 €6 对 Kling 20 镜低估 5-10 倍
+    const { estimatePipelineCostEur } = await import('@/lib/budget-estimate');
+    const b = await assertBudget({ userId: uid, pendingCostEur: estimatePipelineCostEur({ videoProvider }), locale });
     if (!b.allow) {
       return new Response(JSON.stringify({ error: b.guard.message, code: 'budget_exceeded', guard: b.guard }), { status: 402, headers: { 'Content-Type': 'application/json' } });
     }
@@ -102,6 +102,8 @@ export async function POST(request: NextRequest) {
     language, // v12.134 issue #2:显式选剧本语言('auto'/空 → 自动检测)
     sketchLock: sketchLock === true, // v12.143 全片草图锁(对标阅文分镜面板)
     uiLocale: locale,
+    mode,
+    explainer,
   };
   const encoder = new TextEncoder();
   const sseHeaders = { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' };

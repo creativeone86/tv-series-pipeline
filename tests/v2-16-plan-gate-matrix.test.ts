@@ -19,7 +19,7 @@ describe('requiredTierForVideoDuration', () => {
   it('10s → creator (Kling Master)', () => {
     expect(requiredTierForVideoDuration(10)).toBe('creator');
   });
-  it('15s → pro (Vidu Q3 Pro, ¥0.3/sec)', () => {
+  it('15s → pro (Vidu Q3 Pro, €0.3/sec)', () => {
     expect(requiredTierForVideoDuration(15)).toBe('pro');
   });
   it('any duration > 15 → pro (no enterprise-only above 15)', () => {

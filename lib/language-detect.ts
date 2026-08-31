@@ -7,7 +7,7 @@
  * 口型模型只有 zh/en 音素 → 其它语种 lipsync 退回 en 近似(诚实降级,见 ttsReliable/lipsync)。
  * visualPrompt 仍保持英文 —— 它喂视频引擎,不属「内容语种」。
  */
-export type TargetLanguage = 'zh' | 'en' | 'ja' | 'ko' | 'es' | 'fr' | 'ru' | 'de' | 'pt';
+export type TargetLanguage = 'zh' | 'en' | 'ja' | 'ko' | 'es' | 'fr' | 'ru' | 'de' | 'pt' | 'bg';
 
 interface LangMeta {
   ttsCode: string;          // TTS 语种码(MiniMax/OpenAI 兼容)
@@ -28,6 +28,7 @@ export const SUPPORTED_LANGUAGES: Record<TargetLanguage, LangMeta> = {
   ru: { ttsCode: 'ru-RU', lipsync: 'none', enName: 'Russian', nativeName: 'Русский', ttsReliable: true },
   de: { ttsCode: 'de-DE', lipsync: 'en', enName: 'German', nativeName: 'Deutsch', ttsReliable: true },
   pt: { ttsCode: 'pt-BR', lipsync: 'en', enName: 'Portuguese', nativeName: 'Português', ttsReliable: true },
+  bg: { ttsCode: 'bg-BG', lipsync: 'none', enName: 'Bulgarian', nativeName: 'Български', ttsReliable: true },
 };
 
 /** 从创意文本判主语种:几乎纯拉丁→en,含相当量 CJK→zh(漫剧默认 zh)。仅区分 zh/en(细分语种靠显式选)。 */
@@ -35,6 +36,13 @@ export function detectLanguage(text: string | null | undefined): TargetLanguage 
   if (!text) return 'zh';
   const cjk = (text.match(/[一-鿿぀-ヿ가-힯]/g) || []).length;
   const latin = (text.match(/[a-zA-Z]/g) || []).length;
+  const cyr = (text.match(/[\u0400-\u04FF]/g) || []).length;
+  if (cyr > 0 && cyr >= cjk && cyr >= latin) {
+    // Bulgarian vs Russian: ы/э/ё are Russian-specific; ъ/ѝ are common in Bulgarian.
+    const ruMarks = (text.match(/[ыэёЫЭЁ]/g) || []).length;
+    const bgMarks = (text.match(/[ъѝЪ]/g) || []).length;
+    return ruMarks > bgMarks ? 'ru' : 'bg';
+  }
   if (cjk === 0 && latin > 0) return 'en';      // 纯拉丁 → 英文
   if (cjk === 0 && latin === 0) return 'zh';     // 无字母(纯标点/数字)→ 默认中文
   // CJK 信息密度高:CJK 字数 ×4 ≥ 拉丁字母数 即判中文(容忍少量英文品牌名/术语)
@@ -52,6 +60,7 @@ const LANG_ALIASES: Record<string, TargetLanguage> = {
   ru: 'ru', 'ru-ru': 'ru', russian: 'ru', 'русский': 'ru', 俄语: 'ru', 俄文: 'ru',
   de: 'de', 'de-de': 'de', german: 'de', deutsch: 'de', 德语: 'de', 德文: 'de',
   pt: 'pt', 'pt-br': 'pt', portuguese: 'pt', 'português': 'pt', 葡萄牙语: 'pt', 葡语: 'pt',
+  bg: 'bg', 'bg-bg': 'bg', bulgarian: 'bg', 'български': 'bg', 'български език': 'bg',
 };
 
 export function isSupportedLanguage(x: unknown): x is TargetLanguage {
@@ -114,7 +123,7 @@ Exception: \`visualPrompt\` and \`beats[].action\`/\`camera\` stay English (they
  * v12.196:按字符分布嗅探文本语种(SRT 烧录选字体用,零 LLM)。
  * 只认置信度高的三类非拉丁文种;分不清 → null(调用方保持原字体)。
  */
-export function sniffTextLanguage(text: string | null | undefined): 'ja' | 'ko' | 'ru' | 'zh' | null {
+export function sniffTextLanguage(text: string | null | undefined): 'ja' | 'ko' | 'ru' | 'bg' | 'zh' | null {
   const t = (text || '').slice(0, 4000);
   if (!t.trim()) return null;
   const kana = (t.match(/[\u3040-\u30ff]/g) || []).length;
@@ -123,7 +132,11 @@ export function sniffTextLanguage(text: string | null | undefined): 'ja' | 'ko' 
   const cjk = (t.match(/[\u4e00-\u9fff]/g) || []).length;
   if (kana >= 4) return 'ja';           // 有假名基本必是日语
   if (hangul >= 4) return 'ko';
-  if (cyr >= 8) return 'ru';
+  if (cyr >= 8) {
+    const ruMarks = (t.match(/[ыэёЫЭЁ]/g) || []).length;
+    const bgMarks = (t.match(/[ъѝЪ]/g) || []).length;
+    return ruMarks > bgMarks ? 'ru' : 'bg';
+  }
   if (cjk >= 8) return 'zh';
   return null;
 }

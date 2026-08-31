@@ -41,6 +41,17 @@ export interface TTSGenerateInput {
 
   /** 调试 label. */
   label?: string;
+
+  /** Request character-level timestamps (ElevenLabs with-timestamps). */
+  withTimestamps?: boolean;
+
+  /** Documentary read knobs — forwarded into voice_settings when the model supports them. */
+  stability?: number;
+  similarityBoost?: number;
+  style?: number;
+  speakerBoost?: boolean;
+  outputFormat?: string;
+  modelId?: string;
 }
 
 export interface TTSGenerateResult {
@@ -55,7 +66,13 @@ export interface TTSGenerateResult {
   /** 上游 taskId. */
   upstreamId?: string;
   /** 估算花费, 人民币元. */
-  estCostCny?: number;
+  estCostEur?: number;
+  /** Character-level alignment from with-timestamps. */
+  alignment?: {
+    characters: string[];
+    character_start_times_seconds: number[];
+    character_end_times_seconds: number[];
+  };
 }
 
 export interface TTSProvider {

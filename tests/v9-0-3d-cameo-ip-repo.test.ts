@@ -30,9 +30,9 @@ describe('v9.0.3d · cameo-ip-repo (async через DbDriver)', () => {
   it('issueIpToken upsert + get + market/owner 列表', async () => {
     const owner = await seedUser();
     const charId = await seedCharacter(owner);
-    const t = await issueIpToken({ characterId: charId, ownerId: owner, name: '联名角色', visibility: 'public', license: 'remix', royaltyCny: 9.9 });
+    const t = await issueIpToken({ characterId: charId, ownerId: owner, name: '联名角色', visibility: 'public', license: 'remix', royaltyEur: 9.9 });
     expect(t.status).toBe('active');
-    expect(t.royaltyCny).toBe(9.9);
+    expect(t.royaltyEur).toBe(9.9);
     expect((await getIpToken(t.id))?.name).toBe('联名角色');
     // upsert: 同 character 再 issue → 同 id, 改名
     const t2 = await issueIpToken({ characterId: charId, ownerId: owner, name: '改名', visibility: 'public', license: 'remix' });

@@ -140,6 +140,18 @@ export interface SeriesAnchor {
   styleAnchorUrl?: string;
   lastEpisodeEndFrame?: string;
   fromEpisode?: number;
+  /** narrated-explainer visual vocabulary mirrors */
+  canonicalEntities?: Array<{ id: string; entityId: string; imageUrl: string }>;
+  /** explainer series bible: the style kit + guide voice locked across episodes */
+  styleKitId?: string;
+  characterSheetUrl?: string;
+  substrateTextureUrl?: string;
+  narrativeVoice?: {
+    register: string;
+    coldOpen: string;
+    turnPhrases: string[];
+    bans: string[];
+  };
 }
 
 export async function getSeriesAnchor(seriesId: string): Promise<SeriesAnchor | null> {

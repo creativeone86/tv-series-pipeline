@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
   // 然后拿这个哨兵去调 assertBudget —— 而哨兵在 users 表里查不到行,预算护栏直接 allow:true;
   // plan-gate 又只在 10/15s 才触发。三者叠加的结果是:**匿名 curl 循环打 5s,无限烧 Minimax**。
   // v12.232 给 u2v/**stream** 接了守卫却漏了这个**同步版**,又一次「修了前门忘了侧门」。
-  const _g = await guardPaidEndpoint(request, { pendingCostCny: 1.8 });
+  const _g = await guardPaidEndpoint(request, { pendingCostEur: 0.23 });
   if (!_g.ok) return _g.response;
   const userId = _g.userId;
 
@@ -136,15 +136,15 @@ export async function POST(request: NextRequest) {
   }
 
   // v12.4.1: 预算硬上限护栏 —— 接入主管线视频端点(放在生成前,超限不发生费用)。
-  // 守卫已按最低价 ¥1.8 粗筛过一道;这里按**实际 duration** 精算再拦一次(10/15s 更贵)。
+  // 守卫已按最低价 €0.23 粗筛过一道;这里按**实际 duration** 精算再拦一次(10/15s 更贵)。
   {
     const { assertBudget } = await import('@/lib/budget-enforce');
-    const b = await assertBudget({ userId, pendingCostCny: Math.max(1.8, duration * 0.3) });
+    const b = await assertBudget({ userId, pendingCostEur: Math.max(0.23, duration * 0.0383) });
     if (!b.allow) return NextResponse.json({ error: b.guard.message, code: 'budget_exceeded', guard: b.guard }, { status: 402 });
   }
 
   // v2.16 P0.1: 计费 gate — 阻止免费用户消费 Kling/Vidu 高单价 API。
-  // 5/6s → free / 10s → creator / 15s → pro (Vidu ¥0.3/秒, 100 次烧 ¥2700+)。
+  // 5/6s → free / 10s → creator / 15s → pro (Vidu €0.3/秒, 100 次烧 €2700+)。
   const requiredTier = requiredTierForVideoDuration(duration);
   if (requiredTier !== 'free') {
     const gate = checkPlan(request, requiredTier);

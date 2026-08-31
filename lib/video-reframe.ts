@@ -14,7 +14,8 @@ import { normalizeVideoAspect, type VideoAspect } from '@/lib/video-aspect';
 export type ReframeMode = 'blur-pad' | 'crop';
 
 /** 目标比例 → 输出像素尺寸(与 veoSizeFromAspect 同口径)。 */
-export function dimsForAspect(a: string): { w: number; h: number } {
+export function dimsForAspect(a: string, explicit?: { w: number; h: number }): { w: number; h: number } {
+  if (explicit && explicit.w > 0 && explicit.h > 0) return { w: Math.round(explicit.w), h: Math.round(explicit.h) };
   switch (normalizeVideoAspect(a)) {
     case '9:16': return { w: 720, h: 1280 };
     case '1:1': return { w: 1024, h: 1024 };
@@ -53,8 +54,8 @@ export function buildReframeFilterComplex(target: VideoAspect | string, mode: Re
  *  - 竖屏(h>w):`increase + crop` —— 放大裁满竖框(源片多为引擎出的 16:9,裁两侧填满竖屏,
  *    主体居中的广告/短剧更显专业,优于黑边 letterbox)。
  */
-export function buildCanvasFit(aspect: string): { fit: string; w: number; h: number } {
-  const { w, h } = dimsForAspect(aspect);
+export function buildCanvasFit(aspect: string, explicit?: { w: number; h: number }): { fit: string; w: number; h: number } {
+  const { w, h } = dimsForAspect(aspect, explicit);
   const fit = h > w
     ? `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}`
     : `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2`;

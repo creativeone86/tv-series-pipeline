@@ -1,7 +1,7 @@
 /**
  * POST /api/series/[id]/cover (阶段二十六 · v12.25.0) —— 生成季封面(系列主视觉海报)。
  * 用锚点集的画风(styleBible 作 sref)+ 系列名生成一张电影感 key art,存为锚点集的 `season_cover` 资产。
- * 安全:登录 + 只动本人系列。计费护栏:走主图生成,粗估 ¥0.3。
+ * 安全:登录 + 只动本人系列。计费护栏:走主图生成,粗估 €0.3。
  */
 import { NextResponse } from 'next/server';
 import { getUserFromRequest } from '../../../auth/lib';
@@ -30,7 +30,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const anchor = eps[0];
 
   const { assertBudget } = await import('@/lib/budget-enforce');
-  const b = await assertBudget({ userId: payload.sub, pendingCostCny: 0.3 });
+  const b = await assertBudget({ userId: payload.sub, pendingCostEur: 0.04 });
   if (!b.allow) return NextResponse.json({ error: b.guard.message, code: 'budget_exceeded', guard: b.guard }, { status: 402 });
 
   // styleBible 作 sref 锁画风(没有则纯文生)

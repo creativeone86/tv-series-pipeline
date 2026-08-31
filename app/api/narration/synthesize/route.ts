@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
 export async function POST(request: NextRequest) {
   // v12.232(对抗复检 CRITICAL 补漏):此前**零鉴权零预算** —— MiniMax TTS,按字符计费,
   // 匿名循环调用即可持续烧额度。登录 + 预算一并前置,拦下才花钱。
-  const _pg = await guardPaidEndpoint(request, { pendingCostCny: 0.2 });
+  const _pg = await guardPaidEndpoint(request, { pendingCostEur: 0.03 });
   if (!_pg.ok) return _pg.response;
   const body = await request.json().catch(() => ({} as any));
   const text = typeof body?.text === 'string' ? body.text : '';

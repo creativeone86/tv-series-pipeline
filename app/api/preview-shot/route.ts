@@ -17,7 +17,7 @@
  *   422 → { error } (上游全跑挂)
  *
  * 计费考量:
- *   - 一次 MJ + 一次 Minimax I2V ≈ 几毛钱, 远低于完整 pipeline (¥3-10)
+ *   - 一次 MJ + 一次 Minimax I2V ≈ 几毛钱, 远低于完整 pipeline (€3-10)
  *   - 不挡免费用户 — 这是"决定要不要付费跑全流程"的关键引导
  *
  * 用法 (前端): create 页 ROLL 旁边的 "先试拍" 按钮 → /api/preview-shot →
@@ -116,9 +116,9 @@ export async function POST(request: NextRequest) {
 
   console.log(`[preview-shot] user=${userId} style=${style} aspect=${aspect} videoToo=${videoToo} prompt="${visualPrompt.slice(0, 80)}..."`);
 
-  // v9.3.4: 预算护栏硬拦截 — 到月度硬上限则拦 (试拍粗估: 图 ~¥0.3, +视频段 ~¥1.5)
+  // v9.3.4: 预算护栏硬拦截 — 到月度硬上限则拦 (试拍粗估: 图 ~€0.3, +视频段 ~€1.5)
   const { assertBudget } = await import('@/lib/budget-enforce');
-  const budgetCheck = await assertBudget({ userId, pendingCostCny: videoToo ? 1.8 : 0.3 });
+  const budgetCheck = await assertBudget({ userId, pendingCostEur: videoToo ? 0.23 : 0.04 });
   if (!budgetCheck.allow) {
     return NextResponse.json(
       { error: budgetCheck.guard.message, guard: budgetCheck.guard },

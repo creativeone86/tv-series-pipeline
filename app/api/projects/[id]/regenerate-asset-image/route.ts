@@ -5,7 +5,7 @@
  * 用资产存的 appearance(角色)/ description+location(场景)+ 可选反馈词重建 prompt,
  * styleBible 图作 sref 锁风格;新图持久化后更新该资产的 mediaUrls。
  *
- * 安全:登录 + 属主/可编辑守卫。计费护栏:走主图生成,粗估 ¥0.3。
+ * 安全:登录 + 属主/可编辑守卫。计费护栏:走主图生成,粗估 €0.3。
  */
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
@@ -39,7 +39,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   // 预算护栏(与主管线一致,生成前拦)
   const { assertBudget } = await import('@/lib/budget-enforce');
-  const b = await assertBudget({ userId: payload.sub, pendingCostCny: 0.3 });
+  const b = await assertBudget({ userId: payload.sub, pendingCostEur: 0.04 });
   if (!b.allow) return NextResponse.json({ error: b.guard.message, code: 'budget_exceeded', guard: b.guard }, { status: 402 });
 
   const row = db.prepare(`SELECT id, data FROM project_assets WHERE project_id = ? AND type = ? AND name = ? ORDER BY version DESC LIMIT 1`).get(id, type, name) as any;

@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
   // v12.234(二轮对抗复检):本端点 count=3 时并发调三次 OpenAI gpt-4o,是**有真实外部成本**的付费端点,
   // 但此前 userId 只用于日志打印,没有任何登录/预算检查 —— 匿名即可让平台替其付费出三份剧本。
   // (顺带纠正一处虚报:v12.232 声称「5 个付费端点已接守卫」,实际只接了 4 个,本端点从不在其中。)
-  const _g = await guardPaidEndpoint(request, { pendingCostCny: 0.3 });
+  const _g = await guardPaidEndpoint(request, { pendingCostEur: 0.04 });
   if (!_g.ok) return _g.response;
   const userId = _g.userId;
 

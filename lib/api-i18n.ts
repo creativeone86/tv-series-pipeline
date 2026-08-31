@@ -53,11 +53,11 @@ const en: Dict = {
 
   planRequired: 'This feature needs the {required} plan or higher. You are on {current}.',
   budgetNone: 'No budget cap set',
-  budgetHardReached: 'Monthly hard cap of ¥{hard} reached. Spending paused — raise your budget or go to billing.',
-  budgetWouldExceed: 'This action (~¥{pending}) would exceed the hard cap of ¥{hard} (now ¥{spent}). Blocked.',
-  budgetSoftOver: 'This action will hit the budget cap of ¥{cap} (projected ¥{projected}). Allowed, but watch spend.',
-  budgetWarn: 'You have used {pct}% this month (¥{spent}/¥{cap}). Approaching budget.',
-  budgetOk: 'Budget healthy (¥{spent}/¥{cap})',
+  budgetHardReached: 'Monthly hard cap of €{hard} reached. Spending paused — raise your budget or go to billing.',
+  budgetWouldExceed: 'This action (~€{pending}) would exceed the hard cap of €{hard} (now €{spent}). Blocked.',
+  budgetSoftOver: 'This action will hit the budget cap of €{cap} (projected €{projected}). Allowed, but watch spend.',
+  budgetWarn: 'You have used {pct}% this month (€{spent}/€{cap}). Approaching budget.',
+  budgetOk: 'Budget healthy (€{spent}/€{cap})',
   budgetExceeded: 'Monthly usage cap reached',
 
   agentDirector: 'Director',
@@ -185,11 +185,11 @@ const zhCN: Dict = {
 
   planRequired: '本功能需要 {required} 档及以上, 你当前是 {current}',
   budgetNone: '未设预算上限',
-  budgetHardReached: '本月已达硬上限 ¥{hard},已暂停消耗,请调高预算或前往计费',
-  budgetWouldExceed: '本次预估 ¥{pending} 将越过硬上限 ¥{hard}(当前 ¥{spent}),已拦截',
-  budgetSoftOver: '本次将触及预算上限 ¥{cap}(预计 ¥{projected}),仍放行但请留意',
-  budgetWarn: '本月已用 {pct}%(¥{spent}/¥{cap}),接近预算',
-  budgetOk: '预算健康(¥{spent}/¥{cap})',
+  budgetHardReached: '本月已达硬上限 €{hard},已暂停消耗,请调高预算或前往计费',
+  budgetWouldExceed: '本次预估 €{pending} 将越过硬上限 €{hard}(当前 €{spent}),已拦截',
+  budgetSoftOver: '本次将触及预算上限 €{cap}(预计 €{projected}),仍放行但请留意',
+  budgetWarn: '本月已用 {pct}%(€{spent}/€{cap}),接近预算',
+  budgetOk: '预算健康(€{spent}/€{cap})',
   budgetExceeded: '已达本月用量上限',
 
   agentDirector: '张导',

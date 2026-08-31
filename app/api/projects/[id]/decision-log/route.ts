@@ -4,7 +4,7 @@
  * 逐镜可审计决策日志:用了哪个引擎 / 花多少钱 / prompt / 九宫格选定 / 一致性分 + 项目质量分 + 成本汇总。
  * 给甲方/导演一份「为什么这么出片」的可复查账。登录 + 属主守卫。
  *
- * 200 → { ok, projectId, shots[], totals{totalCostCny,shotCount,byEngine[]}, nonShotCosts[], quality }
+ * 200 → { ok, projectId, shots[], totals{totalCostEur,shotCount,byEngine[]}, nonShotCosts[], quality }
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';

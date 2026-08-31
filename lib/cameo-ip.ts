@@ -31,7 +31,7 @@ export interface IpToken {
   visibility: IpVisibility;
   license: IpLicense;
   terms: string;
-  royaltyCny: number;
+  royaltyEur: number;
   status: IpStatus;
   useCount: number;
   createdAt: string;
@@ -99,7 +99,7 @@ function mapTokenRow(r: any): IpToken {
   return {
     id: r.id, characterId: r.character_id, ownerId: r.owner_id, name: r.name,
     coverUrl: r.cover_url ?? null, visibility: r.visibility, license: r.license,
-    terms: r.terms || '', royaltyCny: r.royalty_cny ?? 0, status: r.status,
+    terms: r.terms || '', royaltyEur: r.royalty_eur ?? 0, status: r.status,
     useCount: r.use_count ?? 0, createdAt: r.created_at, updatedAt: r.updated_at,
   };
 }
@@ -121,7 +121,7 @@ export interface IssueTokenInput {
   visibility?: IpVisibility;
   license?: IpLicense;
   terms?: string;
-  royaltyCny?: number;
+  royaltyEur?: number;
 }
 
 /** 发行 / 更新一个角色的 IP token (一个角色一个 token, UPSERT). */
@@ -136,23 +136,23 @@ export function issueIpToken(input: IssueTokenInput): IpToken {
     }
     db.prepare(
       `UPDATE character_ip_tokens
-       SET name=?, cover_url=?, visibility=?, license=?, terms=?, royalty_cny=?, status='active', updated_at=?
+       SET name=?, cover_url=?, visibility=?, license=?, terms=?, royalty_eur=?, status='active', updated_at=?
        WHERE id=?`,
     ).run(
       input.name, input.coverUrl ?? null, normVisibility(input.visibility),
-      normLicense(input.license), input.terms || '', clampRoyalty(input.royaltyCny), ts, existing.id,
+      normLicense(input.license), input.terms || '', clampRoyalty(input.royaltyEur), ts, existing.id,
     );
     return getIpToken(existing.id)!;
   }
   const id = 'ipt_' + nanoid(12);
   db.prepare(
     `INSERT INTO character_ip_tokens
-      (id, character_id, owner_id, name, cover_url, visibility, license, terms, royalty_cny, status, use_count, created_at, updated_at)
+      (id, character_id, owner_id, name, cover_url, visibility, license, terms, royalty_eur, status, use_count, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, ?, ?)`,
   ).run(
     id, input.characterId, input.ownerId, input.name, input.coverUrl ?? null,
     normVisibility(input.visibility), normLicense(input.license), input.terms || '',
-    clampRoyalty(input.royaltyCny), ts, ts,
+    clampRoyalty(input.royaltyEur), ts, ts,
   );
   return getIpToken(id)!;
 }

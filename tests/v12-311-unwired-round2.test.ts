@@ -45,15 +45,15 @@ describe('v12.311 · ① 成本归因终于接上了', () => {
 
   it('归因能力本身是好的 —— 之前只是没人调', () => {
     const attr = attributeCost(costEventsFromCostLog([
-      { engine: 'veo', costCny: 12 },
-      { engine: 'minimax', costCny: 8 },
+      { engine: 'veo', costEur: 12 },
+      { engine: 'minimax', costEur: 8 },
     ]));
-    expect(attr.totalCny).toBeGreaterThan(0);
+    expect(attr.totalEur).toBeGreaterThan(0);
   });
 
   it('零成本项目不炸(新项目打开面板也不该报错)', () => {
     expect(() => attributeCost(costEventsFromCostLog([]))).not.toThrow();
-    expect(attributeCost(costEventsFromCostLog([])).totalCny).toBe(0);
+    expect(attributeCost(costEventsFromCostLog([])).totalEur).toBe(0);
   });
 
   it('CSV 导出与 COGS 报告两条老分支没被改动', () => {

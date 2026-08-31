@@ -90,10 +90,10 @@ export function planRejection(current: AnyTier, required: AnyTier, request?: Req
 // ════════════════════════════════════════════════════════════════════
 // v2.16 P0.1: 视频生成分档 — duration → 最低 tier
 //
-// 引擎成本档位 (¥/秒):
-//   - Minimax I2V-01:    ~¥0.10  (5/6s)
-//   - Kling Master:      ~¥0.20  (10s)
-//   - Vidu Q3 Pro:       ~¥0.30  (15s)
+// 引擎成本档位 (€/秒):
+//   - Minimax I2V-01:    ~€0.10  (5/6s)
+//   - Kling Master:      ~€0.20  (10s)
+//   - Vidu Q3 Pro:       ~€0.30  (15s)
 //
 // 定价策略: 只把贵 API 锁后端 tier, 让免费用户至少能跑 5/6s 体验。
 // ════════════════════════════════════════════════════════════════════

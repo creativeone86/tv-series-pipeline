@@ -38,6 +38,31 @@ db.pragma('journal_mode = WAL');
 // 避免假性失败.
 db.pragma('busy_timeout = 5000');
 
+// ─── CNY → EUR 迁移(全库改用 EUR 计价/记账)──────────────────────────────
+// 历史库的金额列以 CNY 记(cost_cny / est_cost_cny / budget_cap_cny / royalty_cny…),
+// 全站改 EUR 后:①把列名重命名为 *_eur;②把既有行按 FX(1 CNY ≈ 0.1278 EUR)换算。
+// 必须在下方 CREATE/addColumnIfMissing 之前跑 —— 否则 addColumnIfMissing('budget_cap_eur')
+// 会在旧库上**新建一个空 eur 列**,把旧 cny 数据孤立掉。幂等:列已是 eur(新库/已迁移)即跳过。
+const CNY_TO_EUR = 0.1278;
+const migrateEurColumn = (table: string, oldCol: string, newCol: string) => {
+  try {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!cols.length) return; // 表尚不存在(全新库)→ 稍后按 EUR schema 直接建
+    const hasOld = cols.some((c) => c.name === oldCol);
+    const hasNew = cols.some((c) => c.name === newCol);
+    if (hasOld && !hasNew) {
+      db.exec(`ALTER TABLE ${table} RENAME COLUMN ${oldCol} TO ${newCol}`);
+      db.exec(`UPDATE ${table} SET ${newCol} = ROUND(${newCol} * ${CNY_TO_EUR}, 4) WHERE ${newCol} IS NOT NULL`);
+    }
+  } catch { /* ignore — 旧 SQLite 无 RENAME COLUMN 时保持原状,不阻断启动 */ }
+};
+migrateEurColumn('cost_log', 'cost_cny', 'cost_eur');
+migrateEurColumn('api_usage_events', 'est_cost_cny', 'est_cost_eur');
+migrateEurColumn('tts_cache', 'est_cost_cny', 'est_cost_eur');
+migrateEurColumn('users', 'budget_cap_cny', 'budget_cap_eur');
+migrateEurColumn('users', 'budget_hard_cap_cny', 'budget_hard_cap_eur');
+migrateEurColumn('character_ip_tokens', 'royalty_cny', 'royalty_eur');
+
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
@@ -234,7 +259,7 @@ CREATE TABLE IF NOT EXISTS cost_log (
   engine TEXT NOT NULL,                         -- 'seedance2' | 'kling3' | ...
   resolution TEXT NOT NULL,                     -- '360p' | '480p' | '720p'
   duration_sec REAL NOT NULL DEFAULT 0,
-  cost_cny REAL NOT NULL DEFAULT 0,
+  cost_eur REAL NOT NULL DEFAULT 0,
   metadata TEXT DEFAULT '{}',
   created_at TEXT NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id)
@@ -256,7 +281,7 @@ CREATE TABLE IF NOT EXISTS api_usage_events (
   duration_ms INTEGER NOT NULL DEFAULT 0,       -- 端到端耗时
   project_id TEXT,                              -- 关联项目 (如有)
   user_id TEXT,                                 -- 关联用户 (如有)
-  est_cost_cny REAL DEFAULT 0,                  -- 估算成本 (CNY), 仅供参考
+  est_cost_eur REAL DEFAULT 0,                  -- 估算成本 (EUR), 仅供参考
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_api_usage_provider_created ON api_usage_events(provider, created_at);
@@ -434,10 +459,10 @@ addColumnIfMissing('projects', 'episode_number', 'INTEGER');                  //
 // v2.0 给 users 表加 invite_code_used 字段，用于审计哪个码引入了用户
 addColumnIfMissing('users', 'invite_code_used', 'TEXT');
 
-// v9.3.4 (2026-06-02): 用户月预算护栏 —— budget_cap_cny 软上限(预算目标) + budget_hard_cap_cny 硬上限(绝对线);
+// v9.3.4 (2026-06-02): 用户月预算护栏 —— budget_cap_eur 软上限(预算目标) + budget_hard_cap_eur 硬上限(绝对线);
 // null = 不设防。生成端点经 lib/budget-enforce.assertBudget 读这两列 + 当月 cost_log 花费裁决, 到硬上限拦截。
-addColumnIfMissing('users', 'budget_cap_cny', 'REAL');
-addColumnIfMissing('users', 'budget_hard_cap_cny', 'REAL');
+addColumnIfMissing('users', 'budget_cap_eur', 'REAL');
+addColumnIfMissing('users', 'budget_hard_cap_eur', 'REAL');
 
 // v9.5.3 (2026-06-03): 灵感库案例加示意播放视频 video_url。
 // 示意片段引用自公开影视作品(《英雄联盟:双城之战 / Arcane》, Netflix·Riot·Fortiche),
@@ -844,7 +869,7 @@ CREATE TABLE IF NOT EXISTS character_ip_tokens (
   visibility TEXT NOT NULL DEFAULT 'private',    -- 'public' | 'unlisted' | 'private'
   license TEXT NOT NULL DEFAULT 'view',          -- 'view' | 'remix' | 'commercial'
   terms TEXT DEFAULT '',                         -- 授权条款自由文本
-  royalty_cny REAL DEFAULT 0,                    -- 建议单次复用版税 (元), 0 = 免费
+  royalty_eur REAL DEFAULT 0,                    -- 建议单次复用版税 (元), 0 = 免费
   status TEXT NOT NULL DEFAULT 'active',         -- 'active' | 'revoked'
   use_count INTEGER NOT NULL DEFAULT 0,          -- 累计被复用次数
   created_at TEXT NOT NULL,
@@ -959,6 +984,27 @@ export function seed() {
     console.log('Seed skipped (already seeded or concurrent)');
   }
 }
+
+// narrated-explainer: paid TTS cache (text+provider+voice+settings → persisted audio)
+db.exec(`
+CREATE TABLE IF NOT EXISTS tts_cache (
+  cache_key TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL DEFAULT '',
+  voice_id TEXT NOT NULL DEFAULT '',
+  language TEXT NOT NULL DEFAULT '',
+  normalized_text TEXT NOT NULL,
+  audio_url TEXT NOT NULL,
+  audio_key TEXT,
+  duration_sec REAL NOT NULL DEFAULT 0,
+  est_cost_eur REAL NOT NULL DEFAULT 0,
+  settings TEXT NOT NULL DEFAULT '{}',
+  alignment TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tts_cache_created ON tts_cache(created_at);
+`);
+try { db.exec('ALTER TABLE tts_cache ADD COLUMN alignment TEXT'); } catch { /* already present */ }
 
 seed();
 

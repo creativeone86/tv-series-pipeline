@@ -58,6 +58,16 @@ export interface ImageGenerateInput {
   cw?: number;
   /** UI label, 仅日志用 */
   label?: string;
+  /**
+   * 生成质量档 (gpt-image-1: low|medium|high). 省成本用 medium/low。
+   * provider 不支持时忽略。
+   */
+  quality?: 'low' | 'medium' | 'high' | 'auto';
+  /**
+   * 显式尺寸覆盖 (如 '1024x1024')。传了则优先于 aspectRatio 推导。
+   * provider 自行映射到该家支持的 size。
+   */
+  size?: string;
   /** 进度回调 (可选 — 长任务) */
   onProgress?: (pct: number, msg: string) => void;
 }
@@ -69,8 +79,8 @@ export interface ImageGenerateResult {
   provider: string;
   /** 可选: provider 端的 task/request id 给追踪用 */
   upstreamId?: string;
-  /** 可选: 上游服务的 cost (¥), 用于 cost_log */
-  estCostCny?: number;
+  /** 可选: 上游服务的 cost (€), 用于 cost_log */
+  estCostEur?: number;
 }
 
 export interface ImageProvider {

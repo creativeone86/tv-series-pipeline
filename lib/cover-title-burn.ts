@@ -22,6 +22,9 @@ export function coverFontCandidates(): string[] {
   return [
     ...(env ? [env] : []),
     // ① 项目自带(部署方可直接放一份开源字体进仓)
+    `${process.cwd()}/data/fonts/SofiaSansExtraCondensed-Black.ttf`,
+    `${process.cwd()}/data/fonts/SofiaSans-Black.ttf`,
+    `${process.cwd()}/data/fonts/NotoSans-Regular.ttf`,
     `${process.cwd()}/data/fonts/NotoSansCJK-Regular.otf`,
     // ② 常见 Linux 发行版的开源 CJK
     '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',

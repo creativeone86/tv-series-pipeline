@@ -10,7 +10,7 @@
  * cinema palette; emoji → Phosphor.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { CurrencyCny, Lightbulb } from '@phosphor-icons/react';
+import { CurrencyEur, Lightbulb } from '@phosphor-icons/react';
 import { EmptyState } from '@/components/cinema/primitives';
 import { evaluateCostGuard } from '@/lib/cost-attribution';
 import { useLocale } from '@/hooks/use-locale';
@@ -23,9 +23,9 @@ const GUARD_BAR: Record<'none' | 'ok' | 'warn' | 'over', string> = {
 };
 
 type CostCategory = 'llm' | 'image' | 'video' | 'tts' | 'lipsync' | 'other';
-interface CategoryCost { category: CostCategory; label: string; labelEn?: string; nameEn?: string; en?: string; costCny: number; pct: number; count: number; }
+interface CategoryCost { category: CostCategory; label: string; labelEn?: string; nameEn?: string; en?: string; costEur: number; pct: number; count: number; }
 interface CostAttribution {
-  totalCny: number;
+  totalEur: number;
   byCategory: CategoryCost[];
   topCategory: CategoryCost | null;
   hints: string[];
@@ -40,8 +40,8 @@ const CAT_COLOR: Record<CostCategory, string> = {
 const CAP_KEY = (id: string) => `qfmj-cost-cap-${id}`;
 
 // v12.224 per-film COGS report (aligned with lib/cogs-report)
-interface CogsLine { engine: string; count: number; totalSec: number; unit: 'per_sec' | 'per_call'; unitRateCny: number; subtotalCny: number; pct: number; }
-interface CogsReport { totalCogsCny: number; lines: CogsLine[]; margin: { saleCny: number; cogsCny: number; grossProfitCny: number; grossMarginPct: number } | null; }
+interface CogsLine { engine: string; count: number; totalSec: number; unit: 'per_sec' | 'per_call'; unitRateEur: number; subtotalEur: number; pct: number; }
+interface CogsReport { totalCogsEur: number; lines: CogsLine[]; margin: { saleEur: number; cogsEur: number; grossProfitEur: number; grossMarginPct: number } | null; }
 
 export function CostAttributionPanel({ projectId }: { projectId: string }) {
   const { locale, t: loc } = useLocale();
@@ -57,9 +57,9 @@ export function CostAttributionPanel({ projectId }: { projectId: string }) {
   const libName = (o: { label?: string; nameEn?: string; en?: string }) =>
     locale === 'en' ? (o.nameEn || o.en || o.label || '') : (o.label || '');
 
-  const loadCogs = async (saleCny: string) => {
+  const loadCogs = async (saleEur: string) => {
     try {
-      const q = saleCny.trim() && Number(saleCny) > 0 ? `&sale=${Number(saleCny)}` : '';
+      const q = saleEur.trim() && Number(saleEur) > 0 ? `&sale=${Number(saleEur)}` : '';
       const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/cost?report=cogs${q}`);
       if (res.ok) setCogs(await res.json());
     } catch { /* silent: enrichment */ }
@@ -80,7 +80,7 @@ export function CostAttributionPanel({ projectId }: { projectId: string }) {
   }, [projectId]);
 
   const capNum = cap.trim() !== '' && Number.isFinite(Number(cap)) ? Number(cap) : null;
-  const guard = useMemo(() => evaluateCostGuard({ totalCny: attr?.totalCny || 0, capCny: capNum }), [attr, capNum]);
+  const guard = useMemo(() => evaluateCostGuard({ totalEur: attr?.totalEur || 0, capEur: capNum }), [attr, capNum]);
   const onCapChange = (v: string) => {
     setCap(v);
     try { if (v.trim()) localStorage.setItem(CAP_KEY(projectId), v); else localStorage.removeItem(CAP_KEY(projectId)); } catch { /* ignore */ }
@@ -92,15 +92,15 @@ export function CostAttributionPanel({ projectId }: { projectId: string }) {
     <div className="cinema-card !p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="cinema-eyebrow flex items-center gap-1.5">
-          <CurrencyCny size={13} className="text-[var(--cinema-amber)]" /> {t.projectPanels.costTitle}
+          <CurrencyEur size={13} className="text-[var(--cinema-amber)]" /> {t.projectPanels.costTitle}
         </div>
-        {attr && attr.totalCny > 0 && (
-          <span className="cinema-mono text-[13px] tabular-nums">¥{attr.totalCny.toFixed(2)}</span>
+        {attr && attr.totalEur > 0 && (
+          <span className="cinema-mono text-[13px] tabular-nums">€{attr.totalEur.toFixed(2)}</span>
         )}
       </div>
 
-      {!attr || attr.totalCny === 0 ? (
-        <EmptyState icon={CurrencyCny} title={t.projectPanels.noCostTitle} hint={t.projectPanels.noCostHint} />
+      {!attr || attr.totalEur === 0 ? (
+        <EmptyState icon={CurrencyEur} title={t.projectPanels.noCostTitle} hint={t.projectPanels.noCostHint} />
       ) : (
         <>
           {/* v9.7.17 budget guard */}
@@ -132,7 +132,7 @@ export function CostAttributionPanel({ projectId }: { projectId: string }) {
                   <div className="h-full rounded" style={{ width: `${Math.max(2, c.pct)}%`, backgroundColor: CAT_COLOR[c.category] }} />
                 </div>
                 <span className="cinema-mono text-[11px] text-[var(--cinema-text-3)] w-10 shrink-0 text-right tabular-nums">{c.pct}%</span>
-                <span className="cinema-mono text-[11px] text-[var(--cinema-text-2)] w-14 shrink-0 text-right tabular-nums">¥{c.costCny.toFixed(2)}</span>
+                <span className="cinema-mono text-[11px] text-[var(--cinema-text-2)] w-14 shrink-0 text-right tabular-nums">€{c.costEur.toFixed(2)}</span>
               </div>
             ))}
           </div>
@@ -171,25 +171,25 @@ export function CostAttributionPanel({ projectId }: { projectId: string }) {
                         <div key={l.engine} className="flex items-center gap-2 cinema-mono text-[11px]">
                           <span className="w-24 shrink-0 truncate text-[var(--cinema-text-2)]" title={l.engine}>{l.engine}</span>
                           <span className="text-[var(--cinema-text-3)] w-28 shrink-0">
-                            ¥{l.unitRateCny}/{l.unit === 'per_sec' ? t.projectPanels.perSec : t.projectPanels.perCall} × {l.unit === 'per_sec' ? t.projectPanels.unitQtySec.replace('{n}', String(l.totalSec)) : t.projectPanels.unitQtyCall.replace('{n}', String(l.count))}
+                            €{l.unitRateEur}/{l.unit === 'per_sec' ? t.projectPanels.perSec : t.projectPanels.perCall} × {l.unit === 'per_sec' ? t.projectPanels.unitQtySec.replace('{n}', String(l.totalSec)) : t.projectPanels.unitQtyCall.replace('{n}', String(l.count))}
                           </span>
                           <div className="flex-1 min-w-0 h-1.5 rounded bg-[var(--cinema-border)] overflow-hidden">
                             <div className="h-full rounded bg-[var(--cinema-amber)]" style={{ width: `${Math.max(2, l.pct)}%` }} />
                           </div>
-                          <span className="w-14 shrink-0 text-right tabular-nums text-[var(--cinema-text-2)]">¥{l.subtotalCny.toFixed(2)}</span>
+                          <span className="w-14 shrink-0 text-right tabular-nums text-[var(--cinema-text-2)]">€{l.subtotalEur.toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
                     <div className="flex items-center justify-between cinema-mono text-[11px] pt-1.5 border-t border-[var(--cinema-border)]">
                       <span className="text-[var(--cinema-text-2)]">{t.projectPanels.totalCogs}</span>
-                      <span className="tabular-nums text-[var(--cinema-text-1)]">¥{cogs.totalCogsCny.toFixed(2)}</span>
+                      <span className="tabular-nums text-[var(--cinema-text-1)]">€{cogs.totalCogsEur.toFixed(2)}</span>
                     </div>
                     {cogs.margin && (
-                      <div className={`cinema-mono text-[11px] rounded p-2 ${cogs.margin.grossProfitCny >= 0 ? 'bg-emerald-500/10 text-emerald-300' : 'bg-rose-500/10 text-rose-300'}`}>
+                      <div className={`cinema-mono text-[11px] rounded p-2 ${cogs.margin.grossProfitEur >= 0 ? 'bg-emerald-500/10 text-emerald-300' : 'bg-rose-500/10 text-rose-300'}`}>
                         {t.projectPanels.marginLine
-                          .replace('{sale}', cogs.margin.saleCny.toFixed(2))
-                          .replace('{cogs}', cogs.margin.cogsCny.toFixed(2))
-                          .replace('{profit}', cogs.margin.grossProfitCny.toFixed(2))}
+                          .replace('{sale}', cogs.margin.saleEur.toFixed(2))
+                          .replace('{cogs}', cogs.margin.cogsEur.toFixed(2))
+                          .replace('{profit}', cogs.margin.grossProfitEur.toFixed(2))}
                         <span className="opacity-80">{t.projectPanels.marginPct.replace('{n}', String(cogs.margin.grossMarginPct))}</span>
                       </div>
                     )}

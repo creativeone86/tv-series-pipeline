@@ -95,6 +95,8 @@ export const MODULE_TARGETS: ModuleTarget[] = [
   { module: 'llm-fallback', label: '通用回退(MiniMax M 系)', envKey: 'LLM_FALLBACK_MODEL', defaultModel: 'MiniMax-M2.7', family: /^minimax-m\d/i, source: 'fallback', verifiable: true }, // \d 防 Music/MCP 系误入
   { module: 'video-veo', label: '视频(Veo,qingyuntop 网关)', envKey: 'VEO_MODEL', defaultModel: 'veo3.1-pro', family: /^veo/i, source: 'qingyuntop' },
   { module: 'tts-minimax', label: '配音兜底(MiniMax speech)', envKey: 'MINIMAX_TTS_MODEL', defaultModel: 'speech-02-hd', family: /^speech-/i, source: 'fallback' },
+  { module: 'explainer-director', label: 'Explainer director', envKey: 'EXPLAINER_DIRECTOR_MODEL', defaultModel: 'gpt-5.6-sol', family: /^gpt-5/i, source: 'primary', verifiable: true },
+  { module: 'explainer-factcheck', label: 'Explainer factcheck', envKey: 'EXPLAINER_FACTCHECK_MODEL', defaultModel: 'gpt-5-search-api', family: /^gpt-5/i, source: 'primary', verifiable: true },
 ];
 
 /** 无列举接口的模块 —— 如实标注,不假装能扫。 */

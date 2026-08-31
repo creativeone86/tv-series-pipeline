@@ -10,6 +10,7 @@ import { registerTTSProvider } from './registry';
 import type { TTSGenerateInput } from './types';
 import './vectorengine-tts'; // v6.9: vectorengine gpt-4o-mini-tts (主), minimax 兜底
 import './elevenlabs'; // 多语种旁白 (ElevenLabs multilingual v2);available() 只认 ELEVENLABS_API_KEY
+import './google-cloud-tts'; // optional Google Cloud TTS (GOOGLE_CLOUD_TTS_API_KEY)
 import '@/lib/mock-providers'; // v10.4.0: mock 三件套常驻注册(MOCK_ENGINES=1 才 available)
 
 let ttsSvc: any = null;

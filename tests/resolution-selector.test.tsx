@@ -9,14 +9,14 @@ import {
 } from '@/components/creation/ResolutionSelector';
 
 describe('estimateCost', () => {
-  it('360p 5s ≈ ¥0.25', () => {
-    expect(estimateCost('360p', 5)).toBeCloseTo(0.25, 2);
+  it('360p 5s ≈ €0.03', () => {
+    expect(estimateCost('360p', 5)).toBeCloseTo(0.03, 2);
   });
-  it('480p 10s ≈ ¥1.2', () => {
-    expect(estimateCost('480p', 10)).toBeCloseTo(1.2, 2);
+  it('480p 10s ≈ €0.15', () => {
+    expect(estimateCost('480p', 10)).toBeCloseTo(0.15, 2);
   });
-  it('720p 15s ≈ ¥3.3', () => {
-    expect(estimateCost('720p', 15)).toBeCloseTo(3.3, 2);
+  it('720p 15s ≈ €0.42', () => {
+    expect(estimateCost('720p', 15)).toBeCloseTo(0.42, 2);
   });
 });
 

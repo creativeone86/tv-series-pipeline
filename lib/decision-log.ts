@@ -13,7 +13,7 @@ import type { CostLogRow } from './repos/cost-log-repo';
 export interface ShotDecision {
   shotNumber: number;
   videoEngine?: string;          // 主出片引擎(从 video-* 成本行提取)
-  costCny: number;               // 该镜总成本(相关成本行求和)
+  costEur: number;               // 该镜总成本(相关成本行求和)
   engines: string[];             // 该镜涉及的所有引擎(去重)
   prompt?: string;               // 分镜 prompt(storyboard 资产)
   consistencyScore?: number;     // 一致性分(资产里有才填)
@@ -22,8 +22,8 @@ export interface ShotDecision {
 
 export interface DecisionLog {
   shots: ShotDecision[];
-  totals: { totalCostCny: number; shotCount: number; byEngine: Array<{ engine: string; costCny: number; count: number }> };
-  nonShotCosts: Array<{ engine: string; costCny: number }>; // 无镜号成本(项目级:封面/整片配乐等)
+  totals: { totalCostEur: number; shotCount: number; byEngine: Array<{ engine: string; costEur: number; count: number }> };
+  nonShotCosts: Array<{ engine: string; costEur: number }>; // 无镜号成本(项目级:封面/整片配乐等)
   quality?: { overall?: number; continuity?: number; lighting?: number; face?: number } | null;
 }
 
@@ -44,18 +44,18 @@ export function buildDecisionLog(input: {
   quality?: Record<string, unknown> | null;
 }): DecisionLog {
   const shotMap = new Map<number, ShotDecision>();
-  const nonShot: Array<{ engine: string; costCny: number }> = [];
-  const byEngine = new Map<string, { costCny: number; count: number }>();
+  const nonShot: Array<{ engine: string; costEur: number }> = [];
+  const byEngine = new Map<string, { costEur: number; count: number }>();
 
   for (const row of input.costRows || []) {
     const eng = row.engine || 'unknown';
-    const be = byEngine.get(eng) || { costCny: 0, count: 0 };
-    be.costCny = r2(be.costCny + row.costCny); be.count++; byEngine.set(eng, be);
+    const be = byEngine.get(eng) || { costEur: 0, count: 0 };
+    be.costEur = r2(be.costEur + row.costEur); be.count++; byEngine.set(eng, be);
 
     const sn = numOr((row.metadata as Record<string, unknown> | undefined)?.shotNumber);
-    if (!sn || sn <= 0) { nonShot.push({ engine: eng, costCny: row.costCny }); continue; }
-    const s = shotMap.get(sn) || { shotNumber: sn, costCny: 0, engines: [] };
-    s.costCny = r2(s.costCny + row.costCny);
+    if (!sn || sn <= 0) { nonShot.push({ engine: eng, costEur: row.costEur }); continue; }
+    const s = shotMap.get(sn) || { shotNumber: sn, costEur: 0, engines: [] };
+    s.costEur = r2(s.costEur + row.costEur);
     if (!s.engines.includes(eng)) s.engines.push(eng);
     if (eng.startsWith('video-') && !s.videoEngine) s.videoEngine = eng.replace(/^video-/, '');
     shotMap.set(sn, s);
@@ -65,7 +65,7 @@ export function buildDecisionLog(input: {
     if (a.type !== 'storyboard') continue;
     const sn = numOr(a.shot_number ?? a.shotNumber);
     if (!sn || sn <= 0) continue;
-    const s = shotMap.get(sn) || { shotNumber: sn, costCny: 0, engines: [] };
+    const s = shotMap.get(sn) || { shotNumber: sn, costEur: 0, engines: [] };
     const d = parseData(a.data);
     if (typeof d.prompt === 'string' && !s.prompt) s.prompt = (d.prompt as string).slice(0, 400);
     const cs = numOr(d.consistency ?? d.consistencyScore);
@@ -75,17 +75,17 @@ export function buildDecisionLog(input: {
   }
 
   const shots = [...shotMap.values()].sort((a, b) => a.shotNumber - b.shotNumber);
-  const totalCostCny = r2(
-    [...shotMap.values()].reduce((t, s) => t + s.costCny, 0) + nonShot.reduce((t, x) => t + x.costCny, 0),
+  const totalCostEur = r2(
+    [...shotMap.values()].reduce((t, s) => t + s.costEur, 0) + nonShot.reduce((t, x) => t + x.costEur, 0),
   );
   const byEngineArr = [...byEngine.entries()]
-    .map(([engine, v]) => ({ engine, costCny: v.costCny, count: v.count }))
-    .sort((a, b) => b.costCny - a.costCny);
+    .map(([engine, v]) => ({ engine, costEur: v.costEur, count: v.count }))
+    .sort((a, b) => b.costEur - a.costEur);
 
   const q = input.quality;
   const quality = q
     ? { overall: numOr(q.overall_score ?? q.overall), continuity: numOr(q.continuity_score ?? q.continuity), lighting: numOr(q.lighting_score ?? q.lighting), face: numOr(q.face_score ?? q.face) }
     : null;
 
-  return { shots, totals: { totalCostCny, shotCount: shots.length, byEngine: byEngineArr }, nonShotCosts: nonShot, quality };
+  return { shots, totals: { totalCostEur, shotCount: shots.length, byEngine: byEngineArr }, nonShotCosts: nonShot, quality };
 }

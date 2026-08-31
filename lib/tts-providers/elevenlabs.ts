@@ -56,7 +56,70 @@ export function resolveElevenLabsVoice(voiceId?: string, env: NodeJS.ProcessEnv 
 }
 
 export function elevenLabsModelId(env: NodeJS.ProcessEnv = process.env): string {
+  if (env.EXPLAINER_TTS_EXPRESSIVE === '1') return 'eleven_v3';
   return env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2';
+}
+
+export function elevenLabsPreviewModelId(env: NodeJS.ProcessEnv = process.env): string {
+  return env.EXPLAINER_TTS_PREVIEW_MODEL || 'eleven_flash_v2_5';
+}
+
+export function supportsLanguageCode(model: string): boolean {
+  return /eleven_v3|flash_v2/i.test(model);
+}
+
+export function documentaryVoiceSettings(input?: {
+  stability?: number;
+  similarityBoost?: number;
+  style?: number;
+  speakerBoost?: boolean;
+  emotion?: string;
+}): { stability: number; similarity_boost: number; style: number; use_speaker_boost: boolean } {
+  const mapped = mapEmotionToVoiceSettings(input?.emotion);
+  return {
+    stability: input?.stability ?? mapped.stability,
+    similarity_boost: input?.similarityBoost ?? mapped.similarity_boost,
+    style: input?.style ?? 0.15,
+    use_speaker_boost: input?.speakerBoost !== false,
+  };
+}
+
+export const BULGARIAN_VOICE_SHORTLIST = [
+  { id: '406EiNlYvqFqcz3vsnOm', name: 'Peter K', accent: 'Sofia', use: 'informative_educational' },
+  { id: 'NG3DzyUGmLkog1AFB5iv', name: 'Yakim Petrov', accent: 'Sofia', use: 'narrative_story' },
+  { id: 'vZifugoCmJjNgn0bBdKH', name: 'Yordan', accent: 'Sofia', use: 'narrative_story' },
+  { id: 'NRh6kcwL61BoyIMyyDuy', name: 'Valentin', accent: 'Varna', use: 'narrative_story' },
+  { id: 'UcGGwCMBEQAIYpXt4nTS', name: 'Boris', accent: 'standard', use: 'advertisement' },
+  { id: '6tPpQd1OMENsZ3qD7FSl', name: 'Yoana', accent: 'standard', use: 'educational' },
+] as const;
+
+export const DEFAULT_SERIES_VOICE_ID = '406EiNlYvqFqcz3vsnOm';
+
+export async function elevenLabsSubscription(env: NodeJS.ProcessEnv = process.env): Promise<{
+  characterCount: number;
+  characterLimit: number;
+  remaining: number;
+  resetUnix?: number;
+  tier?: string;
+} | null> {
+  const key = env.ELEVENLABS_API_KEY;
+  if (!key) return null;
+  const base = env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io';
+  const res = await fetch(`${base}/v1/user/subscription`, {
+    headers: { 'xi-api-key': key },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) return null;
+  const j = await res.json();
+  const limit = Number(j.character_limit) || 0;
+  const used = Number(j.character_count) || 0;
+  return {
+    characterCount: used,
+    characterLimit: limit,
+    remaining: Math.max(0, limit - used),
+    resetUnix: j.next_character_count_reset_unix,
+    tier: j.tier,
+  };
 }
 
 /**
@@ -110,7 +173,8 @@ registerTTSProvider({
     if (!key) throw new Error('elevenlabs: ELEVENLABS_API_KEY not set');
     const base = process.env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io';
     const voice = resolveElevenLabsVoice(input.voiceId);
-    const model = elevenLabsModelId();
+    const model = input.modelId || elevenLabsModelId();
+    const format = input.outputFormat || process.env.ELEVENLABS_OUTPUT_FORMAT || 'mp3_44100_192';
 
     // `speed` is only honoured by voice_settings on newer models; clamp to the
     // documented range so an out-of-range prosody value can't 422 the whole call.
@@ -118,27 +182,71 @@ registerTTSProvider({
       ? Math.min(1.2, Math.max(0.7, input.speed))
       : undefined;
 
+    const path = input.withTimestamps
+      ? `/v1/text-to-speech/${encodeURIComponent(voice)}/with-timestamps`
+      : `/v1/text-to-speech/${encodeURIComponent(voice)}`;
+    const body: Record<string, unknown> = {
+      text: input.text,
+      model_id: model,
+      voice_settings: {
+        ...documentaryVoiceSettings({
+          stability: input.stability,
+          similarityBoost: input.similarityBoost,
+          style: input.style,
+          speakerBoost: input.speakerBoost,
+          emotion: input.emotion,
+        }),
+        ...(speed ? { speed } : {}),
+      },
+    };
+    if (supportsLanguageCode(model) && input.language) {
+      body.language_code = String(input.language).split('-')[0];
+    }
+
     const res = await fetch(
-      `${base}/v1/text-to-speech/${encodeURIComponent(voice)}?output_format=mp3_44100_128`,
+      `${base}${path}?output_format=${encodeURIComponent(format)}`,
       {
         method: 'POST',
-        headers: { 'xi-api-key': key, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
-        body: JSON.stringify({
-          text: input.text,
-          model_id: model,
-          voice_settings: {
-            ...mapEmotionToVoiceSettings(input.emotion),
-            ...(speed ? { speed } : {}),
-          },
-        }),
-        signal: AbortSignal.timeout(120_000),
+        headers: {
+          'xi-api-key': key,
+          'Content-Type': 'application/json',
+          Accept: input.withTimestamps ? 'application/json' : 'audio/mpeg',
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(180_000),
       },
     );
     if (!res.ok) {
       throw new Error(`elevenlabs ${res.status}: ${(await res.text()).slice(0, 200)}`);
     }
 
-    const buf = Buffer.from(await res.arrayBuffer());
+    let buf: Buffer;
+    let alignment: {
+      characters: string[];
+      character_start_times_seconds: number[];
+      character_end_times_seconds: number[];
+    } | undefined;
+    if (input.withTimestamps) {
+      const json = await res.json() as {
+        audio_base64?: string;
+        alignment?: {
+          characters?: string[];
+          character_start_times_seconds?: number[];
+          character_end_times_seconds?: number[];
+        };
+      };
+      if (!json.audio_base64) throw new Error('elevenlabs: empty audio_base64');
+      buf = Buffer.from(json.audio_base64, 'base64');
+      if (json.alignment?.characters) {
+        alignment = {
+          characters: json.alignment.characters,
+          character_start_times_seconds: json.alignment.character_start_times_seconds || [],
+          character_end_times_seconds: json.alignment.character_end_times_seconds || [],
+        };
+      }
+    } else {
+      buf = Buffer.from(await res.arrayBuffer());
+    }
     if (!buf.length) throw new Error('elevenlabs: empty audio');
     const audioUrl = `data:audio/mpeg;base64,${buf.toString('base64')}`;
 
@@ -158,6 +266,7 @@ registerTTSProvider({
       duration,
       subtitle: [{ start: 0, end: duration, text: input.text, character: input.character }],
       provider: 'elevenlabs',
+      alignment,
     };
   },
 });

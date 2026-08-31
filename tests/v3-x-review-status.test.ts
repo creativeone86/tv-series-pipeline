@@ -21,62 +21,62 @@ beforeEach(() => {
 });
 
 describe('v3.x E.3 · getReviewStatus', () => {
-  it('returns draft by default when no record', () => {
-    const s = getReviewStatus(freshProjectId());
+  it('returns draft by default when no record', async () => {
+    const s = await await getReviewStatus(freshProjectId());
     expect(s.status).toBe('draft');
     expect(s.submittedByUserId).toBeNull();
   });
 });
 
 describe('v3.x E.3 · transitionReviewStatus', () => {
-  it('draft → in_review (submit)', () => {
+  it('draft → in_review (submit)', async () => {
     const pid = freshProjectId();
-    const r = transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
+    const r = await transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
     expect(r.ok).toBe(true);
     expect(r.status?.status).toBe('in_review');
     expect(r.status?.submittedByUserId).toBe(SUBMITTER);
   });
 
-  it('in_review → approved by different user', () => {
+  it('in_review → approved by different user', async () => {
     const pid = freshProjectId();
-    transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
-    const r = transitionReviewStatus({ projectId: pid, toStatus: 'approved', actorUserId: REVIEWER });
+    await transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
+    const r = await transitionReviewStatus({ projectId: pid, toStatus: 'approved', actorUserId: REVIEWER });
     expect(r.ok).toBe(true);
     expect(r.status?.status).toBe('approved');
     expect(r.status?.reviewedByUserId).toBe(REVIEWER);
   });
 
-  it('rejects self-approve', () => {
+  it('rejects self-approve', async () => {
     const pid = freshProjectId();
-    transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
-    const r = transitionReviewStatus({ projectId: pid, toStatus: 'approved', actorUserId: SUBMITTER });
+    await transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
+    const r = await transitionReviewStatus({ projectId: pid, toStatus: 'approved', actorUserId: SUBMITTER });
     expect(r.ok).toBe(false);
     expect(r.error).toContain('自审');
   });
 
-  it('rejects self-request-changes', () => {
+  it('rejects self-request-changes', async () => {
     const pid = freshProjectId();
-    transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
-    const r = transitionReviewStatus({
+    await transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
+    const r = await transitionReviewStatus({
       projectId: pid, toStatus: 'changes_requested', actorUserId: SUBMITTER, note: 'self',
     });
     expect(r.ok).toBe(false);
   });
 
-  it('request_changes requires note', () => {
+  it('request_changes requires note', async () => {
     const pid = freshProjectId();
-    transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
-    const r = transitionReviewStatus({
+    await transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
+    const r = await transitionReviewStatus({
       projectId: pid, toStatus: 'changes_requested', actorUserId: REVIEWER, // no note
     });
     expect(r.ok).toBe(false);
     expect(r.error).toContain('留言');
   });
 
-  it('request_changes with note succeeds', () => {
+  it('request_changes with note succeeds', async () => {
     const pid = freshProjectId();
-    transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
-    const r = transitionReviewStatus({
+    await transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
+    const r = await transitionReviewStatus({
       projectId: pid, toStatus: 'changes_requested', actorUserId: REVIEWER,
       note: '第 3 镜画风不对, 请重做',
     });
@@ -84,45 +84,45 @@ describe('v3.x E.3 · transitionReviewStatus', () => {
     expect(r.status?.reviewNote).toContain('第 3 镜');
   });
 
-  it('approved → draft (re-creation cycle)', () => {
+  it('approved → draft (re-creation cycle)', async () => {
     const pid = freshProjectId();
-    transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
-    transitionReviewStatus({ projectId: pid, toStatus: 'approved', actorUserId: REVIEWER });
-    const r = transitionReviewStatus({ projectId: pid, toStatus: 'draft', actorUserId: SUBMITTER });
+    await transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
+    await transitionReviewStatus({ projectId: pid, toStatus: 'approved', actorUserId: REVIEWER });
+    const r = await transitionReviewStatus({ projectId: pid, toStatus: 'draft', actorUserId: SUBMITTER });
     expect(r.ok).toBe(true);
     expect(r.status?.status).toBe('draft');
   });
 
-  it('rejects illegal transition draft → approved', () => {
+  it('rejects illegal transition draft → approved', async () => {
     const pid = freshProjectId();
-    const r = transitionReviewStatus({ projectId: pid, toStatus: 'approved', actorUserId: REVIEWER });
+    const r = await transitionReviewStatus({ projectId: pid, toStatus: 'approved', actorUserId: REVIEWER });
     expect(r.ok).toBe(false);
     expect(r.error).toContain('非法状态转换');
   });
 
-  it('rejects illegal transition approved → in_review', () => {
+  it('rejects illegal transition approved → in_review', async () => {
     const pid = freshProjectId();
-    transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
-    transitionReviewStatus({ projectId: pid, toStatus: 'approved', actorUserId: REVIEWER });
-    const r = transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
+    await transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
+    await transitionReviewStatus({ projectId: pid, toStatus: 'approved', actorUserId: REVIEWER });
+    const r = await transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
     expect(r.ok).toBe(false);
   });
 
-  it('withdraw (in_review → draft) by submitter', () => {
+  it('withdraw (in_review → draft) by submitter', async () => {
     const pid = freshProjectId();
-    transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
-    const r = transitionReviewStatus({ projectId: pid, toStatus: 'draft', actorUserId: SUBMITTER });
+    await transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
+    const r = await transitionReviewStatus({ projectId: pid, toStatus: 'draft', actorUserId: SUBMITTER });
     expect(r.ok).toBe(true);
     expect(r.status?.status).toBe('draft');
   });
 
-  it('changes_requested → in_review (re-submit)', () => {
+  it('changes_requested → in_review (re-submit)', async () => {
     const pid = freshProjectId();
-    transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
-    transitionReviewStatus({
+    await transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
+    await transitionReviewStatus({
       projectId: pid, toStatus: 'changes_requested', actorUserId: REVIEWER, note: 'fix this',
     });
-    const r = transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
+    const r = await transitionReviewStatus({ projectId: pid, toStatus: 'in_review', actorUserId: SUBMITTER });
     expect(r.ok).toBe(true);
     expect(r.status?.submittedByUserId).toBe(SUBMITTER);
     expect(r.status?.reviewedAt).toBeNull(); // reset on re-submit

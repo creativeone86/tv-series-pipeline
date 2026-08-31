@@ -51,7 +51,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   // v12.312:**此前完全无鉴权**。下面那段预算护栏写的是「有登录态才检查」——
   // 于是匿名请求 uid 为空,**既跳过预算也没有任何归属校验**,可对任意 projectId
-  // 循环触发真实付费视频生成(单次 ¥0.5–3),烧平台配额且不计费到任何账户,项目属主毫无感知。
+  // 循环触发真实付费视频生成(单次 €0.5–3),烧平台配额且不计费到任何账户,项目属主毫无感知。
   // 单镜重生属写操作,要 editor 权限。
   const _g = await requireProjectAccess(request, projectId, 'edit');
   if (!_g.ok) return NextResponse.json({ error: _g.message }, { status: _g.status });
@@ -67,9 +67,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const uid = getUserFromRequest(request)?.sub;
     if (uid) {
       const { assertBudget } = await import('@/lib/budget-enforce');
-      const { estimatePipelineCostCny } = await import('@/lib/budget-estimate');
-      const pending = estimatePipelineCostCny({ shotCount: 1, videoShots: 1, videoProvider, secondsPerShot: 8, skipImages: true });
-      const b = await assertBudget({ userId: uid, pendingCostCny: pending });
+      const { estimatePipelineCostEur } = await import('@/lib/budget-estimate');
+      const pending = estimatePipelineCostEur({ shotCount: 1, videoShots: 1, videoProvider, secondsPerShot: 8, skipImages: true });
+      const b = await assertBudget({ userId: uid, pendingCostEur: pending });
       if (!b.allow) return NextResponse.json({ error: b.guard.message, code: 'budget_exceeded', guard: b.guard }, { status: 402 });
     }
   }

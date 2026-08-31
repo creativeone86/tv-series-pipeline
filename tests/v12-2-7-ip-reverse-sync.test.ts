@@ -32,7 +32,7 @@ describe('v12.2.7 · IP 反向同步', () => {
   });
 
   it('撤销 token → 导入行标 stale + 发通知', async () => {
-    const token = await issueIpToken({ characterId: CHAR_ID, ownerId: OWNER, name: '银发剑客', visibility: 'public', license: 'cc', terms: '', royaltyCny: 0 } as any);
+    const token = await issueIpToken({ characterId: CHAR_ID, ownerId: OWNER, name: '银发剑客', visibility: 'public', license: 'cc', terms: '', royaltyEur: 0 } as any);
     await seedChar(IMPORTED_ID, IMPORTER, token.id); // importer 导入了该 token
 
     const before = await getDbDriver().get<{ c: number }>('SELECT COUNT(*) c FROM notifications WHERE recipient_user_id = ? AND type = ?', [IMPORTER, 'ip_revoked']);
@@ -50,7 +50,7 @@ describe('v12.2.7 · IP 反向同步', () => {
   });
 
   it('无导入方 → fanOut 返回 0(不崩、不发通知)', async () => {
-    const token = await issueIpToken({ characterId: 'ip-rev-noimport', ownerId: OWNER, name: '孤角', visibility: 'public', license: 'cc', terms: '', royaltyCny: 0 } as any);
+    const token = await issueIpToken({ characterId: 'ip-rev-noimport', ownerId: OWNER, name: '孤角', visibility: 'public', license: 'cc', terms: '', royaltyEur: 0 } as any);
     const n = await fanOutTokenInvalidation(token, 'revoked');
     expect(n).toBe(0);
   });

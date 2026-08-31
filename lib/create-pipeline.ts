@@ -58,6 +58,9 @@ export interface CreatePipelineInput {
   sketchLock?: boolean;
   /** UI locale for SSE status / error lines. Defaults to English. */
   uiLocale?: Locale;
+  /** Sixth production mode — branches off the drama agent loop. */
+  mode?: import('@/types/agents').CreationMode;
+  explainer?: import('@/types/agents').ProjectOutputConfig['explainer'];
 }
 
 export type PipelineEmit = (type: string, data: unknown) => void;
@@ -388,6 +391,41 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
 
     send('agents', orchestrator.getAllAgents());
     send('projectId', { projectId });
+
+    if ((input as CreatePipelineInput).mode === 'narrated-explainer') {
+      const expl = (input as CreatePipelineInput).explainer || {};
+      await updateProjectById(projectId, {
+        mode: 'narrated-explainer',
+        output_config: JSON.stringify({
+          resolution: '720p',
+          aspectRatio: aspect || '16:9',
+          explainer: {
+            category: expl.category || 'GENERAL',
+            language: language || expl.language || 'bg',
+            capEur: expl.capEur ?? 40,
+            hardCapEur: expl.hardCapEur ?? expl.capEur ?? 40,
+            allowPaidImages: expl.allowPaidImages !== false,
+            allowPaidVideo: false,
+            outputWidth: expl.outputWidth || 1920,
+            outputHeight: expl.outputHeight || 1080,
+            seriesId: expl.seriesId,
+            ttsProvider: expl.ttsProvider,
+            voiceId: expl.voiceId,
+            autoApprove: expl.autoApprove,
+          },
+        }),
+      });
+      const { runExplainerPipeline } = await import('@/lib/explainer/pipeline');
+      await runExplainerPipeline({
+        projectId,
+        userId,
+        topic: idea,
+        category: expl.category,
+        language: language || expl.language || 'bg',
+        autoApprove: expl.autoApprove === true || process.env.EXPLAINER_AUTO_APPROVE === '1',
+      }, send);
+      return;
+    }
 
     // ── v10.4.2 幂等续跑:attempt>1 时装载已有产物,后续各阶段「有则跳过」(不重复生成/计费)──
     const cp: PipelineCheckpoints = opts?.resume ? await loadCheckpoints(projectId) : emptyCheckpoints();

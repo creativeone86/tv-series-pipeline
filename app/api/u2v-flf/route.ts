@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
   // v12.4.1: 预算硬上限护栏 —— FLF 视频端点接入(生成前拦,超限不发生费用)。
   {
     const { assertBudget } = await import('@/lib/budget-enforce');
-    const b = await assertBudget({ userId, pendingCostCny: Math.max(1.8, duration * 0.3) });
+    const b = await assertBudget({ userId, pendingCostEur: Math.max(0.23, duration * 0.0383) });
     if (!b.allow) return NextResponse.json({ error: b.guard.message, code: 'budget_exceeded', guard: b.guard }, { status: 402 });
   }
 

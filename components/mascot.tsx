@@ -35,16 +35,23 @@ export function Mascot({ mood = 'idle', className = '' }: Props) {
     if (mood === 'idle') { setShowQuip(false); return; }
 
     const pool = quipPool(t, mood);
-    setQuip(pool[Math.floor(Math.random() * pool.length)]);
+    const pick = () => pool[Math.floor(Math.random() * pool.length)];
+    let hideTimer: ReturnType<typeof setTimeout> | undefined;
+
+    setQuip(pick());
     setShowQuip(true);
 
     const interval = setInterval(() => {
-      setQuip(pool[Math.floor(Math.random() * pool.length)]);
+      setQuip(pick());
       setShowQuip(true);
-      setTimeout(() => setShowQuip(false), 4000);
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => setShowQuip(false), 4000);
     }, mood === 'waiting' ? 15000 : 20000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(hideTimer);
+    };
   }, [mood, t]);
 
   const moodColors = {

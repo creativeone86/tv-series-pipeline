@@ -27,13 +27,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const rows = await listCostLogByProject(id);
 
   if (new URL(request.url).searchParams.get('export') === 'csv') {
-    const header = ['createdAt', 'engine', 'resolution', 'durationSec', 'costCny', 'shotNumber'];
+    const header = ['createdAt', 'engine', 'resolution', 'durationSec', 'costEur', 'shotNumber'];
     const lines = [header.join(',')];
     for (const r of rows) {
       const shot = (r.metadata as Record<string, unknown>)?.shotNumber ?? '';
-      lines.push([r.createdAt, r.engine, r.resolution, r.durationSec, r.costCny, shot].map(csvCell).join(','));
+      lines.push([r.createdAt, r.engine, r.resolution, r.durationSec, r.costEur, shot].map(csvCell).join(','));
     }
-    const total = Number(rows.reduce((t, r) => t + (Number(r.costCny) || 0), 0).toFixed(2));
+    const total = Number(rows.reduce((t, r) => t + (Number(r.costEur) || 0), 0).toFixed(2));
     lines.push(['', '', '', '', total, `合计 ${rows.length} 条`].map(csvCell).join(','));
     return new NextResponse('﻿' + lines.join('\n'), { // BOM 保 Excel 中文不乱码
       status: 200,
@@ -45,14 +45,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 
   const byEngine = rollupByEngine(rows);
-  const totalCny = Number(rows.reduce((t, r) => t + (Number(r.costCny) || 0), 0).toFixed(2));
+  const totalEur = Number(rows.reduce((t, r) => t + (Number(r.costEur) || 0), 0).toFixed(2));
 
   // v12.224:?report=cogs → 单片 COGS 报告(逐引擎单价×用量 + 可选毛利)。?sale=X 给参考售价算毛利率。
   const sp = new URL(request.url).searchParams;
   if (sp.get('report') === 'cogs') {
     const saleRaw = sp.get('sale');
-    const saleCny = saleRaw != null && saleRaw !== '' && Number.isFinite(Number(saleRaw)) ? Number(saleRaw) : null;
-    const report = buildCogsReport(byEngine, { projectId: id, saleCny });
+    const saleEur = saleRaw != null && saleRaw !== '' && Number.isFinite(Number(saleRaw)) ? Number(saleRaw) : null;
+    const report = buildCogsReport(byEngine, { projectId: id, saleEur });
     return NextResponse.json(report);
   }
 
@@ -62,5 +62,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // 类目条形、省钱提示、预算护栏三块功能整体失效 —— 又一处「造好没接线」。
   const attribution = attributeCost(costEventsFromCostLog(rows));
 
-  return NextResponse.json({ projectId: id, totalCny, entries: rows.length, byEngine, attribution });
+  return NextResponse.json({ projectId: id, totalEur, entries: rows.length, byEngine, attribution });
 }

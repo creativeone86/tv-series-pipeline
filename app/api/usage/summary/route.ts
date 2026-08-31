@@ -5,13 +5,13 @@
  *   { cost: {totals, byEngine, byDay, byProject}, budget(当月), activeAlerts, failuresByProvider }
  *
  * scope: admin → 全量 (或 ?userId=); 创作者 → 限本人。demo 无登录回退首个用户 (与 /api/usage 一致)。
- * 过滤: ?days=(默认 30, 1..365) · ?projectId= · ?capCny=(预算上限, 缺省无上限)。
+ * 过滤: ?days=(默认 30, 1..365) · ?projectId= · ?capEur=(预算上限, 缺省无上限)。
  * 预算用「当前自然月」算 (线性预测月末才有意义), 与展示窗口分离。
  */
 import { NextResponse } from 'next/server';
 import { getDbDriver } from '@/lib/db-driver';
 import { getUserFromRequest } from '../../auth/lib';
-import { buildCostSummary, computeBudget, totalCostCny, type CostLogRow } from '@/lib/cost-rollup';
+import { buildCostSummary, computeBudget, totalCostEur, type CostLogRow } from '@/lib/cost-rollup';
 import { evaluateBudgetGuard } from '@/lib/budget-guard';
 import { getUserBudget } from '@/lib/budget-enforce';
 import { listActiveQuotaAlerts } from '@/lib/api-usage-tracker';
@@ -34,8 +34,8 @@ export async function GET(request: Request) {
   const projectId = (url.searchParams.get('projectId') || '').trim();
   // admin 可看全量 (scopeUserId=null) 或指定 userId; 创作者锁本人
   const scopeUserId = isAdmin ? (url.searchParams.get('userId') || null) : userId;
-  // v9.3.4: 预算从服务端 (users 列) 读, 不再走 ?capCny
-  const { capCny, hardCapCny } = await getUserBudget(scopeUserId || userId);
+  // v9.3.4: 预算从服务端 (users 列) 读, 不再走 ?capEur
+  const { capEur, hardCapEur } = await getUserBudget(scopeUserId || userId);
 
   // ── 展示窗口: cost_log 卷积 ──
   const filters = ['created_at > ?'];
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
   if (scopeUserId) { filters.push('user_id = ?'); params.push(scopeUserId); }
   if (projectId) { filters.push('project_id = ?'); params.push(projectId); }
   const rows = (await driver.query(
-    `SELECT engine, resolution, duration_sec, cost_cny, project_id, user_id, created_at
+    `SELECT engine, resolution, duration_sec, cost_eur, project_id, user_id, created_at
        FROM cost_log WHERE ${filters.join(' AND ')} ORDER BY created_at DESC LIMIT 5000`,
     params,
   )) as any[];
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
     engine: r.engine,
     resolution: r.resolution,
     durationSec: Number(r.duration_sec) || 0,
-    costCny: Number(r.cost_cny) || 0,
+    costEur: Number(r.cost_eur) || 0,
     projectId: r.project_id,
     userId: r.user_id,
     createdAt: r.created_at,
@@ -66,20 +66,20 @@ export async function GET(request: Request) {
   const mParams: any[] = [monthStart.toISOString()];
   if (scopeUserId) { mFilters.push('user_id = ?'); mParams.push(scopeUserId); }
   const monthRows = (await driver.query(
-    `SELECT cost_cny, created_at FROM cost_log WHERE ${mFilters.join(' AND ')}`,
+    `SELECT cost_eur, created_at FROM cost_log WHERE ${mFilters.join(' AND ')}`,
     mParams,
   )) as any[];
-  const monthCostRows: CostLogRow[] = monthRows.map((r) => ({ engine: '', costCny: Number(r.cost_cny) || 0, createdAt: r.created_at }));
+  const monthCostRows: CostLogRow[] = monthRows.map((r) => ({ engine: '', costEur: Number(r.cost_eur) || 0, createdAt: r.created_at }));
   const budget = computeBudget({
-    spentCny: totalCostCny(monthCostRows),
-    capCny,
+    spentEur: totalCostEur(monthCostRows),
+    capEur,
     periodStartMs: monthStart.getTime(),
     nowMs: Date.now(),
     periodDays: daysInMonth,
   });
 
   // ── 预算护栏: 当月花费对软/硬上限裁决 (看板视角, 不含本次操作成本) ──
-  const guard = evaluateBudgetGuard({ spentCny: budget.spentCny, capCny, hardCapCny });
+  const guard = evaluateBudgetGuard({ spentEur: budget.spentEur, capEur, hardCapEur });
 
   // ── 运维: 活跃配额告警 + 按 provider 失败计数 (窗口内) ──
   const activeAlerts = await listActiveQuotaAlerts({ windowMs: 60 * 60 * 1000 });
@@ -94,7 +94,7 @@ export async function GET(request: Request) {
   const tierRow = await driver.get<{ subscription_tier?: string }>(
     `SELECT subscription_tier FROM users WHERE id = ?`, [scopeUserId || userId],
   );
-  const quota = computeQuotaStatus((tierRow?.subscription_tier as string) || 'free', budget.spentCny);
+  const quota = computeQuotaStatus((tierRow?.subscription_tier as string) || 'free', budget.spentEur);
 
   return NextResponse.json({
     scope: isAdmin ? (scopeUserId ? 'admin:user' : 'admin:all') : 'self',

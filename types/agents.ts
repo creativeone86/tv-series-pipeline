@@ -161,6 +161,30 @@ export interface ScriptShot {
   /** 与上一镜的衔接:'cut'=硬切换场,'continuous'=同场景平滑衔接(StoryMem cut 字段)。
    *  为 'continuous' 时才可安全做「上一镜真末帧」链式 I2V(承接 v12.9.1 #3 暂缓项的前置条件)。 */
   transition?: 'cut' | 'continuous';
+  // ── narrated-explainer (all optional → drama shots unchanged) ──
+  /** Stable beat id (independent of shotNumber reorder). */
+  narrationBeatId?: string;
+  narrationText?: string;
+  explainerPurpose?: ExplainerBeatPurpose;
+  teachingGoal?: string;
+  visualGoal?: string;
+  activeEntities?: string[];
+  importance?: number;
+  actualNarrationDuration?: number;
+  factualReviewStatus?: 'UNREVIEWED' | 'APPROVED' | 'NEEDS_REVIEW' | 'VERIFIED' | 'UNVERIFIED' | 'DISPUTED';
+  visualIntent?: Record<string, unknown>;
+  /** Section this beat belongs to (documentary episode structure). */
+  sectionId?: string;
+  /** Producer-locked beat: excluded from re-plan / revision re-spend. */
+  locked?: boolean;
+  /** Per-beat frame plan (ExplainerFrame[]; typed loosely to avoid a type cycle). */
+  frames?: unknown[];
+  /** Primary shot type for the beat (ShotType). */
+  shotType?: string;
+  /** Cyrillic overlay text composited locally over the frame. */
+  overlayText?: string;
+  /** Fact cards backing the beat's claims (FactCard[]). */
+  claims?: unknown[];
 }
 
 export interface Script {
@@ -266,7 +290,7 @@ export interface ChatMessage {
 }
 
 // 项目资产
-export type AssetType = 'character' | 'scene' | 'storyboard' | 'video' | 'script' | 'music' | 'final_video' | 'timeline' | 'storyboard-sketch'; // v12.144 构图草图(草图锁)
+export type AssetType = 'character' | 'scene' | 'storyboard' | 'video' | 'script' | 'music' | 'final_video' | 'timeline' | 'storyboard-sketch' | 'narration-track' | 'section-video' | 'captions' | 'script-version' | 'series-sting' | 'publish-copy';
 
 export interface ProjectAsset {
   id: string;
@@ -500,7 +524,31 @@ export type CreationMode =
   | 'mv'               // 音乐 MV
   | 'quick'            // 快剪
   | 'comic-to-video'   // 漫转视频
-  | 'ip-derivative';   // IP 衍生设计
+  | 'ip-derivative'    // IP 衍生设计
+  | 'narrated-explainer'; // 旁白讲解 (Simply Explained)
+
+export type ExplainerCategory =
+  | 'CHESS'
+  | 'PHYSICS'
+  | 'MATH'
+  | 'TECHNOLOGY'
+  | 'SPACE'
+  | 'BIOLOGY'
+  | 'ECONOMICS'
+  | 'HISTORY'
+  | 'GENERAL';
+
+export type ExplainerBeatPurpose =
+  | 'HOOK'
+  | 'QUESTION'
+  | 'EXPLANATION'
+  | 'ANALOGY'
+  | 'DEMONSTRATION'
+  | 'MISCONCEPTION'
+  | 'REVEAL'
+  | 'EXAMPLE'
+  | 'RECAP'
+  | 'TRANSITION';
 
 // 执行模式（全局生效，工作台可切换）
 export type ExecutionMode = 'managed' | 'dialogue';
@@ -516,6 +564,28 @@ export interface ProjectOutputConfig {
   resolution: ResolutionTier;
   aspectRatio: AspectRatio;
   targetDuration?: number;   // 目标总时长（秒）
+  /** narrated-explainer settings (ignored by drama). */
+  explainer?: {
+    category?: ExplainerCategory;
+    language?: string;
+    voiceId?: string;
+    ttsProvider?: string;
+    capEur?: number;
+    hardCapEur?: number;
+    allowPaidImages?: boolean;
+    allowPaidVideo?: boolean;
+    outputWidth?: number;
+    outputHeight?: number;
+    seriesId?: string;
+    visualBibleId?: string;
+    styleKitId?: string;
+    autoApprove?: boolean;
+    frameSource?: 'generated' | 'diagram' | 'auto';
+    narrationMode?: 'continuous' | 'per-beat';
+    targetDuration?: number;
+    sectionTransitionSec?: number;
+    stingAfterSection?: number;
+  };
 }
 
 // ========== v2.0 新增：全局资产记忆库 ==========
@@ -602,7 +672,7 @@ export interface CostLogEntry {
   engine: VideoEngineId;
   resolution: ResolutionTier;
   durationSec: number;
-  costCNY: number;
+  costEUR: number;
   metadata?: Record<string, any>;
   createdAt: string;
 }

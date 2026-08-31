@@ -303,6 +303,26 @@ export async function resolveByKeyOrFetch(key: string): Promise<{ absPath: strin
 /**
  * 根据 key 查本地存储文件。找到返回绝对路径,否则 null。
  */
+/**
+ * Resolve `/api/serve-file?path=` or `?key=` to an existing local file.
+ * TTS persistAsset writes key-only URLs; the composer used to only understand `path=`,
+ * so every narration clip failed to load and the mp4 shipped silent.
+ */
+export function resolveServeFilePath(url: string): string | null {
+  if (!url || !url.includes('/api/serve-file')) return null;
+  try {
+    const u = new URL(url, 'http://localhost');
+    const fromPath = decodeURIComponent(u.searchParams.get('path') || '');
+    if (fromPath && fs.existsSync(fromPath)) return fromPath;
+    const key = u.searchParams.get('key');
+    if (key) {
+      const hit = resolveByKey(key);
+      if (hit?.absPath && fs.existsSync(hit.absPath)) return hit.absPath;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 export function resolveByKey(key: string): { absPath: string; ext: string } | null {
   ensureStorage();
   // key 经过严格校验(仅 hex)

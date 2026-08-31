@@ -10,7 +10,7 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import {
   ChartLineUp, ArrowsClockwise as RefreshCw, CircleNotch as Loader2,
-  WarningCircle as AlertTriangle, CurrencyCny, Stack, ShieldCheck,
+  WarningCircle as AlertTriangle, CurrencyEur, Stack, ShieldCheck,
 } from '@phosphor-icons/react';
 import type { CostSummary, BudgetStatus } from '@/lib/cost-rollup';
 import type { BudgetGuardResult } from '@/lib/budget-guard';
@@ -19,9 +19,9 @@ import { useLocale } from '@/hooks/use-locale';
 interface Alert { provider: string; model: string; alertType: string; occurrenceCount: number; errorMessage: string; }
 interface Quota {
   tierId: string;
-  usedCny: number;
-  ceilingCny: number;
-  remainingCny: number;
+  usedEur: number;
+  ceilingEur: number;
+  remainingEur: number;
   ratio: number;
   exceeded: boolean;
   nearLimit: boolean;
@@ -52,7 +52,7 @@ const GUARD_TONE: Record<string, string> = {
   soft_over: 'text-amber-300 border-amber-500/40 bg-amber-500/10',
   hard_block: 'text-rose-300 border-rose-500/40 bg-rose-500/10',
 };
-const cny = (n: number) => `¥${(Number(n) || 0).toFixed(2)}`;
+const eur = (n: number) => `€${(Number(n) || 0).toFixed(2)}`;
 
 export default function UsagePage() {
   const { t } = useLocale();
@@ -98,7 +98,7 @@ export default function UsagePage() {
   // v9.3.4: monthly budget is stored server-side — load saved value on first fetch
   useEffect(() => {
     fetch('/api/usage/budget').then((r) => (r.ok ? r.json() : null)).then((b) => {
-      if (b && b.capCny != null) setCap(String(b.capCny));
+      if (b && b.capEur != null) setCap(String(b.capEur));
     }).catch(() => {});
   }, []);
 
@@ -107,7 +107,7 @@ export default function UsagePage() {
     try {
       await fetch('/api/usage/budget', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ capCny: cap && Number(cap) > 0 ? Number(cap) : null }),
+        body: JSON.stringify({ capEur: cap && Number(cap) > 0 ? Number(cap) : null }),
       });
     } catch { /* ignore */ }
     load(days);
@@ -121,11 +121,11 @@ export default function UsagePage() {
   const C = 2 * Math.PI * 32; // r=32
 
   const engines = data?.cost.byEngine || [];
-  const maxEngine = Math.max(1, ...engines.map((e) => e.costCny));
+  const maxEngine = Math.max(1, ...engines.map((e) => e.costEur));
   // Daily trend: fill sparse byDay (only days with spend) into every day in the window (missing days = 0).
   // Otherwise non-contiguous dates sit side-by-side at equal width — misleading; also fixes the bar-height bug (see render below).
   const trend = buildDailyTrend(data?.cost.byDay || [], data?.window?.since, data?.window?.days || 0);
-  const maxDay = Math.max(1, ...trend.map((d) => d.costCny));
+  const maxDay = Math.max(1, ...trend.map((d) => d.costEur));
   const labelEvery = Math.max(1, Math.ceil(trend.length / 8)); // thin labels so 30/90-day windows do not pile up
 
   return (
@@ -206,8 +206,8 @@ export default function UsagePage() {
               </div>
               <div className="min-w-0">
                 <div className="cinema-eyebrow !text-[9px] opacity-60">{t.usagePage.thisMonthBudget}</div>
-                <div className="cinema-mono text-lg mt-0.5">{cny(b?.spentCny || 0)}{b?.capCny != null && <span className="opacity-50 text-sm"> / {cny(b.capCny)}</span>}</div>
-                <div className="cinema-mono text-[10px] opacity-50 mt-0.5">{t.usagePage.projectedEndPrefix} {cny(b?.projectedPeriodEndCny || 0)}{b?.capCny == null && t.usagePage.noCapSuffix}</div>
+                <div className="cinema-mono text-lg mt-0.5">{eur(b?.spentEur || 0)}{b?.capEur != null && <span className="opacity-50 text-sm"> / {eur(b.capEur)}</span>}</div>
+                <div className="cinema-mono text-[10px] opacity-50 mt-0.5">{t.usagePage.projectedEndPrefix} {eur(b?.projectedPeriodEndEur || 0)}{b?.capEur == null && t.usagePage.noCapSuffix}</div>
               </div>
             </div>
 
@@ -231,7 +231,7 @@ export default function UsagePage() {
                   </div>
                   <div className="min-w-0">
                     <div className="cinema-eyebrow !text-[9px] opacity-60">{t.usagePage.quotaTitle}</div>
-                    <div className="cinema-mono text-lg mt-0.5">{cny(q.usedCny)}{!q.unlimited && <span className="opacity-50 text-sm"> / {cny(q.ceilingCny)}</span>}</div>
+                    <div className="cinema-mono text-lg mt-0.5">{eur(q.usedEur)}{!q.unlimited && <span className="opacity-50 text-sm"> / {eur(q.ceilingEur)}</span>}</div>
                     <div className="cinema-mono text-[10px] opacity-50 mt-0.5">
                       {q.unlimited ? t.usagePage.quotaUnlimited : q.exceeded ? t.usagePage.quotaExceeded : q.nearLimit ? t.usagePage.quotaNearLimit : t.usagePage.quotaOfCeiling}
                     </div>
@@ -241,7 +241,7 @@ export default function UsagePage() {
             })()}
 
             <div className="cinema-card !p-4 grid grid-cols-3 gap-3">
-              <Stat label={`${t.usagePage.nearDays} ${data.window.days} ${t.usagePage.daysCostSuffix}`} value={cny(data.cost.totals.costCny)} icon={<CurrencyCny size={13} />} />
+              <Stat label={`${t.usagePage.nearDays} ${data.window.days} ${t.usagePage.daysCostSuffix}`} value={eur(data.cost.totals.costEur)} icon={<CurrencyEur size={13} />} />
               <Stat label={t.usagePage.statGenerations} value={String(data.cost.totals.count)} icon={<Stack size={13} />} />
               <Stat label={t.usagePage.statEngines} value={String(engines.length)} icon={<ChartLineUp size={13} />} />
             </div>
@@ -249,16 +249,16 @@ export default function UsagePage() {
 
           {/* Engine spend bars */}
           <div className="cinema-card !p-4">
-            <div className="cinema-eyebrow mb-3 flex items-center gap-1.5"><CurrencyCny size={13} className="text-[var(--primary)]" /> {t.usagePage.engineCostPrefix} {data.window.days} {t.usagePage.daySuffix}</div>
+            <div className="cinema-eyebrow mb-3 flex items-center gap-1.5"><CurrencyEur size={13} className="text-[var(--primary)]" /> {t.usagePage.engineCostPrefix} {data.window.days} {t.usagePage.daySuffix}</div>
             {engines.length === 0 && <div className="cinema-mono text-[11px] opacity-50">{t.usagePage.engineNoData}</div>}
             <div className="flex flex-col gap-2">
               {engines.map((e) => (
                 <div key={e.engine} className="flex items-center gap-3">
                   <span className="cinema-mono text-[11px] w-24 shrink-0 truncate" title={e.engine}>{e.engine}</span>
                   <div className="flex-1 h-3.5 rounded bg-[var(--border)] overflow-hidden">
-                    <div className="h-full bg-[var(--primary)] rounded transition-all duration-500" style={{ width: `${(e.costCny / maxEngine) * 100}%` }} />
+                    <div className="h-full bg-[var(--primary)] rounded transition-all duration-500" style={{ width: `${(e.costEur / maxEngine) * 100}%` }} />
                   </div>
-                  <span className="cinema-mono text-[11px] tabular-nums w-20 text-right shrink-0">{cny(e.costCny)}</span>
+                  <span className="cinema-mono text-[11px] tabular-nums w-20 text-right shrink-0">{eur(e.costEur)}</span>
                   <span className="cinema-mono text-[10px] opacity-40 w-10 text-right shrink-0">×{e.count}</span>
                 </div>
               ))}
@@ -272,11 +272,11 @@ export default function UsagePage() {
             {trend.length > 0 && (
               <div className="flex items-stretch gap-px h-28">
                 {trend.map((d, i) => (
-                  <div key={d.day} className="flex-1 flex flex-col items-center gap-1 group min-w-0" title={`${d.day} · ${cny(d.costCny)} · ${d.count} ${t.usagePage.countSuffix}`}>
+                  <div key={d.day} className="flex-1 flex flex-col items-center gap-1 group min-w-0" title={`${d.day} · ${eur(d.costEur)} · ${d.count} ${t.usagePage.countSuffix}`}>
                     {/* Bar track: flex-1 gives a definite height so bar height:% has a basis (old bug: parent column had no height → % resolved to 0) */}
                     <div className="flex-1 w-full flex items-end min-h-0">
                       <div className="w-full rounded-t bg-[var(--accent)]/70 group-hover:bg-[var(--accent)] transition-colors"
-                        style={{ height: `${d.costCny > 0 ? Math.max(4, (d.costCny / maxDay) * 100) : 0}%` }} />
+                        style={{ height: `${d.costEur > 0 ? Math.max(4, (d.costEur / maxDay) * 100) : 0}%` }} />
                     </div>
                     <span className="cinema-mono text-[7px] opacity-40 truncate w-full text-center leading-none h-2.5">
                       {i % labelEvery === 0 ? d.day.slice(5) : ''}
@@ -306,10 +306,10 @@ function Stat({ label, value, icon }: { label: string; value: string; icon: Reac
  * cover every day in the window; missing days get 0. UTC basis aligns with byDay createdAt.slice(0,10).
  */
 function buildDailyTrend(
-  byDay: Array<{ day: string; costCny: number; count: number }>,
+  byDay: Array<{ day: string; costEur: number; count: number }>,
   since: string | undefined,
   windowDays: number,
-): Array<{ day: string; costCny: number; count: number }> {
+): Array<{ day: string; costEur: number; count: number }> {
   if (!byDay.length) return [];
   const map = new Map(byDay.map((d) => [d.day, d]));
   const startYmd = ((since || byDay[0].day) || '').slice(0, 10);
@@ -318,10 +318,10 @@ function buildDailyTrend(
   const lastMs = Date.parse(`${byDay[byDay.length - 1].day}T00:00:00Z`);
   const spanDays = Number.isNaN(lastMs) ? byDay.length : Math.round((lastMs - startMs) / 86400000) + 1;
   const n = Math.min(370, Math.max(windowDays > 0 ? windowDays : spanDays, spanDays));
-  const out: Array<{ day: string; costCny: number; count: number }> = [];
+  const out: Array<{ day: string; costEur: number; count: number }> = [];
   for (let i = 0; i < n; i++) {
     const key = new Date(startMs + i * 86400000).toISOString().slice(0, 10);
-    out.push(map.get(key) || { day: key, costCny: 0, count: 0 });
+    out.push(map.get(key) || { day: key, costEur: 0, count: 0 });
   }
   return out;
 }

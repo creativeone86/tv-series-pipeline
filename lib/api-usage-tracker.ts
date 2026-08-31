@@ -51,7 +51,7 @@ export interface ApiCallRecord {
   durationMs?: number;
   projectId?: string;
   userId?: string;
-  estCostCny?: number;
+  estCostEur?: number;
 }
 
 export interface QuotaAlert {
@@ -167,7 +167,7 @@ export async function recordApiCall(rec: ApiCallRecord): Promise<void> {
       const errMsg = (rec.errorMessage || '').slice(0, 200);
       await getDbDriver().run(
         `INSERT INTO api_usage_events
-         (id, provider, model, method, success, status_code, error_message, duration_ms, project_id, user_id, est_cost_cny, created_at)
+         (id, provider, model, method, success, status_code, error_message, duration_ms, project_id, user_id, est_cost_eur, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
@@ -180,7 +180,7 @@ export async function recordApiCall(rec: ApiCallRecord): Promise<void> {
           rec.durationMs ?? 0,
           rec.projectId ?? null,
           rec.userId ?? null,
-          rec.estCostCny ?? 0,
+          rec.estCostEur ?? 0,
           now,
         ],
       );
@@ -341,7 +341,7 @@ export async function withApiTracking<T>(
     method?: string;
     projectId?: string;
     userId?: string;
-    estCostCny?: number;
+    estCostEur?: number;
   },
   fn: () => Promise<T>,
 ): Promise<T> {

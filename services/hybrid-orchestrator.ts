@@ -77,7 +77,7 @@ import { extractLastFrame, extractMiddleFrame } from '@/lib/last-frame-extractor
 import { deriveProsody } from '@/lib/tts-prosody';
 import { getLatestQualityScore, buildWriterFeedbackHint } from '@/lib/quality-scores';
 // v12.4.0(阶段二十三):主管线视频/图像成本落库 —— 此前从不记,cost-attribution 视频/图像类目永远 0。
-import { recordCostLog, estimateVideoCostCny, estimateImageCostCny, videoRateForProvider, estimateH3CostUsd, usdToCny } from '@/lib/repos/cost-log-repo';
+import { recordCostLog, estimateVideoCostEur, estimateImageCostEur, videoRateForProvider, estimateH3CostUsd, usdToEur } from '@/lib/repos/cost-log-repo';
 // v12.6.1(#2):目标语种检测 —— 锁台词/旁白/TTS/口型语种,visualPrompt 仍英文。
 import { detectLanguage, ttsLangCode, lipsyncLangCode, buildLanguageDirective, SUPPORTED_LANGUAGES, type TargetLanguage } from '@/lib/language-detect';
 // v12.7.0:editor TTS 走注册表(vectorengine-tts 50 > minimax-tts 100),vectorengine 进主路径。
@@ -477,7 +477,7 @@ export class HybridOrchestrator {
 
   /**
    * v2.19 P0.2: 用户接受了 "试拍 1 镜" 的结果, 把那张图设为第 1 镜的 storyboard
-   * 渲染产物, 省一次 MJ/Minimax 出图调用 (≈30-60s + ¥). 也作为后续镜头的 sref 链
+   * 渲染产物, 省一次 MJ/Minimax 出图调用 (≈30-60s + €). 也作为后续镜头的 sref 链
    * 起点 (推入 renderedStoryboardUrls), 让整片画风跟用户拍板的那张图对齐。
    *
    * 必须在 runStoryboardRenderer 之前调用 (通常 create-stream 入口就 set 好)。
@@ -1076,7 +1076,7 @@ export class HybridOrchestrator {
     // gemini-image / gpt-image 都返回 **data: URI**(b64_json / inlineData),一律不匹配 →
     // 这两条付费路径**从不记账**,预算护栏与成本面板对它们完全失明。补上 data: 前缀。
     if (url && /^(https?:|data:|\/api\/serve-file)/.test(url) && process.env.MOCK_ENGINES !== '1') {
-      void recordCostLog({ userId: this.userId, projectId: this.projectId, engine: 'image', costCny: estimateImageCostCny(), metadata: { label: opts?.label } });
+      void recordCostLog({ userId: this.userId, projectId: this.projectId, engine: 'image', costEur: estimateImageCostEur(), metadata: { label: opts?.label } });
     }
     return url;
   }
@@ -3537,10 +3537,10 @@ ${shots.map((s, i) => {
           userId: this.userId, projectId: this.projectId,
           engine: `video-${usedVideoEngine || ranVideoProvider || 'engine'}`,
           durationSec,
-          costCny: usd != null ? usdToCny(usd) : estimateVideoCostCny(durationSec, videoRateForProvider(usedVideoEngine || ranVideoProvider)),
+          costEur: usd != null ? usdToEur(usd) : estimateVideoCostEur(durationSec, videoRateForProvider(usedVideoEngine || ranVideoProvider)),
           metadata: {
             shotNumber: board.shotNumber,
-            ...(usd != null ? { usd, usage: h3?.usage, resolution: h3?.resolution, fxRate: Number(process.env.USD_CNY_RATE || 7.2), priceRetrieved: '2026-08-28' } : {}),
+            ...(usd != null ? { usd, usage: h3?.usage, resolution: h3?.resolution, fxRate: Number(process.env.USD_EUR_RATE || 0.92), priceRetrieved: '2026-08-28' } : {}),
           },
         });
       }

@@ -40,19 +40,19 @@ export const API_CONFIG = {
     // 版本段;而几乎所有网关文档给的地址都以 `/v1` 结尾,照抄进来就全线 `/v1/v1/...` 404,
     // 且没有任何一行报错说得清原因(我自己就被同一颗地雷误导过一次)。
     baseURL: normalizeBaseURL(process.env.MINIMAX_BASE_URL || 'https://api.minimaxi.com', { stripApiVersion: true }),
-    pricing: 0.15  // ¥/秒
+    pricing: 0.0192  // €/秒
   },
 
   vidu: {
     apiKey: process.env.VIDU_API_KEY || '',
     baseURL: process.env.VIDU_BASE_URL || 'https://api.vidu.ai',
-    pricing: 0.3  // ¥/秒
+    pricing: 0.0383  // €/秒
   },
 
   keling: {
     apiKey: process.env.KELING_API_KEY || '',
     baseURL: process.env.KELING_BASE_URL || 'https://api.klingai.com',
-    pricing: 0.2  // ¥/秒
+    pricing: 0.0256  // €/秒
   },
 
   // Veo / Sora 视频生成 —— 通过 qingyuntop 聚合网关
@@ -70,7 +70,7 @@ export const API_CONFIG = {
       return (process.env.VEO_FALLBACK_MODELS || 'veo3.1') /* sora-2 退役:API 2026-09-24 停服 */
         .split(',').map(s => s.trim()).filter(Boolean);
     },
-    pricing: 0.25  // ¥/秒（估算）
+    pricing: 0.0319  // €/秒（估算）
   },
 
   // qingyuntop 聚合网关（统一 Key，可被所有视频/图像服务共享）

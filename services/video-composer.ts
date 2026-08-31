@@ -146,6 +146,8 @@ export interface ComposeOptions {
   musicVolume?: number;        // 配乐音量 0~1，默认 0.3
   voiceoverVolume?: number;    // 配音音量 0~1，默认 0.9
   aspect?: string;             // v12.49.0 成片画幅('16:9'|'9:16'|'1:1'...) — 决定合成画布分辨率;缺省 16:9(旧行为)
+  /** Optional explicit canvas size. Default remains dimsForAspect (1280×720 for 16:9). */
+  outputSize?: { w: number; h: number };
   captionStyle?: import('@/lib/caption-style').CaptionPreset; // v12.52.0 字幕风格预设;缺省 clean(零回归)
   voiceoverDurations?: Record<number, number>; // v12.68.0 镜号→TTS 真实时长(karaoke 扫光对齐音频)
   platform?: import('@/lib/caption-style').CaptionPlatform; // v12.79.0 平台安全区(抖音/小红书字幕避让)
@@ -398,9 +400,9 @@ function downloadFile(url: string, destPath: string): Promise<void> {
     // 处理 /api/serve-file?path=... 本地代理 URL —— 直接取出本地路径拷贝
     if (url.startsWith('/api/serve-file')) {
       try {
-        const u = new URL(url, 'http://localhost');
-        const localPath = decodeURIComponent(u.searchParams.get('path') || '');
-        if (localPath && fs.existsSync(localPath)) {
+        const { resolveServeFilePath } = require('@/lib/asset-storage') as typeof import('@/lib/asset-storage');
+        const localPath = resolveServeFilePath(url);
+        if (localPath) {
           fs.copyFileSync(localPath, destPath);
           console.log(`[Download] /api/serve-file → local copy: ${localPath}`);
           return resolve();
@@ -829,7 +831,7 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
   // 病根:此前每镜预处理硬编码 `scale=1280:720,pad=1280:720` → 无视项目比例,竖屏(9:16)项目
   // 成片仍出 16:9 横屏。改为按 aspect 取画布尺寸 + 适配滤镜(横屏缩入补边=旧行为零回归;竖屏放大裁满)。
   const { buildCanvasFit } = await import('@/lib/video-reframe');
-  const { fit: canvasFit, w: canvasW, h: canvasH } = buildCanvasFit(options.aspect || '16:9');
+  const { fit: canvasFit, w: canvasW, h: canvasH } = buildCanvasFit(options.aspect || '16:9', options.outputSize);
   console.log(`[Composer] 画布 ${canvasW}x${canvasH} (aspect=${options.aspect || '16:9'})`);
 
   // ═══ 高光检测 ═══
@@ -1033,7 +1035,7 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
   let assResync: { path: string; opts: { w: number; h: number; fontName: string; vertical: boolean; marginVRatio: number } } | null = null;
   try {
     const hasAnyDialogue = validClips.some((c) => (c?.dialogue || '').trim().length > 0);
-    const cjkFontForSub = (await import('@/lib/text-control')).findCjkFont();
+    const cjkFontForSub = (await import('@/lib/text-control')).findSubtitleFont();
     // v12.234(对抗复检二轮自查):FontName 兜底此前写死 'PingFang SC' —— 本机没有该字体也照样
     // 在 ASS 里指名要它,既绕过开源优先策略,又在字体缺失时渲染成豆腐块。
     // 实测截帧证实:无 CJK 字体时 ffmpeg 仍 exit=0,但中文全是 □□□□(静默产废片,比报错更糟)。

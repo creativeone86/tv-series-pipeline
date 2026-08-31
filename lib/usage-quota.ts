@@ -8,10 +8,10 @@
 import { getDbDriver } from './db-driver';
 import { getTierById } from './pricing';
 
-/** 某档月度成本上限(¥)。-1 = 不设上限(企业)。未知档按 free 兜底。 */
-export function tierMonthlyCeilingCny(tierId: string | null | undefined): number {
+/** 某档月度成本上限(€)。-1 = 不设上限(企业)。未知档按 free 兜底。 */
+export function tierMonthlyCeilingEur(tierId: string | null | undefined): number {
   const tier = getTierById(tierId || 'free');
-  return tier?.limits.monthlyCostCeilingCny ?? 5;
+  return tier?.limits.monthlyCostCeilingEur ?? 0.64;
 }
 
 /** 当前自然月起点 ISO(用于按月汇总)。testNow 便于测试注入。 */
@@ -20,10 +20,10 @@ export function monthStartISO(testNow?: Date): string {
   return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 }
 
-/** 累计某用户本自然月已花真实成本(¥,来自 cost_log)。 */
-export async function getMonthlyCostCny(userId: string, testNow?: Date): Promise<number> {
+/** 累计某用户本自然月已花真实成本(€,来自 cost_log)。 */
+export async function getMonthlyCostEur(userId: string, testNow?: Date): Promise<number> {
   const row = await getDbDriver().get<{ s: number }>(
-    `SELECT COALESCE(SUM(cost_cny), 0) AS s FROM cost_log WHERE user_id = ? AND created_at >= ?`,
+    `SELECT COALESCE(SUM(cost_eur), 0) AS s FROM cost_log WHERE user_id = ? AND created_at >= ?`,
     [userId, monthStartISO(testNow)],
   );
   return Math.round((Number(row?.s) || 0) * 100) / 100;
@@ -31,9 +31,9 @@ export async function getMonthlyCostCny(userId: string, testNow?: Date): Promise
 
 export interface QuotaStatus {
   tierId: string;
-  usedCny: number;
-  ceilingCny: number;      // -1 = 无上限
-  remainingCny: number;    // Infinity 当无上限
+  usedEur: number;
+  ceilingEur: number;      // -1 = 无上限
+  remainingEur: number;    // Infinity 当无上限
   ratio: number;           // used / ceiling,0..(>1);无上限恒 0
   exceeded: boolean;       // 已超上限
   nearLimit: boolean;      // ≥80% 预警
@@ -41,20 +41,20 @@ export interface QuotaStatus {
 }
 
 /** 纯函数:给定 used + tier 算配额状态(便于单测,不碰 DB)。 */
-export function computeQuotaStatus(tierId: string, usedCny: number): QuotaStatus {
-  const ceilingCny = tierMonthlyCeilingCny(tierId);
-  const unlimited = ceilingCny < 0;
+export function computeQuotaStatus(tierId: string, usedEur: number): QuotaStatus {
+  const ceilingEur = tierMonthlyCeilingEur(tierId);
+  const unlimited = ceilingEur < 0;
   if (unlimited) {
-    return { tierId, usedCny, ceilingCny: -1, remainingCny: Infinity, ratio: 0, exceeded: false, nearLimit: false, unlimited: true };
+    return { tierId, usedEur, ceilingEur: -1, remainingEur: Infinity, ratio: 0, exceeded: false, nearLimit: false, unlimited: true };
   }
-  const ratio = ceilingCny > 0 ? usedCny / ceilingCny : (usedCny > 0 ? Infinity : 0);
+  const ratio = ceilingEur > 0 ? usedEur / ceilingEur : (usedEur > 0 ? Infinity : 0);
   return {
     tierId,
-    usedCny,
-    ceilingCny,
-    remainingCny: Math.max(0, ceilingCny - usedCny),
+    usedEur,
+    ceilingEur,
+    remainingEur: Math.max(0, ceilingEur - usedEur),
     ratio,
-    exceeded: usedCny >= ceilingCny,
+    exceeded: usedEur >= ceilingEur,
     nearLimit: ratio >= 0.8,
     unlimited: false,
   };
@@ -62,6 +62,6 @@ export function computeQuotaStatus(tierId: string, usedCny: number): QuotaStatus
 
 /** 查某用户本月配额状态(DB)。 */
 export async function checkMonthlyQuota(userId: string, tierId: string, testNow?: Date): Promise<QuotaStatus> {
-  const used = await getMonthlyCostCny(userId, testNow);
+  const used = await getMonthlyCostEur(userId, testNow);
   return computeQuotaStatus(tierId, used);
 }

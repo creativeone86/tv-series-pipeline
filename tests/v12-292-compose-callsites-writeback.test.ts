@@ -72,6 +72,10 @@ const EXEMPT: Array<{ file: string; why: string }> = [
     file: 'app/api/comic/compose/route.ts',
     why: 'v12.293 扩大门禁边界后抓出的第五条:漫剧顺序拼接,同样不写任何 project_asset,产物直接回给调用方,没有 timeline 资产会被 EDL/AAF 读到',
   },
+  {
+    file: 'lib/explainer/pipeline.ts',
+    why: 'Narrated explainer: Ken Burns stills + narration MP4 only; upserts final_video, no timeline asset, so EDL/AAF never reads stale transitions',
+  },
 ];
 
 describe('v12.292 · composeVideo 的每个调用点都必须回写转场', () => {

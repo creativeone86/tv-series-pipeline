@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDbDriver } from '@/lib/db-driver';
 import { getUserFromRequest } from '../auth/lib';
 import { createProject } from '@/lib/repos/project-repo';
 import { safeJsonParse } from '@/lib/safe-json';
@@ -12,7 +12,9 @@ export async function GET(request: Request) {
 
   // 一次查询: 项目本表 + 最新 script asset 的 data (子查询).
   // 这样列表页就能拿到 latestPolish 渲染就绪度徽章, 而不必每张卡再发一次请求。
-  const rows = db.prepare(`
+  // v12.x fix: 走 DbDriver (SQLite/PG 双驱动), 而非直连 better-sqlite3 ——
+  // DB_DRIVER=pg 时项目在 Postgres, 之前直读 SQLite 让列表恒空 (项目"消失")。
+  const rows = await getDbDriver().query<any>(`
     SELECT p.*, (
       SELECT data FROM project_assets
       WHERE project_id = p.id AND type = 'script'
@@ -21,7 +23,7 @@ export async function GET(request: Request) {
     FROM projects p
     WHERE p.user_id = ?
     ORDER BY p.created_at DESC
-  `).all(userId) as any[];
+  `, [userId]);
   const data = rows.map((r) => {
     let latestPolish: any = null;
     if (r.script_asset_data) {
@@ -33,7 +35,7 @@ export async function GET(request: Request) {
       } catch { /* 该 asset 数据格式异常, 安静跳过 */ }
     }
     return {
-      id: r.id, title: r.title, description: r.description,
+      id: r.id, title: r.title, description: r.description, mode: r.mode,
       // v12.305:**列表口不能因为一行坏数据整页 500** —— 一个项目的字段损坏
       // (管道写一半被中断、直接改过 DB、旧格式)此前会让该用户的所有项目一起打不开。
       covers: safeJsonParse<string[]>(r.cover_urls, [], { context: `projects.cover_urls#${r.id}` }), status: r.status,

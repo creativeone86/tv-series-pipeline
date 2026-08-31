@@ -8,7 +8,7 @@
  * 区别于无 key 时 orchestrator 的 data:URI 占位兜底(会被下游过滤)。
  *
  * 产物由 /api/mock-assets/* 确定性生成(SVG 图 / ffmpeg 纯色短片 / 正弦 WAV):
- * 同 seed 同产物、零外部调用、零成本(estCostCny: 0)。
+ * 同 seed 同产物、零外部调用、零成本(estCostEur: 0)。
  */
 import { registerImageProvider } from './image-providers/registry';
 import { registerVideoProvider } from './video-providers/registry';
@@ -53,7 +53,7 @@ registerImageProvider({
     return {
       imageUrl: `${mockAssetBase()}/api/mock-assets/image/${seed}.svg?ar=${encodeURIComponent(ar)}&label=${label}`,
       provider: 'mock-image',
-      estCostCny: 0,
+      estCostEur: 0,
     };
   },
 });
@@ -81,7 +81,7 @@ registerVideoProvider({
       videoUrl: `${mockAssetBase()}/api/mock-assets/clip/${seed}.mp4?ar=${encodeURIComponent(ar)}&d=${dur}`,
       provider: 'mock-video',
       durationSec: dur,
-      estCostCny: 0,
+      estCostEur: 0,
     };
   },
 });
@@ -107,7 +107,7 @@ registerTTSProvider({
       duration: dur,
       subtitle: [{ start: 0, end: dur, text: input.text, character: input.character }],
       provider: 'mock-tts',
-      estCostCny: 0,
+      estCostEur: 0,
     };
   },
 });

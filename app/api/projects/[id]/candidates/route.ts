@@ -11,7 +11,7 @@
  *   data:{type:'complete', shotNumber, grid:{cols,rows}, candidates:[...]}
  *   data:{type:'error', message}
  *
- * 鉴权:登录 + 属主守卫;真花钱端点 → assertBudget 预算护栏(每张约 ¥0.3)。
+ * 鉴权:登录 + 属主守卫;真花钱端点 → assertBudget 预算护栏(每张约 €0.3)。
  * 并发复用 v12.32 的 GEN_CONCURRENCY_STORYBOARD(默认 2)。
  */
 import { NextRequest } from 'next/server';
@@ -26,7 +26,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-const EST_COST_PER_IMG_CNY = 0.3;
+const EST_COST_PER_IMG_EUR = 0.04;
 
 function getProjectContext(projectId: string): {
   userId: string | null; styleId: string | null; styleAnchorUrl: string | null; primaryCharacterRef: string | null;
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const n = clampCandidateCount(count);
   // 预算护栏:一次出 N 张图
-  const budget = await assertBudget({ userId: payload.sub, pendingCostCny: n * EST_COST_PER_IMG_CNY });
+  const budget = await assertBudget({ userId: payload.sub, pendingCostEur: n * EST_COST_PER_IMG_EUR });
   if (!budget.allow) {
     return new Response(JSON.stringify({ error: '本月预算已达上限,候选生成已拦截', guard: budget.guard }), { status: 402, headers: { 'Content-Type': 'application/json' } });
   }

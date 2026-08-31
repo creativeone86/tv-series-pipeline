@@ -13,7 +13,7 @@ import { getDbDriver } from '@/lib/db-driver';
 import { listAssetsByType, createAsset } from '@/lib/repos/asset-repo';
 import { persistAsset } from '@/lib/asset-storage';
 import { getUserFromRequest } from '../../../../auth/lib';
-import { recordCostLog, estimateLipsyncCostCny } from '@/lib/repos/cost-log-repo';
+import { recordCostLog, estimateLipsyncCostEur } from '@/lib/repos/cost-log-repo';
 import { dialogueLinesFromShots, planVisemes } from '@/lib/lipsync-plan';
 import {
   lipSyncEngineConfigured, listLipSyncProviders, dispatchLipSyncGenerate,
@@ -117,7 +117,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   await recordCostLog({
     userId, projectId: id, engine: `lipsync-${result.provider}`,
     durationSec: result.durationSec,
-    costCny: estimateLipsyncCostCny(result.estCostCny, result.durationSec),
+    costEur: estimateLipsyncCostEur(result.estCostEur, result.durationSec),
     metadata: { kind: 'lipsync-render', shotNumber: body.shotNumber, provider: result.provider },
   });
 

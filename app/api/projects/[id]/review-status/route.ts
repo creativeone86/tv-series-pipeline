@@ -32,7 +32,7 @@ export async function GET(request: NextRequest,
   const _g = await requireProjectAccess(request, projectId, 'view');
   if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
 
-  const status = getReviewStatus(projectId);
+  const status = await getReviewStatus(projectId);
   return NextResponse.json(status);
 }
 
@@ -59,7 +59,7 @@ export async function POST(
   }
   const note = typeof body?.note === 'string' ? body.note : undefined;
 
-  const result = transitionReviewStatus({
+  const result = await transitionReviewStatus({
     projectId, toStatus, actorUserId: actorId, note,
   });
   if (!result.ok) {
